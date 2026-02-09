@@ -76,21 +76,29 @@ class CrossModalHashModel(pl.LightningModule):
             ema_decay=ema_decay,
         )
 
+    def _pool(self, outputs) -> torch.Tensor:
+        """Extract pooled embedding from model output (handles Tensor or ModelOutput)."""
+        if isinstance(outputs, torch.Tensor):
+            return outputs
+        if hasattr(outputs, "pooler_output") and outputs.pooler_output is not None:
+            return outputs.pooler_output
+        return outputs.last_hidden_state.mean(dim=1)
+
     def encode_image(
         self, pixel_values: torch.Tensor
     ) -> list[dict[str, torch.Tensor]]:
-        image_embeds = self.backbone.get_image_features(pixel_values=pixel_values)
-        return self.image_hash(image_embeds)
+        outputs = self.backbone.vision_model(pixel_values=pixel_values)
+        return self.image_hash(self._pool(outputs))
 
     def encode_text(
         self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None = None
     ) -> list[dict[str, torch.Tensor]]:
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids)
-        text_embeds = self.backbone.get_text_features(
+        outputs = self.backbone.text_model(
             input_ids=input_ids, attention_mask=attention_mask
         )
-        return self.text_hash(text_embeds)
+        return self.text_hash(self._pool(outputs))
 
     def forward(self, batch: dict) -> dict:
         image_out = self.encode_image(batch["pixel_values"])
