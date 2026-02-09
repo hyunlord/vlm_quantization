@@ -3,7 +3,7 @@ model:
   bit_list: [16, 32, 64, 128]
   hidden_dim: 512
   dropout: 0.1
-  freeze_backbone: false
+  freeze_backbone: true
 
 training:
   batch_size: 32

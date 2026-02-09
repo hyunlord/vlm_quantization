@@ -83,8 +83,10 @@ class CrossModalHashModel(pl.LightningModule):
         return self.image_hash(image_embeds)
 
     def encode_text(
-        self, input_ids: torch.Tensor, attention_mask: torch.Tensor
+        self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None = None
     ) -> list[dict[str, torch.Tensor]]:
+        if attention_mask is None:
+            attention_mask = torch.ones_like(input_ids)
         text_embeds = self.backbone.get_text_features(
             input_ids=input_ids, attention_mask=attention_mask
         )

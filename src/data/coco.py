@@ -68,9 +68,9 @@ class CocoCaptionsDataset(Dataset):
             return_tensors="pt",
         )
 
-        # Process text
-        text_inputs = self.processor(
-            text=caption,
+        # Process text via tokenizer directly (SigLIP processor may omit attention_mask)
+        text_inputs = self.processor.tokenizer(
+            caption,
             padding="max_length",
             max_length=self.max_text_length,
             truncation=True,
@@ -80,9 +80,13 @@ class CocoCaptionsDataset(Dataset):
         result = {
             "pixel_values": image_inputs["pixel_values"].squeeze(0),
             "input_ids": text_inputs["input_ids"].squeeze(0),
-            "attention_mask": text_inputs["attention_mask"].squeeze(0),
             "image_id": image_id,
         }
+
+        if "attention_mask" in text_inputs:
+            result["attention_mask"] = text_inputs["attention_mask"].squeeze(0)
+        else:
+            result["attention_mask"] = torch.ones_like(result["input_ids"])
 
         # Consistency augmentation (stronger transform of same image)
         if self.consistency_transform is not None:
