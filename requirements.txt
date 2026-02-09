@@ -10,6 +10,9 @@ pillow>=10.0.0
 scipy>=1.11.0
 tqdm>=4.65.0
 
+# Hyperparameter Optimization
+optuna>=3.5.0
+
 # Monitoring
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0

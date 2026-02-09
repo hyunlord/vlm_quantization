@@ -4,83 +4,142 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.losses.contrastive import CrossModalContrastiveLoss
-from src.losses.quantization import QuantizationLoss
 from src.losses.balance import BitBalanceLoss
+from src.losses.contrastive import CrossModalContrastiveLoss
+from src.losses.eaql import EAQLLoss
+from src.losses.lcs import LCSSelfDistillationLoss
+from src.losses.ortho_hash import CrossModalOrthoHashLoss
 
 
 class CombinedHashLoss(nn.Module):
-    """Orchestrates all loss components with configurable weights.
+    """Multi-bit, multi-modal loss orchestrator.
 
-    Total = w_c * L_contrastive
-          + w_q * L_quantization  (scaled by training progress)
-          + w_b * L_balance
-          + w_con * L_consistency
+    For each bit length in bit_list:
+        - InfoNCE (cross-modal contrastive)
+        - EAQL (adaptive quantization)
+        - OrthoHash (cross-modal orthogonal)
+        - BitBalance (balance + decorrelation)
+        - Consistency (augmented image alignment)
+
+    Globally across bit lengths:
+        - LCS self-distillation (long -> short)
+
+    Total = w_c * contrastive + w_o * ortho + w_q * ramp(progress) * eaql
+          + w_b * balance + w_con * consistency + w_lcs * lcs
     """
 
     def __init__(
         self,
+        bit_list: list[int],
         contrastive_weight: float = 1.0,
+        ortho_weight: float = 0.1,
         quantization_weight: float = 0.1,
         balance_weight: float = 0.01,
         consistency_weight: float = 0.5,
+        lcs_weight: float = 0.5,
         temperature: float = 0.07,
-        hash_dim: int = 64,
+        ema_decay: float = 0.99,
     ):
         super().__init__()
+        self.bit_list = sorted(bit_list)
         self.contrastive_weight = contrastive_weight
+        self.ortho_weight = ortho_weight
         self.quantization_weight = quantization_weight
         self.balance_weight = balance_weight
         self.consistency_weight = consistency_weight
+        self.lcs_weight = lcs_weight
 
         self.contrastive_loss = CrossModalContrastiveLoss(temperature)
-        self.quantization_loss = QuantizationLoss()
-        self.balance_loss = BitBalanceLoss(hash_dim)
+        self.eaql_loss = EAQLLoss(ema_decay)
+        self.ortho_loss = CrossModalOrthoHashLoss()
+        self.balance_losses = nn.ModuleList(
+            [BitBalanceLoss(bit) for bit in self.bit_list]
+        )
+        self.lcs_loss = LCSSelfDistillationLoss()
 
     def forward(
         self,
-        image_continuous: torch.Tensor,
-        text_continuous: torch.Tensor,
-        image_binary: torch.Tensor,
-        text_binary: torch.Tensor,
-        aug_image_continuous: torch.Tensor | None = None,
+        image_outputs: list[dict[str, torch.Tensor]],
+        text_outputs: list[dict[str, torch.Tensor]],
+        aug_image_outputs: list[dict[str, torch.Tensor]] | None = None,
         progress: float = 1.0,
     ) -> dict[str, torch.Tensor]:
         """
         Args:
-            progress: training progress in [0, 1] for quantization weight ramp-up.
+            image_outputs: list of {"continuous", "binary"} per bit length
+            text_outputs: same structure
+            aug_image_outputs: optional augmented image outputs (same structure)
+            progress: training progress in [0, 1] for quantization ramp-up
         """
-        losses: dict[str, torch.Tensor] = {}
+        device = image_outputs[0]["continuous"].device
+        n_bits = len(self.bit_list)
 
-        # Cross-modal contrastive
-        losses["contrastive"] = self.contrastive_loss(
-            image_continuous, text_continuous
-        )
+        contrastive_total = torch.tensor(0.0, device=device)
+        eaql_total = torch.tensor(0.0, device=device)
+        ortho_total = torch.tensor(0.0, device=device)
+        balance_total = torch.tensor(0.0, device=device)
+        consistency_total = torch.tensor(0.0, device=device)
 
-        # Quantization (both modalities), ramped up over training
-        quant_scale = min(1.0, progress * 2.0)
-        losses["quantization"] = (
-            self.quantization_loss(image_continuous, image_binary)
-            + self.quantization_loss(text_continuous, text_binary)
+        for k in range(n_bits):
+            img_cont = image_outputs[k]["continuous"]
+            txt_cont = text_outputs[k]["continuous"]
+
+            # InfoNCE (cross-modal)
+            contrastive_total = contrastive_total + self.contrastive_loss(
+                img_cont, txt_cont
+            )
+
+            # EAQL (both modalities)
+            eaql_total = eaql_total + (
+                self.eaql_loss(img_cont) + self.eaql_loss(txt_cont)
+            ) / 2.0
+
+            # OrthoHash (cross-modal)
+            ortho_total = ortho_total + self.ortho_loss(img_cont, txt_cont)
+
+            # Balance (joint)
+            all_hashes = torch.cat([img_cont, txt_cont], dim=0)
+            balance_total = balance_total + self.balance_losses[k](all_hashes)
+
+            # Consistency (augmented image)
+            if aug_image_outputs is not None:
+                aug_cont = aug_image_outputs[k]["continuous"]
+                consistency_total = consistency_total + F.mse_loss(
+                    img_cont, aug_cont
+                )
+
+        # Average over bit lengths
+        contrastive_total = contrastive_total / n_bits
+        eaql_total = eaql_total / n_bits
+        ortho_total = ortho_total / n_bits
+        balance_total = balance_total / n_bits
+        consistency_total = consistency_total / n_bits
+
+        # LCS self-distillation (across bit lengths, both modalities)
+        img_continuous_list = [out["continuous"] for out in image_outputs]
+        txt_continuous_list = [out["continuous"] for out in text_outputs]
+        lcs_total = (
+            self.lcs_loss(img_continuous_list) + self.lcs_loss(txt_continuous_list)
         ) / 2.0
 
-        # Bit balance (joint across modalities)
-        all_hashes = torch.cat([image_continuous, text_continuous], dim=0)
-        losses["balance"] = self.balance_loss(all_hashes)
+        # Quantization ramp-up
+        quant_scale = min(1.0, progress * 2.0)
 
-        # Consistency (augmented image → same hash)
-        if aug_image_continuous is not None:
-            losses["consistency"] = F.mse_loss(
-                image_continuous, aug_image_continuous
-            )
-        else:
-            losses["consistency"] = torch.tensor(0.0, device=image_continuous.device)
-
-        losses["total"] = (
-            self.contrastive_weight * losses["contrastive"]
-            + self.quantization_weight * quant_scale * losses["quantization"]
-            + self.balance_weight * losses["balance"]
-            + self.consistency_weight * losses["consistency"]
+        total = (
+            self.contrastive_weight * contrastive_total
+            + self.ortho_weight * ortho_total
+            + self.quantization_weight * quant_scale * eaql_total
+            + self.balance_weight * balance_total
+            + self.consistency_weight * consistency_total
+            + self.lcs_weight * lcs_total
         )
 
-        return losses
+        return {
+            "total": total,
+            "contrastive": contrastive_total,
+            "eaql": eaql_total,
+            "ortho": ortho_total,
+            "balance": balance_total,
+            "consistency": consistency_total,
+            "lcs": lcs_total,
+        }

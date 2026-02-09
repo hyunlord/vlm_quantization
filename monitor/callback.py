@@ -29,14 +29,18 @@ class MonitorCallback(pl.Callback):
         except Exception as e:
             logger.debug(f"Monitor send failed: {e}")
 
-    def on_fit_start(
+    def _to_float(self, value, default=0.0) -> float | None:
+        """Convert tensor/number to Python float for JSON serialization."""
+        if value is None:
+            return default
+        return float(value)
+
+    def on_train_start(
         self, trainer: pl.Trainer, pl_module: pl.LightningModule
     ) -> None:
         steps_per_epoch = (
             len(trainer.train_dataloader)
             // trainer.accumulate_grad_batches
-            if trainer.train_dataloader is not None
-            else 0
         )
         self._post("/api/training/status", {
             "epoch": 0,
@@ -62,11 +66,13 @@ class MonitorCallback(pl.Callback):
         self._post("/api/metrics/training", {
             "step": trainer.global_step,
             "epoch": trainer.current_epoch,
-            "loss_total": logged.get("train/total", 0.0),
-            "loss_contrastive": logged.get("train/contrastive", 0.0),
-            "loss_quantization": logged.get("train/quantization", 0.0),
-            "loss_balance": logged.get("train/balance", 0.0),
-            "loss_consistency": logged.get("train/consistency", 0.0),
+            "loss_total": self._to_float(logged.get("train/total")),
+            "loss_contrastive": self._to_float(logged.get("train/contrastive")),
+            "loss_quantization": self._to_float(logged.get("train/eaql")),
+            "loss_balance": self._to_float(logged.get("train/balance")),
+            "loss_consistency": self._to_float(logged.get("train/consistency")),
+            "loss_ortho": self._to_float(logged.get("train/ortho")),
+            "loss_lcs": self._to_float(logged.get("train/lcs")),
             "lr": trainer.optimizers[0].param_groups[0]["lr"],
         })
 
@@ -74,11 +80,18 @@ class MonitorCallback(pl.Callback):
         self, trainer: pl.Trainer, pl_module: pl.LightningModule
     ) -> None:
         logged = trainer.callback_metrics
-        self._post("/api/metrics/eval", {
-            "epoch": trainer.current_epoch,
-            "bit_entropy": logged.get("val/bit_entropy", None),
-            "quant_error": logged.get("val/quant_error", None),
-        })
+        bit_list = pl_module.hparams.get("bit_list", [64])
+
+        eval_data = {"epoch": trainer.current_epoch}
+        for bit in bit_list:
+            eval_data[f"bit_entropy_{bit}"] = self._to_float(
+                logged.get(f"val/{bit}_bit_entropy"), None
+            )
+            eval_data[f"quant_error_{bit}"] = self._to_float(
+                logged.get(f"val/{bit}_quant_error"), None
+            )
+
+        self._post("/api/metrics/eval", eval_data)
 
     def on_fit_end(
         self, trainer: pl.Trainer, pl_module: pl.LightningModule

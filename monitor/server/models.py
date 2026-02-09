@@ -11,6 +11,8 @@ class TrainingMetric(BaseModel):
     loss_quantization: float
     loss_balance: float
     loss_consistency: float
+    loss_ortho: float = 0.0
+    loss_lcs: float = 0.0
     lr: float
 
 
@@ -25,6 +27,15 @@ class EvalMetric(BaseModel):
     p10: float | None = None
     bit_entropy: float | None = None
     quant_error: float | None = None
+    # Per-bit quality metrics
+    bit_entropy_16: float | None = None
+    bit_entropy_32: float | None = None
+    bit_entropy_64: float | None = None
+    bit_entropy_128: float | None = None
+    quant_error_16: float | None = None
+    quant_error_32: float | None = None
+    quant_error_64: float | None = None
+    quant_error_128: float | None = None
 
 
 class SystemMetric(BaseModel):

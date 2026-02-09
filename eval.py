@@ -21,8 +21,13 @@ from src.utils.metrics import (
 def encode_all(
     model: CrossModalHashModel, dataloader: DataLoader, device: torch.device
 ) -> dict[str, torch.Tensor]:
-    """Encode entire dataset into binary hash codes."""
-    image_codes, text_codes, image_ids_all = [], [], []
+    """Encode entire dataset into binary hash codes for all bit lengths."""
+    bit_list = model.hparams.bit_list
+
+    # Accumulators per bit length
+    image_codes = {bit: [] for bit in bit_list}
+    text_codes = {bit: [] for bit in bit_list}
+    image_ids_all = []
 
     for batch in tqdm(dataloader, desc="Encoding"):
         batch = {
@@ -33,15 +38,18 @@ def encode_all(
         img_out = model.encode_image(batch["pixel_values"])
         txt_out = model.encode_text(batch["input_ids"], batch["attention_mask"])
 
-        image_codes.append(img_out["binary"].cpu())
-        text_codes.append(txt_out["binary"].cpu())
+        for k, bit in enumerate(bit_list):
+            image_codes[bit].append(img_out[k]["binary"].cpu())
+            text_codes[bit].append(txt_out[k]["binary"].cpu())
+
         image_ids_all.extend(batch["image_ids"])
 
-    return {
-        "image_codes": torch.cat(image_codes, dim=0),
-        "text_codes": torch.cat(text_codes, dim=0),
-        "image_ids": torch.tensor(image_ids_all),
-    }
+    result = {"image_ids": torch.tensor(image_ids_all)}
+    for bit in bit_list:
+        result[f"image_codes_{bit}"] = torch.cat(image_codes[bit], dim=0)
+        result[f"text_codes_{bit}"] = torch.cat(text_codes[bit], dim=0)
+
+    return result
 
 
 def evaluate_retrieval(
@@ -89,6 +97,8 @@ def main():
     model = model.to(device)
     model.eval()
 
+    bit_list = model.hparams.bit_list
+
     # DataModule
     datamodule = CrossModalHashDataModule(
         data_root=cfg["data"]["data_root"],
@@ -103,32 +113,35 @@ def main():
     # Encode
     encoded = encode_all(model, datamodule.test_dataloader(), device)
 
-    # Hash quality
-    all_codes = torch.cat([encoded["image_codes"], encoded["text_codes"]], dim=0)
-    entropy = compute_bit_entropy(all_codes)
-    print(f"\nBit Entropy: mean={entropy.mean():.4f}, min={entropy.min():.4f}")
-
-    # Retrieval evaluation
     k_values = [1, 5, 10, 20]
-    results = evaluate_retrieval(
-        encoded["image_codes"],
-        encoded["text_codes"],
-        encoded["image_ids"],
-        k_values,
-    )
 
-    # Print results table
-    print(f"\n{'Direction':<8} {'mAP@50':>8}", end="")
-    for k in k_values:
-        print(f" {'P@'+str(k):>8}", end="")
-    print()
-    print("-" * (8 + 9 + 9 * len(k_values)))
+    for bit in bit_list:
+        image_codes = encoded[f"image_codes_{bit}"]
+        text_codes = encoded[f"text_codes_{bit}"]
 
-    for direction, metrics in results.items():
-        print(f"{direction:<8} {metrics['mAP@50']:>8.4f}", end="")
+        # Hash quality
+        all_codes = torch.cat([image_codes, text_codes], dim=0)
+        entropy = compute_bit_entropy(all_codes)
+        print(f"\n=== {bit}-bit ===")
+        print(f"Bit Entropy: mean={entropy.mean():.4f}, min={entropy.min():.4f}")
+
+        # Retrieval evaluation
+        results = evaluate_retrieval(
+            image_codes, text_codes, encoded["image_ids"], k_values
+        )
+
+        # Print results table
+        print(f"\n{'Direction':<8} {'mAP@50':>8}", end="")
         for k in k_values:
-            print(f" {metrics[f'P@{k}']:>8.4f}", end="")
+            print(f" {'P@'+str(k):>8}", end="")
         print()
+        print("-" * (8 + 9 + 9 * len(k_values)))
+
+        for direction, metrics in results.items():
+            print(f"{direction:<8} {metrics['mAP@50']:>8.4f}", end="")
+            for k in k_values:
+                print(f" {metrics[f'P@{k}']:>8.4f}", end="")
+            print()
 
 
 if __name__ == "__main__":

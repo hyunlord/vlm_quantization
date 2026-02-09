@@ -1,6 +1,6 @@
 model:
   backbone: "google/siglip2-so400m-patch14-384"
-  hash_dim: 64
+  bit_list: [16, 32, 64, 128]
   hidden_dim: 512
   dropout: 0.1
   freeze_backbone: false
@@ -17,10 +17,13 @@ training:
 
 loss:
   contrastive_weight: 1.0
+  ortho_weight: 0.1
   quantization_weight: 0.1
   balance_weight: 0.01
   consistency_weight: 0.5
+  lcs_weight: 0.5
   temperature: 0.07
+  ema_decay: 0.99
 
 data:
   data_root: "./data/coco"

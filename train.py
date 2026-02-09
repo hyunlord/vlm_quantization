@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 
 import pytorch_lightning as pl
+import torch
 import yaml
 
 from src.data.datamodule import CrossModalHashDataModule
@@ -40,7 +41,7 @@ def main():
     # Model
     model = CrossModalHashModel(
         model_name=cfg["model"]["backbone"],
-        hash_dim=cfg["model"]["hash_dim"],
+        bit_list=cfg["model"]["bit_list"],
         hidden_dim=cfg["model"]["hidden_dim"],
         dropout=cfg["model"]["dropout"],
         hash_lr=cfg["training"]["hash_lr"],
@@ -50,10 +51,13 @@ def main():
         max_steps=max_steps,
         freeze_backbone=cfg["model"]["freeze_backbone"],
         contrastive_weight=cfg["loss"]["contrastive_weight"],
+        ortho_weight=cfg["loss"]["ortho_weight"],
         quantization_weight=cfg["loss"]["quantization_weight"],
         balance_weight=cfg["loss"]["balance_weight"],
         consistency_weight=cfg["loss"]["consistency_weight"],
+        lcs_weight=cfg["loss"]["lcs_weight"],
         temperature=cfg["loss"]["temperature"],
+        ema_decay=cfg["loss"]["ema_decay"],
     )
 
     # Callbacks
@@ -85,7 +89,7 @@ def main():
         max_epochs=cfg["training"]["max_epochs"],
         accelerator="auto",
         devices="auto",
-        precision="bf16-mixed",
+        precision="bf16-mixed" if torch.cuda.is_bf16_supported() else "16-mixed",
         gradient_clip_val=cfg["training"]["gradient_clip_val"],
         accumulate_grad_batches=cfg["training"]["accumulate_grad_batches"],
         callbacks=callbacks,
