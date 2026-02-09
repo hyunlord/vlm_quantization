@@ -84,6 +84,9 @@ def main():
             )
         )
 
+    # Progress bar: reduce refresh rate for non-interactive environments (Colab subprocess)
+    callbacks.append(pl.callbacks.TQDMProgressBar(refresh_rate=50))
+
     # Trainer
     trainer = pl.Trainer(
         max_epochs=cfg["training"]["max_epochs"],
@@ -94,6 +97,7 @@ def main():
         accumulate_grad_batches=cfg["training"]["accumulate_grad_batches"],
         callbacks=callbacks,
         log_every_n_steps=10,
+        enable_progress_bar=True,
     )
 
     trainer.fit(model, datamodule=datamodule)
