@@ -14,6 +14,7 @@ training:
   warmup_steps: 500
   gradient_clip_val: 1.0
   accumulate_grad_batches: 4
+  early_stopping_patience: 5
 
 loss:
   contrastive_weight: 1.0

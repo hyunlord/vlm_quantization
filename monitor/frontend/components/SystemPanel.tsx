@@ -85,7 +85,7 @@ function MemoryBar({
 }
 
 const utilColor = (v: number) =>
-  v > 90 ? "#ef4444" : v > 70 ? "#eab308" : "#10b981";
+  v > 95 ? "#ef4444" : v > 80 ? "#eab308" : "#10b981";
 
 export default function SystemPanel({ data }: Props) {
   if (!data) {

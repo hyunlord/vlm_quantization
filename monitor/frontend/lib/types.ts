@@ -13,6 +13,7 @@ export interface TrainingMetric {
 
 export interface EvalMetric {
   epoch: number;
+  step: number | null;
   map_i2t: number | null;
   map_t2i: number | null;
   map_i2i: number | null;
@@ -22,6 +23,13 @@ export interface EvalMetric {
   p10: number | null;
   bit_entropy: number | null;
   quant_error: number | null;
+  val_loss_total: number | null;
+  val_loss_contrastive: number | null;
+  val_loss_quantization: number | null;
+  val_loss_balance: number | null;
+  val_loss_consistency: number | null;
+  val_loss_ortho: number | null;
+  val_loss_lcs: number | null;
 }
 
 export interface SystemMetric {

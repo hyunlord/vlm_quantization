@@ -23,6 +23,7 @@ export default function TrainingStatus({ status, latestMetric }: Props) {
   const stepProgress = status.total_steps
     ? (status.step / status.total_steps) * 100
     : 0;
+  const accum = Number(status.config?.accumulate_grad_batches) || 1;
 
   return (
     <div className="rounded-xl bg-gray-900 p-4 border border-gray-800">
@@ -67,6 +68,13 @@ export default function TrainingStatus({ status, latestMetric }: Props) {
               /{status.total_steps.toLocaleString()}
             </span>
           </p>
+          {accum > 1 && (
+            <p className="text-[10px] text-gray-600 font-mono">
+              Batch {(status.step * accum).toLocaleString()}
+              /{(status.total_steps * accum).toLocaleString()}
+              {" "}({accum}x accum)
+            </p>
+          )}
           <div className="mt-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
             <div
               className="h-full bg-purple-500 rounded-full transition-all"

@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from monitor.server.database import (
+    clear_training_metrics,
     get_eval_metrics,
     get_system_metrics as get_system_metrics_db,
     get_training_metrics,
@@ -18,7 +19,20 @@ from monitor.server.database import (
     insert_system_metric,
     insert_training_metric,
 )
-from monitor.server.models import EvalMetric, SystemMetric, TrainingMetric, TrainingStatus
+from monitor.server.inference import InferenceEngine
+from monitor.server.models import (
+    CompareRequest,
+    CompareResponse,
+    CompareResult,
+    EncodeRequest,
+    EncodeResponse,
+    EvalMetric,
+    HashCode,
+    LoadModelRequest,
+    SystemMetric,
+    TrainingMetric,
+    TrainingStatus,
+)
 from monitor.server.system_monitor import SystemMonitorThread
 
 app = FastAPI(title="VLM Quantization Monitor")
@@ -34,6 +48,7 @@ app.add_middleware(
 # --- State ---
 training_status = TrainingStatus()
 system_monitor = SystemMonitorThread(interval=2.0)
+inference_engine = InferenceEngine()
 
 
 # --- WebSocket Manager ---
@@ -143,6 +158,10 @@ async def get_training_status():
 
 @app.post("/api/training/status")
 async def update_training_status(status: TrainingStatus):
+    # Clear previous run data when a new training session begins
+    if status.is_training and status.step == 0:
+        clear_training_metrics()
+
     training_status.epoch = status.epoch
     training_status.step = status.step
     training_status.total_epochs = status.total_epochs
@@ -156,6 +175,49 @@ async def update_training_status(status: TrainingStatus):
     return {"status": "ok"}
 
 
+# --- REST: Inference ---
+@app.post("/api/inference/load")
+async def load_inference_model(req: LoadModelRequest):
+    try:
+        return inference_engine.load(req.checkpoint_path)
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/inference/status")
+async def get_inference_status():
+    return inference_engine.status()
+
+
+@app.get("/api/inference/checkpoints")
+async def list_checkpoints(directory: str = ""):
+    if not directory:
+        return {"checkpoints": [], "error": "Provide directory parameter"}
+    return {"checkpoints": InferenceEngine.list_checkpoints(directory)}
+
+
+@app.post("/api/inference/encode", response_model=EncodeResponse)
+async def encode_input(req: EncodeRequest):
+    if req.image_base64:
+        image = InferenceEngine.decode_base64_image(req.image_base64)
+        codes = inference_engine.encode_image(image)
+    elif req.text:
+        codes = inference_engine.encode_text(req.text)
+    else:
+        return {"error": "Provide image_base64 or text"}
+    return EncodeResponse(codes=[HashCode(**c) for c in codes])
+
+
+@app.post("/api/inference/compare", response_model=CompareResponse)
+async def compare_codes(req: CompareRequest):
+    codes_a = [c.model_dump() for c in req.codes_a]
+    codes_b = [c.model_dump() for c in req.codes_b]
+    results = InferenceEngine.compare(codes_a, codes_b)
+    return CompareResponse(
+        comparisons=[CompareResult(**r) for r in results]
+    )
+
+
 # --- Static Frontend (Next.js export) ---
 _frontend_out = Path(__file__).resolve().parent.parent / "frontend" / "out"
 
@@ -164,5 +226,9 @@ if _frontend_out.is_dir():
     @app.get("/")
     async def serve_index():
         return FileResponse(_frontend_out / "index.html")
+
+    @app.get("/inference")
+    async def serve_inference():
+        return FileResponse(_frontend_out / "inference.html")
 
     app.mount("/", StaticFiles(directory=str(_frontend_out)), name="static")

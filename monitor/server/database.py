@@ -36,6 +36,7 @@ def init_db() -> None:
         CREATE TABLE IF NOT EXISTS eval_metrics (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             epoch INTEGER NOT NULL,
+            step INTEGER,
             map_i2t REAL,
             map_t2i REAL,
             map_i2i REAL,
@@ -45,6 +46,13 @@ def init_db() -> None:
             p10 REAL,
             bit_entropy REAL,
             quant_error REAL,
+            val_loss_total REAL,
+            val_loss_contrastive REAL,
+            val_loss_quantization REAL,
+            val_loss_balance REAL,
+            val_loss_consistency REAL,
+            val_loss_ortho REAL,
+            val_loss_lcs REAL,
             timestamp REAL NOT NULL
         );
 
@@ -74,6 +82,15 @@ def init_db() -> None:
             )
         except sqlite3.OperationalError:
             pass  # column already exists
+    for col in ("step", "val_loss_total", "val_loss_contrastive",
+                "val_loss_quantization", "val_loss_balance",
+                "val_loss_consistency", "val_loss_ortho", "val_loss_lcs"):
+        try:
+            conn.execute(
+                f"ALTER TABLE eval_metrics ADD COLUMN {col} REAL"
+            )
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     conn.close()
 
@@ -100,12 +117,18 @@ def insert_eval_metric(m: EvalMetric) -> None:
     conn = get_connection()
     conn.execute(
         """INSERT INTO eval_metrics
-           (epoch, map_i2t, map_t2i, map_i2i, map_t2t,
-            p1, p5, p10, bit_entropy, quant_error, timestamp)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           (epoch, step, map_i2t, map_t2i, map_i2i, map_t2t,
+            p1, p5, p10, bit_entropy, quant_error,
+            val_loss_total, val_loss_contrastive, val_loss_quantization,
+            val_loss_balance, val_loss_consistency, val_loss_ortho,
+            val_loss_lcs, timestamp)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            m.epoch, m.map_i2t, m.map_t2i, m.map_i2i, m.map_t2t,
-            m.p1, m.p5, m.p10, m.bit_entropy, m.quant_error, time.time(),
+            m.epoch, m.step, m.map_i2t, m.map_t2i, m.map_i2i, m.map_t2t,
+            m.p1, m.p5, m.p10, m.bit_entropy, m.quant_error,
+            m.val_loss_total, m.val_loss_contrastive, m.val_loss_quantization,
+            m.val_loss_balance, m.val_loss_consistency, m.val_loss_ortho,
+            m.val_loss_lcs, time.time(),
         ),
     )
     conn.commit()
@@ -124,6 +147,15 @@ def insert_system_metric(m: SystemMetric) -> None:
             m.gpu_name, m.cpu_util, m.ram_used, m.ram_total, time.time(),
         ),
     )
+    conn.commit()
+    conn.close()
+
+
+def clear_training_metrics() -> None:
+    """Delete all training and eval metrics (called on new training run)."""
+    conn = get_connection()
+    conn.execute("DELETE FROM training_metrics")
+    conn.execute("DELETE FROM eval_metrics")
     conn.commit()
     conn.close()
 

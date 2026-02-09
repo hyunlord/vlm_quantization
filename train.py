@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 from pathlib import Path
 
 import pytorch_lightning as pl
@@ -9,6 +10,7 @@ import yaml
 
 from src.data.datamodule import CrossModalHashDataModule
 from src.models.cross_modal_hash import CrossModalHashModel
+from src.utils.gpu_config import auto_configure
 
 
 def main():
@@ -20,6 +22,15 @@ def main():
 
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
+
+    # Auto-configure GPU-dependent parameters
+    if cfg["training"].get("batch_size") == "auto":
+        gpu_cfg = auto_configure(
+            freeze_backbone=cfg["model"].get("freeze_backbone", True),
+        )
+        cfg["training"]["batch_size"] = gpu_cfg["batch_size"]
+        cfg["training"]["accumulate_grad_batches"] = gpu_cfg["accumulate_grad_batches"]
+        cfg["data"]["num_workers"] = gpu_cfg["num_workers"]
 
     # DataModule
     datamodule = CrossModalHashDataModule(
@@ -60,16 +71,28 @@ def main():
         ema_decay=cfg["loss"]["ema_decay"],
     )
 
+    # Timestamped checkpoint directory (avoid overwriting between runs)
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base_ckpt_dir = cfg["training"].get("checkpoint_dir", "checkpoints")
+    ckpt_dir = str(Path(base_ckpt_dir) / run_id)
+    print(f"  Checkpoint dir: {ckpt_dir}")
+
     # Callbacks
     callbacks = [
         pl.callbacks.ModelCheckpoint(
-            dirpath=cfg["training"].get("checkpoint_dir", "checkpoints"),
+            dirpath=ckpt_dir,
             filename="best-{epoch}-{val/total:.4f}",
             monitor="val/total",
             mode="min",
             save_top_k=3,
         ),
         pl.callbacks.LearningRateMonitor(logging_interval="step"),
+        pl.callbacks.EarlyStopping(
+            monitor="val/total",
+            mode="min",
+            patience=cfg["training"].get("early_stopping_patience", 5),
+            verbose=True,
+        ),
     ]
 
     # Monitor callback (optional)
@@ -99,6 +122,10 @@ def main():
         log_every_n_steps=10,
         enable_progress_bar=True,
     )
+
+    # Baseline validation (epoch 0, before any training)
+    print("  Running baseline validation...")
+    trainer.validate(model, datamodule=datamodule)
 
     trainer.fit(model, datamodule=datamodule)
 

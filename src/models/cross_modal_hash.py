@@ -7,7 +7,11 @@ from transformers import AutoModel
 
 from src.losses.combined import CombinedHashLoss
 from src.models.nested_hash_layer import NestedHashLayer
-from src.utils.metrics import compute_bit_entropy, compute_quantization_error
+from src.utils.metrics import (
+    compute_bit_entropy,
+    compute_quantization_error,
+    mean_average_precision,
+)
 
 
 class CrossModalHashModel(pl.LightningModule):
@@ -43,6 +47,7 @@ class CrossModalHashModel(pl.LightningModule):
         if bit_list is None:
             bit_list = [16, 32, 64, 128]
         self.save_hyperparameters()
+        self._val_outputs: list[dict] = []
 
         # Backbone
         self.backbone = AutoModel.from_pretrained(model_name)
@@ -166,7 +171,56 @@ class CrossModalHashModel(pl.LightningModule):
             result[f"image_binary_{bit}"] = img_binary.detach()
             result[f"text_binary_{bit}"] = txt_binary.detach()
 
+        self._val_outputs.append(result)
         return result
+
+    def on_validation_epoch_end(self) -> None:
+        if not self._val_outputs:
+            return
+
+        bit_list = self.hparams.bit_list
+
+        # Collect image_ids across all batches
+        all_ids: list[int] = []
+        for out in self._val_outputs:
+            all_ids.extend(out["image_ids"])
+        labels = torch.tensor(all_ids, device=self.device)
+
+        # Subsample for mAP efficiency (max 5000 samples)
+        N = len(labels)
+        max_samples = min(N, 5000)
+        if N > max_samples:
+            idx = torch.randperm(N, device=self.device)[:max_samples]
+        else:
+            idx = torch.arange(N, device=self.device)
+
+        # Use 64-bit codes for mAP (middle resolution)
+        bit_idx = bit_list.index(64) if 64 in bit_list else 0
+        bit = bit_list[bit_idx]
+
+        img_codes = torch.cat(
+            [o[f"image_binary_{bit}"] for o in self._val_outputs]
+        )[idx]
+        txt_codes = torch.cat(
+            [o[f"text_binary_{bit}"] for o in self._val_outputs]
+        )[idx]
+        sub_labels = labels[idx]
+
+        # 4-direction mAP@50
+        self.log("val/map_i2t", mean_average_precision(
+            img_codes, txt_codes, sub_labels, sub_labels,
+        ))
+        self.log("val/map_t2i", mean_average_precision(
+            txt_codes, img_codes, sub_labels, sub_labels,
+        ))
+        self.log("val/map_i2i", mean_average_precision(
+            img_codes, img_codes, sub_labels, sub_labels,
+        ))
+        self.log("val/map_t2t", mean_average_precision(
+            txt_codes, txt_codes, sub_labels, sub_labels,
+        ))
+
+        self._val_outputs.clear()
 
     def configure_optimizers(self):
         backbone_params = [
