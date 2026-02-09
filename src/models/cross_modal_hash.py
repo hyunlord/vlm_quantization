@@ -50,7 +50,14 @@ class CrossModalHashModel(pl.LightningModule):
             for param in self.backbone.parameters():
                 param.requires_grad = False
 
-        embed_dim = self.backbone.config.projection_dim
+        # SigLIP/SigLIP2: use vision hidden size as embedding dimension
+        config = self.backbone.config
+        if hasattr(config, "projection_dim"):
+            embed_dim = config.projection_dim
+        elif hasattr(config, "vision_config"):
+            embed_dim = config.vision_config.hidden_size
+        else:
+            embed_dim = config.hidden_size
 
         # Separate nested hash layers per modality
         self.image_hash = NestedHashLayer(embed_dim, hidden_dim, bit_list, dropout)
