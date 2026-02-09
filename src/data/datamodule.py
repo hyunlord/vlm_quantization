@@ -1,0 +1,108 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytorch_lightning as pl
+import torch
+from torch.utils.data import DataLoader
+from transformers import AutoProcessor
+
+from src.data.coco import CocoCaptionsDataset
+from src.data.transforms import (
+    get_consistency_augmentation,
+    get_train_transforms,
+    get_val_transforms,
+)
+
+
+def collate_fn(batch: list[dict]) -> dict[str, torch.Tensor]:
+    """Stack tensors and handle optional aug_pixel_values."""
+    result = {
+        "pixel_values": torch.stack([b["pixel_values"] for b in batch]),
+        "input_ids": torch.stack([b["input_ids"] for b in batch]),
+        "attention_mask": torch.stack([b["attention_mask"] for b in batch]),
+        "image_ids": [b["image_id"] for b in batch],
+    }
+    if "aug_pixel_values" in batch[0]:
+        result["aug_pixel_values"] = torch.stack(
+            [b["aug_pixel_values"] for b in batch]
+        )
+    return result
+
+
+class CrossModalHashDataModule(pl.LightningDataModule):
+    """Lightning DataModule for COCO Captions cross-modal hashing."""
+
+    def __init__(
+        self,
+        data_root: str = "./data/coco",
+        processor_name: str = "google/siglip2-so400m-patch14-384",
+        batch_size: int = 128,
+        num_workers: int = 4,
+        max_text_length: int = 64,
+        image_size: int = 384,
+    ):
+        super().__init__()
+        self.save_hyperparameters()
+        self.data_root = Path(data_root)
+        self.processor = AutoProcessor.from_pretrained(processor_name)
+
+    def setup(self, stage: str | None = None) -> None:
+        if stage == "fit" or stage is None:
+            self.train_dataset = CocoCaptionsDataset(
+                image_dir=self.data_root / "train2014",
+                ann_file=self.data_root / "annotations" / "captions_train2014.json",
+                processor=self.processor,
+                transform=get_train_transforms(self.hparams.image_size),
+                consistency_transform=get_consistency_augmentation(
+                    self.hparams.image_size
+                ),
+                max_text_length=self.hparams.max_text_length,
+            )
+            self.val_dataset = CocoCaptionsDataset(
+                image_dir=self.data_root / "val2014",
+                ann_file=self.data_root / "annotations" / "captions_val2014.json",
+                processor=self.processor,
+                transform=get_val_transforms(self.hparams.image_size),
+                max_text_length=self.hparams.max_text_length,
+            )
+
+        if stage == "test":
+            self.test_dataset = CocoCaptionsDataset(
+                image_dir=self.data_root / "val2014",
+                ann_file=self.data_root / "annotations" / "captions_val2014.json",
+                processor=self.processor,
+                transform=get_val_transforms(self.hparams.image_size),
+                max_text_length=self.hparams.max_text_length,
+            )
+
+    def train_dataloader(self) -> DataLoader:
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.hparams.batch_size,
+            shuffle=True,
+            num_workers=self.hparams.num_workers,
+            collate_fn=collate_fn,
+            pin_memory=True,
+            drop_last=True,
+        )
+
+    def val_dataloader(self) -> DataLoader:
+        return DataLoader(
+            self.val_dataset,
+            batch_size=self.hparams.batch_size,
+            shuffle=False,
+            num_workers=self.hparams.num_workers,
+            collate_fn=collate_fn,
+            pin_memory=True,
+        )
+
+    def test_dataloader(self) -> DataLoader:
+        return DataLoader(
+            self.test_dataset,
+            batch_size=self.hparams.batch_size,
+            shuffle=False,
+            num_workers=self.hparams.num_workers,
+            collate_fn=collate_fn,
+            pin_memory=True,
+        )
