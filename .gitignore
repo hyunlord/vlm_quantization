@@ -1,0 +1,38 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Data
+data/
+*.db
+
+# Checkpoints
+checkpoints/
+*.ckpt
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env
+venv/
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Monitoring frontend
+monitor/frontend/node_modules/
+monitor/frontend/.next/
+monitor/frontend/out/
+monitor/metrics.db
+
+# Logs
+*.log
+wandb/
+lightning_logs/
