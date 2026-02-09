@@ -48,7 +48,7 @@ class CrossModalHashDataModule(pl.LightningDataModule):
         self.processor = AutoProcessor.from_pretrained(processor_name)
 
     def setup(self, stage: str | None = None) -> None:
-        if stage == "fit" or stage is None:
+        if stage in ("fit", "validate") or stage is None:
             self.train_dataset = CocoCaptionsDataset(
                 image_dir=self.data_root / "train2014",
                 ann_file=self.data_root / "annotations" / "captions_train2014.json",
