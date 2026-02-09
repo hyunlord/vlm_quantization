@@ -24,6 +24,8 @@ const LOSS_LINES = [
   { key: "loss_quantization", color: "#f59e0b", label: "Quantization" },
   { key: "loss_balance", color: "#10b981", label: "Balance" },
   { key: "loss_consistency", color: "#ec4899", label: "Consistency" },
+  { key: "loss_ortho", color: "#06b6d4", label: "Ortho" },
+  { key: "loss_lcs", color: "#f97316", label: "LCS" },
 ] as const;
 
 export default function LossChart({ data }: Props) {
@@ -66,8 +68,13 @@ export default function LossChart({ data }: Props) {
             <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
             <XAxis
               dataKey="step"
+              type="number"
+              domain={["dataMin", "dataMax"]}
               tick={{ fontSize: 10, fill: "#6b7280" }}
               stroke="#374151"
+              tickFormatter={(v: number) =>
+                v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)
+              }
             />
             <YAxis
               tick={{ fontSize: 10, fill: "#6b7280" }}

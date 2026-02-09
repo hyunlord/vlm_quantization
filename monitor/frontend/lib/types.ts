@@ -6,6 +6,8 @@ export interface TrainingMetric {
   loss_quantization: number;
   loss_balance: number;
   loss_consistency: number;
+  loss_ortho: number;
+  loss_lcs: number;
   lr: number;
 }
 

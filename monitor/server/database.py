@@ -27,6 +27,8 @@ def init_db() -> None:
             loss_quantization REAL,
             loss_balance REAL,
             loss_consistency REAL,
+            loss_ortho REAL DEFAULT 0.0,
+            loss_lcs REAL DEFAULT 0.0,
             lr REAL,
             timestamp REAL NOT NULL
         );
@@ -64,6 +66,15 @@ def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_eval_epoch ON eval_metrics(epoch);
         CREATE INDEX IF NOT EXISTS idx_sys_ts ON system_metrics(timestamp);
     """)
+    # Migrate: add columns for existing DBs
+    for col in ("loss_ortho", "loss_lcs"):
+        try:
+            conn.execute(
+                f"ALTER TABLE training_metrics ADD COLUMN {col} REAL DEFAULT 0.0"
+            )
+        except sqlite3.OperationalError:
+            pass  # column already exists
+    conn.commit()
     conn.close()
 
 
@@ -72,11 +83,12 @@ def insert_training_metric(m: TrainingMetric) -> None:
     conn.execute(
         """INSERT INTO training_metrics
            (step, epoch, loss_total, loss_contrastive, loss_quantization,
-            loss_balance, loss_consistency, lr, timestamp)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            loss_balance, loss_consistency, loss_ortho, loss_lcs, lr, timestamp)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             m.step, m.epoch, m.loss_total, m.loss_contrastive,
             m.loss_quantization, m.loss_balance, m.loss_consistency,
+            m.loss_ortho, m.loss_lcs,
             m.lr, time.time(),
         ),
     )
