@@ -30,7 +30,10 @@ def auto_configure(
     # Per-sample memory (GB, empirical for SigLIP2 + hash layers, fp16)
     # Frozen backbone: only forward activations
     # Unfrozen backbone: forward + backward activations + gradients
-    per_sample = 0.11 if freeze_backbone else 0.28
+    # 3-view training: 3 image forward passes + 1 text forward per sample
+    # Image forward ≈ 70% of cost → multiplier = 1 + 0.7*2 = 2.4x
+    base_per_sample = 0.11 if freeze_backbone else 0.28
+    per_sample = base_per_sample * 2.4
     model_overhead = 2.0 if freeze_backbone else 4.0
     utilization = 0.65  # leave 35% headroom for peaks
 

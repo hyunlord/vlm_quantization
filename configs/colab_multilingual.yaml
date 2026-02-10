@@ -1,0 +1,49 @@
+model:
+  backbone: "google/siglip2-so400m-patch14-384"
+  bit_list: [16, 32, 64, 128]
+  hidden_dim: 512
+  dropout: 0.1
+  freeze_backbone: false          # A100: fine-tune backbone for Korean
+
+training:
+  batch_size: auto                # auto-detect based on GPU VRAM
+  max_epochs: 5                   # 6.4M samples × 5 epochs
+  hash_lr: 1.0e-3
+  backbone_lr: 5.0e-6             # lower than default to prevent catastrophic forgetting
+  weight_decay: 0.01
+  warmup_steps: 500
+  gradient_clip_val: 1.0
+  accumulate_grad_batches: 4      # overridden when batch_size=auto
+  val_check_interval: 5000        # validate every N training batches
+  early_stopping_patience: 3      # tighter than default (5)
+  checkpoint_dir: "/content/drive/MyDrive/vlm_quantization/checkpoints"
+
+loss:
+  contrastive_weight: 1.0
+  ortho_weight: 0.1
+  quantization_weight: 0.1
+  balance_weight: 0.01
+  consistency_weight: 0.5
+  lcs_weight: 0.5
+  temperature: 0.07
+  ema_decay: 0.99
+
+data:
+  data_root: "/content/data/coco"
+  karpathy_json: "/content/data/coco/dataset_coco.json"
+  num_workers: 4                  # overridden when batch_size=auto
+  max_text_length: 64
+  image_size: 384
+  extra_datasets:
+    - jsonl_path: "/content/data/aihub/aihub_71454.jsonl"
+      data_root: "/content/data/aihub"
+    - jsonl_path: "/content/data/cc3m_ko/cc3m_ko.jsonl"
+      data_root: "/content/data/cc3m_ko"
+    # Phase 2: LAION-KR (requires Drive 2TB or GCS)
+    # - jsonl_path: "/content/data/laion_kr/laion_kr.jsonl"
+    #   data_root: "/content/data/laion_kr"
+
+monitor:
+  enabled: true
+  server_url: "http://localhost:8000"
+  log_every_n_steps: 10

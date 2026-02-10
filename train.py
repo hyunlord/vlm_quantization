@@ -34,6 +34,7 @@ def main():
 
     # DataModule
     karpathy_json = cfg["data"].get("karpathy_json")
+    extra_datasets = cfg["data"].get("extra_datasets")
     datamodule = CrossModalHashDataModule(
         data_root=cfg["data"]["data_root"],
         processor_name=cfg["model"]["backbone"],
@@ -42,11 +43,26 @@ def main():
         max_text_length=cfg["data"]["max_text_length"],
         image_size=cfg["data"]["image_size"],
         karpathy_json=karpathy_json,
+        extra_datasets=extra_datasets,
     )
 
     # Estimate max_steps
     # Karpathy train+restval: ~113K images; standard COCO train2014: ~82K
     num_train_images = 113000 if karpathy_json else 82000
+
+    # Add extra dataset sizes (count JSONL lines)
+    for ds_cfg in extra_datasets or []:
+        jsonl_path = ds_cfg["jsonl_path"]
+        try:
+            with open(jsonl_path) as f:
+                count = sum(1 for line in f if line.strip())
+            num_train_images += count
+            print(f"  Extra dataset: {jsonl_path} ({count:,} samples)")
+        except FileNotFoundError:
+            print(f"  Warning: {jsonl_path} not found, skipping count")
+
+    print(f"  Total training images: {num_train_images:,}")
+
     steps_per_epoch = num_train_images // (
         cfg["training"]["batch_size"] * cfg["training"]["accumulate_grad_batches"]
     )

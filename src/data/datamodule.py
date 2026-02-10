@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytorch_lightning as pl
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import ConcatDataset, DataLoader
 from transformers import AutoProcessor
 
 from src.data.coco import CocoCaptionsDataset
@@ -46,11 +46,40 @@ class CrossModalHashDataModule(pl.LightningDataModule):
         max_text_length: int = 64,
         image_size: int = 384,
         karpathy_json: str | None = None,
+        extra_datasets: list[dict] | None = None,
     ):
         super().__init__()
         self.save_hyperparameters()
         self.data_root = Path(data_root)
         self.processor = AutoProcessor.from_pretrained(processor_name)
+
+    def _build_extra_datasets(self) -> list:
+        """Build GenericImageTextDataset instances from extra_datasets config."""
+        from src.data.generic import GenericImageTextDataset
+
+        extra = []
+        for ds_cfg in self.hparams.extra_datasets or []:
+            extra.append(
+                GenericImageTextDataset(
+                    data_root=ds_cfg["data_root"],
+                    jsonl_path=ds_cfg["jsonl_path"],
+                    processor=self.processor,
+                    transform=get_train_transforms(self.hparams.image_size),
+                    consistency_transform=get_consistency_augmentation(
+                        self.hparams.image_size
+                    ),
+                    max_text_length=self.hparams.max_text_length,
+                    image_size=self.hparams.image_size,
+                )
+            )
+        return extra
+
+    def _concat_with_extra(self, base_train):
+        """Wrap base training dataset with extra datasets via ConcatDataset."""
+        extra = self._build_extra_datasets()
+        if extra:
+            return ConcatDataset([base_train] + extra)
+        return base_train
 
     def setup(self, stage: str | None = None) -> None:
         karpathy = self.hparams.karpathy_json
@@ -59,7 +88,7 @@ class CrossModalHashDataModule(pl.LightningDataModule):
             from src.data.karpathy import KarpathyCocoCaptionsDataset
 
             if stage in ("fit", "validate") or stage is None:
-                self.train_dataset = KarpathyCocoCaptionsDataset(
+                base_train = KarpathyCocoCaptionsDataset(
                     data_root=self.data_root,
                     karpathy_json=karpathy,
                     split="train",
@@ -71,6 +100,7 @@ class CrossModalHashDataModule(pl.LightningDataModule):
                     max_text_length=self.hparams.max_text_length,
                     image_size=self.hparams.image_size,
                 )
+                self.train_dataset = self._concat_with_extra(base_train)
                 self.val_dataset = KarpathyCocoCaptionsDataset(
                     data_root=self.data_root,
                     karpathy_json=karpathy,
@@ -92,7 +122,7 @@ class CrossModalHashDataModule(pl.LightningDataModule):
         else:
             # Fallback: standard COCO 2014 splits
             if stage in ("fit", "validate") or stage is None:
-                self.train_dataset = CocoCaptionsDataset(
+                base_train = CocoCaptionsDataset(
                     image_dir=self.data_root / "train2014",
                     ann_file=self.data_root / "annotations" / "captions_train2014.json",
                     processor=self.processor,
@@ -103,6 +133,7 @@ class CrossModalHashDataModule(pl.LightningDataModule):
                     max_text_length=self.hparams.max_text_length,
                     image_size=self.hparams.image_size,
                 )
+                self.train_dataset = self._concat_with_extra(base_train)
                 self.val_dataset = CocoCaptionsDataset(
                     image_dir=self.data_root / "val2014",
                     ann_file=self.data_root / "annotations" / "captions_val2014.json",
