@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import warnings
+warnings.filterwarnings("ignore", message=".*pynvml.*", category=FutureWarning)
+
 import argparse
 from datetime import datetime
 from pathlib import Path
