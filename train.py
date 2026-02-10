@@ -144,6 +144,7 @@ def main():
         callbacks=callbacks,
         log_every_n_steps=10,
         enable_progress_bar=True,
+        num_sanity_val_steps=0,  # skip: we run full validate() below
     )
 
     # Baseline validation (epoch 0, before any training)
