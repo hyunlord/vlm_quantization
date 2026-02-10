@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from monitor.server.database import (
+    clear_all_metrics,
     clear_training_metrics,
     get_eval_metrics,
     get_system_metrics as get_system_metrics_db,
@@ -188,6 +189,15 @@ async def post_hash_analysis(data: dict):
 @app.get("/api/metrics/hash_analysis")
 async def get_hash_analysis():
     return {"hash_analysis": _hash_analysis_data}
+
+
+@app.post("/api/metrics/reset")
+async def reset_all_metrics():
+    """Full reset: clear all training, eval, and hash analysis data."""
+    global _hash_analysis_data
+    clear_all_metrics()
+    _hash_analysis_data = None
+    return {"status": "ok"}
 
 
 # --- REST: Inference ---

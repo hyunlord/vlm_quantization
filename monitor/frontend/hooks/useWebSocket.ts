@@ -58,9 +58,24 @@ export function useWebSocket(url: string) {
           case "eval":
             setEvalData((prev) => [...prev, msg.data as EvalMetric]);
             break;
-          case "status":
-            setStatus(msg.data as TrainingStatus);
+          case "status": {
+            const s = msg.data as TrainingStatus;
+            // New training run — reset accumulated data
+            if (s.is_training && s.step === 0 && s.config) {
+              setTrainingData([]);
+              setHashAnalysis(null);
+              // Reload eval data from server (preserves baseline)
+              fetch("/api/metrics/history")
+                .then((r) => r.json())
+                .then((data) => {
+                  if (data.eval?.length) setEvalData(data.eval);
+                  else setEvalData([]);
+                })
+                .catch(() => setEvalData([]));
+            }
+            setStatus(s);
             break;
+          }
           case "hash_analysis":
             setHashAnalysis(msg.data as HashAnalysisData);
             break;

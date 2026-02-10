@@ -152,7 +152,19 @@ def insert_system_metric(m: SystemMetric) -> None:
 
 
 def clear_training_metrics() -> None:
-    """Delete all training and eval metrics (called on new training run)."""
+    """Delete training metrics from previous run (called on new training run).
+
+    Eval metrics are preserved so baseline validation data (collected before
+    training) survives the on_train_start clear.
+    """
+    conn = get_connection()
+    conn.execute("DELETE FROM training_metrics")
+    conn.commit()
+    conn.close()
+
+
+def clear_all_metrics() -> None:
+    """Delete all training and eval metrics (full reset)."""
     conn = get_connection()
     conn.execute("DELETE FROM training_metrics")
     conn.execute("DELETE FROM eval_metrics")
