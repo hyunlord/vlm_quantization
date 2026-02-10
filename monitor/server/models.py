@@ -75,6 +75,7 @@ class LoadModelRequest(BaseModel):
 
 class EncodeRequest(BaseModel):
     image_base64: str | None = None
+    image_url: str | None = None
     text: str | None = None
 
 

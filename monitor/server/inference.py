@@ -4,6 +4,8 @@ from __future__ import annotations
 import base64
 import io
 import logging
+import re
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 
@@ -53,11 +55,18 @@ class InferenceEngine:
         return self.status()
 
     def status(self) -> dict:
+        hparams: dict = {}
+        if self.model is not None:
+            hparams = {k: v for k, v in self.model.hparams.items()}
+            # Shorten model_name for display
+            if "model_name" in hparams:
+                hparams["model_name"] = hparams["model_name"].split("/")[-1]
         return {
             "loaded": self.is_loaded,
             "checkpoint": self.checkpoint_path,
             "model_name": self.model_name,
             "bit_list": self.bit_list,
+            "hparams": hparams,
         }
 
     @torch.no_grad()
@@ -123,6 +132,9 @@ class InferenceEngine:
             })
         return comparisons
 
+    # Pattern: best-epoch=12-val/total=0.2341.ckpt
+    _ckpt_pattern = re.compile(r"epoch=(\d+).*?=(\d+\.\d+)")
+
     @staticmethod
     def list_checkpoints(directory: str) -> list[dict]:
         """List all .ckpt files under directory, grouped by run folder."""
@@ -136,12 +148,15 @@ class InferenceEngine:
             reverse=True,
         ):
             stat = p.stat()
+            m = InferenceEngine._ckpt_pattern.search(p.name)
             ckpts.append({
                 "path": str(p),
                 "name": p.name,
                 "run_dir": p.parent.name,
                 "size_mb": round(stat.st_size / 1024 / 1024, 1),
                 "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "epoch": int(m.group(1)) if m else None,
+                "val_loss": float(m.group(2)) if m else None,
             })
         return ckpts
 
@@ -152,4 +167,13 @@ class InferenceEngine:
         if "," in b64:
             b64 = b64.split(",", 1)[1]
         data = base64.b64decode(b64)
+        return Image.open(io.BytesIO(data)).convert("RGB")
+
+    @staticmethod
+    def download_image(url: str) -> Image.Image:
+        """Download image from URL and return as PIL Image."""
+        headers = {"User-Agent": "Mozilla/5.0"}
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = resp.read()
         return Image.open(io.BytesIO(data)).convert("RGB")

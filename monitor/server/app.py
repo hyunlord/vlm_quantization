@@ -216,10 +216,13 @@ async def encode_input(req: EncodeRequest):
     if req.image_base64:
         image = InferenceEngine.decode_base64_image(req.image_base64)
         codes = inference_engine.encode_image(image)
+    elif req.image_url:
+        image = InferenceEngine.download_image(req.image_url)
+        codes = inference_engine.encode_image(image)
     elif req.text:
         codes = inference_engine.encode_text(req.text)
     else:
-        return {"error": "Provide image_base64 or text"}
+        return {"error": "Provide image_base64, image_url, or text"}
     return EncodeResponse(codes=[HashCode(**c) for c in codes])
 
 
