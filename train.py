@@ -151,6 +151,16 @@ def main():
     print("  Running baseline validation...")
     trainer.validate(model, datamodule=datamodule)
 
+    # Standalone validate() may not trigger callbacks in all Lightning versions.
+    # Explicitly push baseline eval metrics to the monitor dashboard.
+    if monitor_cfg.get("enabled", False):
+        from monitor.callback import MonitorCallback
+
+        for cb in trainer.callbacks:
+            if isinstance(cb, MonitorCallback):
+                cb.on_validation_epoch_end(trainer, model)
+                break
+
     # Clean up GPU state before training to avoid CUDA fork deadlocks
     import gc
     gc.collect()
