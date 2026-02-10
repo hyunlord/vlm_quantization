@@ -121,6 +121,11 @@ class MonitorCallback(pl.Callback):
         eval_data["map_i2i"] = self._to_float(logged.get("val/map_i2i"), None)
         eval_data["map_t2t"] = self._to_float(logged.get("val/map_t2t"), None)
 
+        # Precision@K
+        eval_data["p1"] = self._to_float(logged.get("val/p1"), None)
+        eval_data["p5"] = self._to_float(logged.get("val/p5"), None)
+        eval_data["p10"] = self._to_float(logged.get("val/p10"), None)
+
         # Validation losses (for train vs val comparison / overfitting detection)
         eval_data["step"] = trainer.global_step
         eval_data["val_loss_total"] = self._to_float(

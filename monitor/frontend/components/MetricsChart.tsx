@@ -31,6 +31,7 @@ export default function MetricsChart({ data }: Props) {
   const [activeTab, setActiveTab] = useState<"map" | "precision">("map");
 
   const mapData = data.map((d) => ({
+    step: d.step ?? d.epoch,
     epoch: d.epoch,
     I2T: d.map_i2t,
     T2I: d.map_t2i,
@@ -41,11 +42,13 @@ export default function MetricsChart({ data }: Props) {
   const latest = data[data.length - 1];
   const precisionData = latest
     ? [
-        { name: "P@1", value: latest.p1 ?? 0 },
-        { name: "P@5", value: latest.p5 ?? 0 },
-        { name: "P@10", value: latest.p10 ?? 0 },
+        { name: "P@1", value: latest.p1 ?? null },
+        { name: "P@5", value: latest.p5 ?? null },
+        { name: "P@10", value: latest.p10 ?? null },
       ]
     : [];
+
+  const hasPrecision = precisionData.some((d) => d.value !== null);
 
   return (
     <div className="rounded-xl bg-gray-900 p-4 border border-gray-800 h-full">
@@ -79,9 +82,16 @@ export default function MetricsChart({ data }: Props) {
           <LineChart data={mapData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
             <XAxis
-              dataKey="epoch"
+              dataKey="step"
               tick={{ fontSize: 10, fill: "#6b7280" }}
               stroke="#374151"
+              label={{
+                value: "Step",
+                position: "insideBottom",
+                offset: -2,
+                fontSize: 10,
+                fill: "#6b7280",
+              }}
             />
             <YAxis
               domain={[0, 1]}
@@ -94,6 +104,12 @@ export default function MetricsChart({ data }: Props) {
                 border: "1px solid #374151",
                 borderRadius: "8px",
                 fontSize: "11px",
+              }}
+              labelFormatter={(step) => {
+                const point = mapData.find((d) => d.step === step);
+                return point
+                  ? `Epoch ${point.epoch}, Step ${step}`
+                  : `Step ${step}`;
               }}
             />
             <Legend wrapperStyle={{ fontSize: "11px" }} />
@@ -111,9 +127,15 @@ export default function MetricsChart({ data }: Props) {
             ))}
           </LineChart>
         </ResponsiveContainer>
+      ) : !hasPrecision ? (
+        <div className="h-48 flex items-center justify-center text-gray-600 text-sm">
+          Waiting for P@K data...
+        </div>
       ) : (
         <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={precisionData}>
+          <BarChart
+            data={precisionData.map((d) => ({ ...d, value: d.value ?? 0 }))}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
             <XAxis
               dataKey="name"
@@ -132,6 +154,11 @@ export default function MetricsChart({ data }: Props) {
                 borderRadius: "8px",
                 fontSize: "11px",
               }}
+              formatter={(value) =>
+                typeof value === "number"
+                  ? [value.toFixed(4), "Precision"]
+                  : [String(value), "Precision"]
+              }
             />
             <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
           </BarChart>

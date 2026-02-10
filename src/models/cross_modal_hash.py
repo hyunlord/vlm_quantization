@@ -12,6 +12,7 @@ from src.utils.metrics import (
     compute_bit_entropy,
     compute_quantization_error,
     mean_average_precision,
+    precision_at_k,
 )
 
 
@@ -219,6 +220,17 @@ class CrossModalHashModel(pl.LightningModule):
         ))
         self.log("val/map_t2t", mean_average_precision(
             txt_codes, txt_codes, sub_labels, sub_labels,
+        ))
+
+        # P@K (I2T direction — primary cross-modal metric)
+        self.log("val/p1", precision_at_k(
+            img_codes, txt_codes, sub_labels, sub_labels, k=1,
+        ))
+        self.log("val/p5", precision_at_k(
+            img_codes, txt_codes, sub_labels, sub_labels, k=5,
+        ))
+        self.log("val/p10", precision_at_k(
+            img_codes, txt_codes, sub_labels, sub_labels, k=10,
         ))
 
         # --- Hash Analysis for monitoring dashboard ---

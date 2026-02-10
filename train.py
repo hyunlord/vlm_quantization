@@ -113,6 +113,7 @@ def main():
     # Trainer
     trainer = pl.Trainer(
         max_epochs=cfg["training"]["max_epochs"],
+        val_check_interval=cfg["training"].get("val_check_interval", 1.0),
         accelerator="auto",
         devices="auto",
         precision="bf16-mixed" if torch.cuda.is_bf16_supported() else "16-mixed",
