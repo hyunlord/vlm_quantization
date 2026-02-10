@@ -400,16 +400,22 @@ if _frontend_out.is_dir():
     async def serve_index():
         return FileResponse(_frontend_out / "index.html")
 
-    @app.get("/inference")
-    async def serve_inference():
-        return FileResponse(_frontend_out / "inference.html")
+    # Register page routes only when their HTML files exist (avoids 500
+    # errors when frontend was built from an older codebase snapshot).
+    _page_routes = [
+        ("/inference", "inference.html"),
+        ("/hash-analysis", "hash-analysis.html"),
+        ("/search", "search.html"),
+    ]
+    for _route, _filename in _page_routes:
+        _html = _frontend_out / _filename
+        if _html.is_file():
 
-    @app.get("/hash-analysis")
-    async def serve_hash_analysis():
-        return FileResponse(_frontend_out / "hash-analysis.html")
+            def _make_handler(p: Path):
+                async def handler():
+                    return FileResponse(p)
+                return handler
 
-    @app.get("/search")
-    async def serve_search():
-        return FileResponse(_frontend_out / "search.html")
+            app.get(_route)(_make_handler(_html))
 
     app.mount("/", StaticFiles(directory=str(_frontend_out)), name="static")

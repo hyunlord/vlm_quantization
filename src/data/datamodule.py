@@ -151,6 +151,15 @@ class CrossModalHashDataModule(pl.LightningDataModule):
                     max_text_length=self.hparams.max_text_length,
                 )
 
+    def _loader_kwargs(self) -> dict:
+        """Common DataLoader kwargs; use forkserver to avoid CUDA fork deadlocks."""
+        nw = self.hparams.num_workers
+        extra: dict = {}
+        if nw > 0:
+            extra["persistent_workers"] = True
+            extra["multiprocessing_context"] = "forkserver"
+        return extra
+
     def train_dataloader(self) -> DataLoader:
         return DataLoader(
             self.train_dataset,
@@ -160,6 +169,7 @@ class CrossModalHashDataModule(pl.LightningDataModule):
             collate_fn=collate_fn,
             pin_memory=True,
             drop_last=True,
+            **self._loader_kwargs(),
         )
 
     def val_dataloader(self) -> DataLoader:
@@ -170,6 +180,7 @@ class CrossModalHashDataModule(pl.LightningDataModule):
             num_workers=self.hparams.num_workers,
             collate_fn=collate_fn,
             pin_memory=True,
+            **self._loader_kwargs(),
         )
 
     def test_dataloader(self) -> DataLoader:
@@ -180,4 +191,5 @@ class CrossModalHashDataModule(pl.LightningDataModule):
             num_workers=self.hparams.num_workers,
             collate_fn=collate_fn,
             pin_memory=True,
+            **self._loader_kwargs(),
         )

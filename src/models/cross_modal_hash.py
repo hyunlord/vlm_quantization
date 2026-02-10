@@ -161,12 +161,17 @@ class CrossModalHashModel(pl.LightningModule):
         return losses["total"]
 
     def validation_step(self, batch: dict, batch_idx: int) -> dict:
-        outputs = self(batch)
-
-        losses = self.loss_fn(
-            image_outputs=outputs["image"],
-            text_outputs=outputs["text"],
+        # Run backbone once, reuse for both hash encoding and backbone baseline
+        img_backbone = self.encode_image_backbone(batch["pixel_values"])
+        txt_backbone = self.encode_text_backbone(
+            batch["input_ids"], batch.get("attention_mask")
         )
+
+        # Hash encoding from backbone embeddings (no redundant forward pass)
+        image_out = self.image_hash(img_backbone)
+        text_out = self.text_hash(txt_backbone)
+
+        losses = self.loss_fn(image_outputs=image_out, text_outputs=text_out)
 
         for name, value in losses.items():
             self.log(f"val/{name}", value, sync_dist=True)
@@ -176,8 +181,8 @@ class CrossModalHashModel(pl.LightningModule):
         result = {"image_ids": batch["image_ids"]}
 
         for k, bit in enumerate(bit_list):
-            img_binary = outputs["image"][k]["binary"]
-            txt_binary = outputs["text"][k]["binary"]
+            img_binary = image_out[k]["binary"]
+            txt_binary = text_out[k]["binary"]
 
             all_binary = torch.cat([img_binary, txt_binary], dim=0)
             entropy = compute_bit_entropy(all_binary).mean()
@@ -185,10 +190,10 @@ class CrossModalHashModel(pl.LightningModule):
 
             quant_error = (
                 compute_quantization_error(
-                    outputs["image"][k]["continuous"], img_binary
+                    image_out[k]["continuous"], img_binary
                 )
                 + compute_quantization_error(
-                    outputs["text"][k]["continuous"], txt_binary
+                    text_out[k]["continuous"], txt_binary
                 )
             ) / 2.0
             self.log(f"val/{bit}_quant_error", quant_error, sync_dist=True)
@@ -196,14 +201,9 @@ class CrossModalHashModel(pl.LightningModule):
             result[f"image_binary_{bit}"] = img_binary.detach()
             result[f"text_binary_{bit}"] = txt_binary.detach()
 
-        # Backbone embeddings for cosine mAP baseline
-        with torch.no_grad():
-            result["image_backbone_emb"] = self.encode_image_backbone(
-                batch["pixel_values"]
-            ).detach()
-            result["text_backbone_emb"] = self.encode_text_backbone(
-                batch["input_ids"], batch.get("attention_mask")
-            ).detach()
+        # Backbone embeddings for cosine mAP baseline (already computed above)
+        result["image_backbone_emb"] = img_backbone.detach()
+        result["text_backbone_emb"] = txt_backbone.detach()
 
         self._val_outputs.append(result)
         return result

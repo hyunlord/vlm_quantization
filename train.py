@@ -147,6 +147,11 @@ def main():
     print("  Running baseline validation...")
     trainer.validate(model, datamodule=datamodule)
 
+    # Clean up GPU state before training to avoid CUDA fork deadlocks
+    import gc
+    gc.collect()
+    torch.cuda.empty_cache()
+
     trainer.fit(model, datamodule=datamodule)
 
 
