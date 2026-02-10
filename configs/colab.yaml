@@ -29,7 +29,7 @@ loss:
   ema_decay: 0.99
 
 data:
-  data_root: "/content/drive/MyDrive/data/coco"
+  data_root: "/content/data/coco"  # local SSD (zips cached on Drive)
   num_workers: 4  # overridden when batch_size=auto
   max_text_length: 64
   image_size: 384
