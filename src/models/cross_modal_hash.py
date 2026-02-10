@@ -7,6 +7,7 @@ from transformers import AutoModel
 
 from src.losses.combined import CombinedHashLoss
 from src.models.nested_hash_layer import NestedHashLayer
+from src.utils.hamming import hamming_distance, to_binary_01
 from src.utils.metrics import (
     compute_bit_entropy,
     compute_quantization_error,
@@ -219,6 +220,45 @@ class CrossModalHashModel(pl.LightningModule):
         self.log("val/map_t2t", mean_average_precision(
             txt_codes, txt_codes, sub_labels, sub_labels,
         ))
+
+        # --- Hash Analysis for monitoring dashboard ---
+        hash_analysis: dict = {}
+
+        # 1) Per-bit activation rates for each bit level
+        for k, b in enumerate(bit_list):
+            all_img = torch.cat(
+                [o[f"image_binary_{b}"] for o in self._val_outputs]
+            )
+            all_txt = torch.cat(
+                [o[f"text_binary_{b}"] for o in self._val_outputs]
+            )
+            combined = torch.cat([all_img, all_txt], dim=0)
+            activation = (combined > 0).float().mean(dim=0).cpu().tolist()
+            hash_analysis[f"activation_{b}"] = activation
+
+        # 2) Fixed 8 samples for qualitative check (deterministic seed)
+        n_samples = min(8, len(idx))
+        gen = torch.Generator().manual_seed(42)
+        sample_perm = torch.randperm(len(idx), generator=gen)[:n_samples]
+
+        sample_image_ids = [all_ids[idx[j].item()] for j in sample_perm]
+        sample_img = img_codes[sample_perm]
+        sample_txt = txt_codes[sample_perm]
+
+        dist = hamming_distance(sample_img, sample_txt)
+        similarity = 1.0 - dist.float() / float(bit)
+
+        hash_analysis["sample_image_ids"] = [int(x) for x in sample_image_ids]
+        hash_analysis["sample_img_codes"] = (
+            to_binary_01(sample_img).cpu().tolist()
+        )
+        hash_analysis["sample_txt_codes"] = (
+            to_binary_01(sample_txt).cpu().tolist()
+        )
+        hash_analysis["similarity_matrix"] = similarity.cpu().tolist()
+        hash_analysis["bit"] = bit
+
+        self._hash_analysis = hash_analysis
 
         self._val_outputs.clear()
 

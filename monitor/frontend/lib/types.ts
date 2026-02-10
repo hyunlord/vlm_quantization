@@ -52,7 +52,29 @@ export interface TrainingStatus {
   config: Record<string, unknown> | null;
 }
 
+export interface HashAnalysisSample {
+  image_id: number;
+  caption: string;
+  thumbnail: string;
+}
+
+export interface HashAnalysisData {
+  epoch: number;
+  step: number;
+  bit_activations: Record<string, number[]>;
+  samples: HashAnalysisSample[];
+  sample_img_codes: number[][];
+  sample_txt_codes: number[][];
+  similarity_matrix: number[][];
+  bit: number;
+}
+
 export interface WSMessage {
-  type: "training" | "eval" | "system" | "status";
-  data: TrainingMetric | EvalMetric | SystemMetric | TrainingStatus;
+  type: "training" | "eval" | "system" | "status" | "hash_analysis";
+  data:
+    | TrainingMetric
+    | EvalMetric
+    | SystemMetric
+    | TrainingStatus
+    | HashAnalysisData;
 }

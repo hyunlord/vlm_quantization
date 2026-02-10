@@ -49,6 +49,7 @@ app.add_middleware(
 training_status = TrainingStatus()
 system_monitor = SystemMonitorThread(interval=2.0)
 inference_engine = InferenceEngine()
+_hash_analysis_data: dict | None = None
 
 
 # --- WebSocket Manager ---
@@ -175,6 +176,20 @@ async def update_training_status(status: TrainingStatus):
     return {"status": "ok"}
 
 
+# --- REST: Hash Analysis ---
+@app.post("/api/metrics/hash_analysis")
+async def post_hash_analysis(data: dict):
+    global _hash_analysis_data
+    _hash_analysis_data = data
+    await manager.broadcast({"type": "hash_analysis", "data": data})
+    return {"status": "ok"}
+
+
+@app.get("/api/metrics/hash_analysis")
+async def get_hash_analysis():
+    return {"hash_analysis": _hash_analysis_data}
+
+
 # --- REST: Inference ---
 @app.post("/api/inference/load")
 async def load_inference_model(req: LoadModelRequest):
@@ -230,5 +245,9 @@ if _frontend_out.is_dir():
     @app.get("/inference")
     async def serve_inference():
         return FileResponse(_frontend_out / "inference.html")
+
+    @app.get("/hash-analysis")
+    async def serve_hash_analysis():
+        return FileResponse(_frontend_out / "hash-analysis.html")
 
     app.mount("/", StaticFiles(directory=str(_frontend_out)), name="static")

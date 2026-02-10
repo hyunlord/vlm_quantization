@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import copy
+from pathlib import Path
 
 import optuna
 import pytorch_lightning as pl
@@ -9,6 +11,44 @@ import yaml
 
 from src.data.datamodule import CrossModalHashDataModule
 from src.models.cross_modal_hash import CrossModalHashModel
+
+# Mapping: Optuna param name → config YAML path
+PARAM_MAP = {
+    "hidden_dim": ("model", "hidden_dim"),
+    "ortho_weight": ("loss", "ortho_weight"),
+    "lcs_weight": ("loss", "lcs_weight"),
+    "consistency_weight": ("loss", "consistency_weight"),
+    "quantization_weight": ("loss", "quantization_weight"),
+    "balance_weight": ("loss", "balance_weight"),
+    "temperature": ("loss", "temperature"),
+    "hash_lr": ("training", "hash_lr"),
+    "backbone_lr": ("training", "backbone_lr"),
+}
+
+
+def export_best_config(
+    study: optuna.Study, base_cfg: dict, output_path: str | Path,
+) -> Path:
+    """Merge best trial params into base config and save as YAML."""
+    best = study.best_trial
+    cfg = copy.deepcopy(base_cfg)
+
+    for param_name, (section, key) in PARAM_MAP.items():
+        if param_name in best.params:
+            value = best.params[param_name]
+            if isinstance(value, float):
+                value = round(value, 6)
+            cfg[section][key] = value
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(output_path, "w") as f:
+        f.write(f"# Auto-generated from Optuna study: {study.study_name}\n")
+        f.write(f"# Best trial #{best.number} — val/total: {best.value:.4f}\n\n")
+        yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+
+    return output_path
 
 
 def objective(trial: optuna.Trial, base_cfg: dict) -> float:
@@ -112,6 +152,10 @@ def main():
     parser.add_argument(
         "--storage", type=str, default="sqlite:///optuna_results.db"
     )
+    parser.add_argument(
+        "--export-config", type=str, default=None,
+        help="Output path for best config YAML (default: configs/best_<study>.yaml)",
+    )
     args = parser.parse_args()
 
     with open(args.config) as f:
@@ -145,6 +189,12 @@ def main():
         print("  Metrics:")
         for key, value in best.user_attrs.items():
             print(f"    {key}: {value:.4f}")
+
+    # Export best config YAML
+    export_path = args.export_config or f"configs/best_{args.study_name}.yaml"
+    out = export_best_config(study, cfg, export_path)
+    print(f"\n  Best config exported → {out}")
+    print(f"  Retrain: python train.py --config {out}")
 
 
 if __name__ == "__main__":

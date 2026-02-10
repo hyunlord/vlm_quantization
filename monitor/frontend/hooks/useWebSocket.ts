@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EvalMetric,
+  HashAnalysisData,
   SystemMetric,
   TrainingMetric,
   TrainingStatus,
@@ -17,6 +18,9 @@ export function useWebSocket(url: string) {
   const [trainingData, setTrainingData] = useState<TrainingMetric[]>([]);
   const [evalData, setEvalData] = useState<EvalMetric[]>([]);
   const [status, setStatus] = useState<TrainingStatus | null>(null);
+  const [hashAnalysis, setHashAnalysis] = useState<HashAnalysisData | null>(
+    null,
+  );
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeout = useRef<NodeJS.Timeout>(undefined);
 
@@ -48,6 +52,9 @@ export function useWebSocket(url: string) {
           break;
         case "status":
           setStatus(msg.data as TrainingStatus);
+          break;
+        case "hash_analysis":
+          setHashAnalysis(msg.data as HashAnalysisData);
           break;
       }
     };
@@ -84,5 +91,22 @@ export function useWebSocket(url: string) {
       .catch(() => {});
   }, []);
 
-  return { isConnected, systemData, trainingData, evalData, status };
+  // Load hash analysis on mount
+  useEffect(() => {
+    fetch("/api/metrics/hash_analysis")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.hash_analysis) setHashAnalysis(data.hash_analysis);
+      })
+      .catch(() => {});
+  }, []);
+
+  return {
+    isConnected,
+    systemData,
+    trainingData,
+    evalData,
+    status,
+    hashAnalysis,
+  };
 }

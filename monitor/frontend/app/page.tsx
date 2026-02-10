@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Search, Wifi, WifiOff } from "lucide-react";
+import { BarChart3, Search, Wifi, WifiOff } from "lucide-react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import TrainingStatus from "@/components/TrainingStatus";
 import SystemPanel from "@/components/SystemPanel";
@@ -29,6 +29,13 @@ export default function Dashboard() {
           VLM Quantization Monitor
         </h1>
         <div className="flex items-center gap-3">
+          <Link
+            href="/hash-analysis"
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-purple-400 transition-colors"
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>Hash Analysis</span>
+          </Link>
           <Link
             href="/inference"
             className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-blue-400 transition-colors"

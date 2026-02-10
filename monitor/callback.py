@@ -147,6 +147,55 @@ class MonitorCallback(pl.Callback):
 
         self._post("/api/metrics/eval", eval_data)
 
+        # Hash analysis data (bit balance + qualitative samples)
+        analysis = getattr(pl_module, "_hash_analysis", None)
+        if analysis:
+            try:
+                val_dataset = trainer.datamodule.val_dataset
+                samples = []
+                for img_id in analysis["sample_image_ids"]:
+                    ann_ids = val_dataset.coco.getAnnIds(imgIds=img_id)
+                    anns = val_dataset.coco.loadAnns(ann_ids)
+                    caption = anns[0]["caption"] if anns else ""
+                    info = val_dataset.coco.imgs[img_id]
+                    img_path = val_dataset.image_dir / info["file_name"]
+                    thumbnail = self._make_thumbnail(img_path)
+                    samples.append({
+                        "image_id": img_id,
+                        "caption": caption,
+                        "thumbnail": thumbnail,
+                    })
+                self._post("/api/metrics/hash_analysis", {
+                    "epoch": trainer.current_epoch,
+                    "step": trainer.global_step,
+                    "bit_activations": {
+                        k: v for k, v in analysis.items()
+                        if k.startswith("activation_")
+                    },
+                    "samples": samples,
+                    "sample_img_codes": analysis["sample_img_codes"],
+                    "sample_txt_codes": analysis["sample_txt_codes"],
+                    "similarity_matrix": analysis["similarity_matrix"],
+                    "bit": analysis["bit"],
+                })
+            except Exception as e:
+                logger.warning("Hash analysis POST failed: %s", e)
+
+    @staticmethod
+    def _make_thumbnail(path, size: int = 128) -> str:
+        """Read image, resize to thumbnail, return as base64 data URI."""
+        import base64
+        import io
+
+        from PIL import Image
+
+        img = Image.open(path).convert("RGB")
+        img.thumbnail((size, size))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=70)
+        b64 = base64.b64encode(buf.getvalue()).decode()
+        return f"data:image/jpeg;base64,{b64}"
+
     def on_fit_end(
         self, trainer: pl.Trainer, pl_module: pl.LightningModule
     ) -> None:
