@@ -221,6 +221,17 @@ async def list_checkpoints(directory: str = ""):
     return {"checkpoints": InferenceEngine.list_checkpoints(directory)}
 
 
+@app.get("/api/inference/checkpoint-info")
+async def get_checkpoint_info(path: str = ""):
+    """Peek at checkpoint hyperparameters without loading the full model."""
+    if not path:
+        return {"error": "Provide path parameter"}
+    hparams = await asyncio.get_event_loop().run_in_executor(
+        None, InferenceEngine.peek_hparams, path,
+    )
+    return {"path": path, "hparams": hparams}
+
+
 @app.post("/api/inference/encode", response_model=EncodeResponse)
 async def encode_input(req: EncodeRequest):
     if req.image_base64:

@@ -132,9 +132,6 @@ class InferenceEngine:
             })
         return comparisons
 
-    # Pattern: best-epoch=12-val/total=0.2341.ckpt
-    _ckpt_pattern = re.compile(r"epoch=(\d+).*?=(\d+\.\d+)")
-
     @staticmethod
     def list_checkpoints(directory: str) -> list[dict]:
         """List all .ckpt files under directory, grouped by run folder."""
@@ -148,17 +145,52 @@ class InferenceEngine:
             reverse=True,
         ):
             stat = p.stat()
-            m = InferenceEngine._ckpt_pattern.search(p.name)
+
+            # Group by first subdirectory under root (usually timestamped run dir)
+            try:
+                parts = p.relative_to(root).parts
+                run_dir = parts[0] if len(parts) > 1 else ""
+            except ValueError:
+                run_dir = p.parent.name
+
+            # Extract epoch from full path (handles subdir like best-epoch=0-val/)
+            epoch_match = re.search(r"epoch[=_](\d+)", str(p))
+            epoch = int(epoch_match.group(1)) if epoch_match else None
+
+            # Extract val_loss from filename (float with 3+ decimals)
+            loss_match = re.search(r"(\d+\.\d{3,})", p.name)
+            val_loss = float(loss_match.group(1)) if loss_match else None
+
             ckpts.append({
                 "path": str(p),
                 "name": p.name,
-                "run_dir": p.parent.name,
-                "size_mb": round(stat.st_size / 1024 / 1024, 1),
+                "run_dir": run_dir,
+                "size_mb": round(stat.st_size / 1024 / 1024),
                 "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                "epoch": int(m.group(1)) if m else None,
-                "val_loss": float(m.group(2)) if m else None,
+                "epoch": epoch,
+                "val_loss": val_loss,
             })
         return ckpts
+
+    @staticmethod
+    def peek_hparams(checkpoint_path: str) -> dict:
+        """Extract hyperparameters from a checkpoint without full model load."""
+        path = Path(checkpoint_path)
+        if not path.exists():
+            return {}
+        try:
+            kwargs: dict = {"map_location": "cpu", "weights_only": False}
+            try:
+                # mmap avoids reading tensor data into RAM (PyTorch 2.1+)
+                ckpt = torch.load(str(path), mmap=True, **kwargs)
+            except TypeError:
+                ckpt = torch.load(str(path), **kwargs)
+            hparams = dict(ckpt.get("hyper_parameters", {}))
+            del ckpt
+            return hparams
+        except Exception as e:
+            logger.warning("peek_hparams failed for %s: %s", checkpoint_path, e)
+            return {}
 
     @staticmethod
     def decode_base64_image(b64: str) -> Image.Image:

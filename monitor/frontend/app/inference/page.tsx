@@ -3,7 +3,9 @@
 import {
   ArrowLeft,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
+  Download,
   FolderSearch,
   Loader2,
   RefreshCw,
@@ -49,6 +51,98 @@ interface Checkpoint {
 const DEFAULT_CKPT_DIR =
   "/content/drive/MyDrive/vlm_quantization/checkpoints";
 
+// --- Helpers ---
+
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function formatDate(iso: string) {
+  const d = new Date(iso);
+  return (
+    d.toLocaleDateString("en", { month: "short", day: "numeric" }) +
+    " " +
+    d.toLocaleTimeString("en", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    })
+  );
+}
+
+function formatRunDir(runDir: string) {
+  // Parse YYYYMMDD_HHMMSS format
+  const m = runDir.match(/^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})$/);
+  if (m) {
+    const months = [
+      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    return `${months[parseInt(m[2]) - 1]} ${parseInt(m[3])}, ${m[1]} ${m[4]}:${m[5]}`;
+  }
+  return runDir;
+}
+
+function formatHparamValue(v: unknown): string {
+  if (Array.isArray(v)) return JSON.stringify(v);
+  if (typeof v === "number") {
+    if (v < 0.001 && v > 0) return v.toExponential(1);
+    return String(v);
+  }
+  if (typeof v === "string") return v.split("/").pop() ?? v;
+  return String(v);
+}
+
+// --- Compact hparams display for run preview ---
+
+function RunHparams({ hp }: { hp: Record<string, unknown> }) {
+  if (!hp || Object.keys(hp).length === 0) {
+    return (
+      <p className="text-[10px] text-gray-600 px-3 py-2">
+        No hyperparameters found
+      </p>
+    );
+  }
+  const rows: [string, unknown][] = [
+    ["backbone", hp.model_name],
+    ["bits", hp.bit_list],
+    ["hidden", hp.hidden_dim],
+    ["freeze", hp.freeze_backbone],
+    ["hash_lr", hp.hash_lr],
+    ["backbone_lr", hp.backbone_lr],
+    ["warmup", hp.warmup_steps],
+    ["wd", hp.weight_decay],
+    ["temp", hp.temperature],
+    ["ema", hp.ema_decay],
+    ["c_w", hp.contrastive_weight],
+    ["q_w", hp.quantization_weight],
+    ["b_w", hp.balance_weight],
+    ["o_w", hp.ortho_weight],
+    ["cons_w", hp.consistency_weight],
+    ["lcs_w", hp.lcs_weight],
+  ].filter(([, v]) => v != null);
+
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-0.5 px-3 py-2 bg-gray-800/30 text-[10px] border-b border-gray-800/50">
+      {rows.map(([k, v]) => (
+        <span key={k}>
+          <span className="text-gray-500">{k}:</span>{" "}
+          <span className="text-gray-400 font-mono">
+            {formatHparamValue(v)}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ========== Main Component ==========
+
 export default function InferencePage() {
   const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
   const [loadingModel, setLoadingModel] = useState(false);
@@ -62,6 +156,13 @@ export default function InferencePage() {
   const [scanning, setScanning] = useState(false);
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [hasScanned, setHasScanned] = useState(false);
+
+  // Expandable run details
+  const [expandedRun, setExpandedRun] = useState<string | null>(null);
+  const [runHparams, setRunHparams] = useState<
+    Record<string, Record<string, unknown>>
+  >({});
+  const [fetchingHparams, setFetchingHparams] = useState<string | null>(null);
 
   const [codesA, setCodesA] = useState<HashCode[] | null>(null);
   const [codesB, setCodesB] = useState<HashCode[] | null>(null);
@@ -96,6 +197,8 @@ export default function InferencePage() {
     const target = dir || DEFAULT_CKPT_DIR;
     setScanning(true);
     setHasScanned(true);
+    setRunHparams({});
+    setExpandedRun(null);
     try {
       const res = await fetch(
         `/api/inference/checkpoints?directory=${encodeURIComponent(target.trim())}`,
@@ -114,6 +217,31 @@ export default function InferencePage() {
     scanCheckpoints(ckptDir);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const toggleRunExpand = async (runDir: string, firstCkptPath: string) => {
+    if (expandedRun === runDir) {
+      setExpandedRun(null);
+      return;
+    }
+    setExpandedRun(runDir);
+    if (!runHparams[runDir]) {
+      setFetchingHparams(runDir);
+      try {
+        const res = await fetch(
+          `/api/inference/checkpoint-info?path=${encodeURIComponent(firstCkptPath)}`,
+        );
+        const data = await res.json();
+        setRunHparams((prev) => ({
+          ...prev,
+          [runDir]: data.hparams || {},
+        }));
+      } catch {
+        setRunHparams((prev) => ({ ...prev, [runDir]: {} }));
+      } finally {
+        setFetchingHparams(null);
+      }
+    }
+  };
 
   const loadCheckpoint = async (path: string) => {
     setLoadingModel(true);
@@ -198,16 +326,7 @@ export default function InferencePage() {
     return bests;
   }, [grouped]);
 
-  const timeAgo = (iso: string) => {
-    const diff = Date.now() - new Date(iso).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    return `${Math.floor(hrs / 24)}d ago`;
-  };
-
-  // Format hparams for display in 3 groups
+  // Format hparams for display in 3 groups (loaded model)
   const hparamGroups = useMemo(() => {
     const hp = modelStatus?.hparams ?? {};
     if (Object.keys(hp).length === 0) return null;
@@ -309,83 +428,149 @@ export default function InferencePage() {
 
             {/* Checkpoint list grouped by run_dir */}
             {checkpoints.length > 0 && (
-              <div className="space-y-2 max-h-[350px] overflow-y-auto">
-                {grouped.map(([runDir, ckpts]) => (
-                  <div
-                    key={runDir}
-                    className="rounded-lg border border-gray-800 overflow-hidden"
-                  >
-                    <div className="text-[10px] text-gray-500 uppercase tracking-wider px-3 py-2 bg-gray-800/50 font-medium">
-                      {runDir}
-                    </div>
-                    <div className="divide-y divide-gray-800/50">
-                      {ckpts.map((ckpt) => {
-                        const isCurrent =
-                          modelStatus?.checkpoint === ckpt.path;
-                        const isLoading = loadingPath === ckpt.path;
-                        const isBest = bestPerRun.has(ckpt.path);
-                        return (
-                          <button
-                            key={ckpt.path}
-                            onClick={() =>
-                              !isCurrent && loadCheckpoint(ckpt.path)
-                            }
-                            disabled={loadingModel}
-                            className={`w-full text-left px-3 py-2.5 text-xs transition-colors
-                              flex items-center justify-between gap-2 ${
-                                isCurrent
-                                  ? "bg-emerald-900/20"
-                                  : "hover:bg-gray-800/70"
-                              }`}
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              {isLoading ? (
-                                <Loader2 className="w-3 h-3 animate-spin text-blue-400 shrink-0" />
-                              ) : isBest ? (
-                                <Star className="w-3 h-3 text-yellow-500 shrink-0 fill-yellow-500" />
-                              ) : isCurrent ? (
-                                <span className="text-emerald-400 text-[10px] shrink-0">
-                                  ●
-                                </span>
-                              ) : (
-                                <span className="w-3 shrink-0" />
-                              )}
+              <div className="space-y-2 max-h-[450px] overflow-y-auto">
+                {grouped.map(([runDir, ckpts]) => {
+                  const isExpanded = expandedRun === runDir;
+                  const isFetching = fetchingHparams === runDir;
+                  const hp = runHparams[runDir];
 
-                              <span
-                                className={`font-mono ${isCurrent ? "text-emerald-300" : "text-gray-300"}`}
-                              >
-                                {ckpt.epoch != null
-                                  ? `Epoch ${ckpt.epoch}`
-                                  : ckpt.name}
-                              </span>
+                  return (
+                    <div
+                      key={runDir}
+                      className="rounded-lg border border-gray-800 overflow-hidden"
+                    >
+                      {/* Run group header — clickable to expand */}
+                      <button
+                        onClick={() =>
+                          toggleRunExpand(runDir, ckpts[0].path)
+                        }
+                        className="w-full text-left px-3 py-2 bg-gray-800/50
+                                   flex items-center justify-between gap-2
+                                   hover:bg-gray-800/80 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {isFetching ? (
+                            <Loader2 className="w-3 h-3 animate-spin text-gray-500 shrink-0" />
+                          ) : isExpanded ? (
+                            <ChevronDown className="w-3 h-3 text-gray-500 shrink-0" />
+                          ) : (
+                            <ChevronRight className="w-3 h-3 text-gray-500 shrink-0" />
+                          )}
+                          <span className="text-[11px] text-gray-300 font-medium">
+                            {formatRunDir(runDir)}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-gray-600 shrink-0">
+                          {ckpts.length} checkpoint
+                          {ckpts.length !== 1 ? "s" : ""}
+                        </span>
+                      </button>
 
-                              {ckpt.val_loss != null && (
-                                <span className="text-gray-500">
-                                  val_loss:{" "}
-                                  <span
-                                    className={
-                                      isBest
-                                        ? "text-yellow-400 font-medium"
-                                        : "text-gray-400"
-                                    }
-                                  >
-                                    {ckpt.val_loss.toFixed(4)}
+                      {/* Hparams preview (when expanded) */}
+                      {isExpanded && hp && <RunHparams hp={hp} />}
+                      {isExpanded && isFetching && (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-gray-800/30 text-[10px] text-gray-500">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          Loading config...
+                        </div>
+                      )}
+
+                      {/* Checkpoint rows */}
+                      <div className="divide-y divide-gray-800/50">
+                        {ckpts.map((ckpt) => {
+                          const isCurrent =
+                            modelStatus?.checkpoint === ckpt.path;
+                          const isLoading = loadingPath === ckpt.path;
+                          const isBest = bestPerRun.has(ckpt.path);
+                          return (
+                            <div
+                              key={ckpt.path}
+                              className={`w-full px-3 py-2.5 text-xs
+                                flex items-center justify-between gap-2 ${
+                                  isCurrent
+                                    ? "bg-emerald-900/20"
+                                    : ""
+                                }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                {isBest ? (
+                                  <Star className="w-3 h-3 text-yellow-500 shrink-0 fill-yellow-500" />
+                                ) : isCurrent ? (
+                                  <span className="text-emerald-400 text-[10px] shrink-0">
+                                    ●
                                   </span>
+                                ) : (
+                                  <span className="w-3 shrink-0" />
+                                )}
+
+                                <span
+                                  className={`font-mono ${isCurrent ? "text-emerald-300" : "text-gray-300"}`}
+                                >
+                                  {ckpt.epoch != null
+                                    ? `Epoch ${ckpt.epoch}`
+                                    : ckpt.name}
                                 </span>
-                              )}
+
+                                {ckpt.val_loss != null && (
+                                  <span className="text-gray-500">
+                                    loss:{" "}
+                                    <span
+                                      className={
+                                        isBest
+                                          ? "text-yellow-400 font-medium"
+                                          : "text-gray-400"
+                                      }
+                                    >
+                                      {ckpt.val_loss.toFixed(4)}
+                                    </span>
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-3 shrink-0">
+                                <span className="text-gray-600 text-[10px]">
+                                  {ckpt.size_mb} MB
+                                </span>
+                                <span
+                                  className="text-gray-600 text-[10px] w-[85px] text-right"
+                                  title={new Date(ckpt.modified).toLocaleString()}
+                                >
+                                  {formatDate(ckpt.modified)}
+                                </span>
+                                <span className="text-gray-700 text-[10px] w-[42px] text-right">
+                                  {timeAgo(ckpt.modified)}
+                                </span>
+                                {isCurrent ? (
+                                  <span className="text-emerald-400 text-[10px] font-medium w-12 text-center">
+                                    Active
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => loadCheckpoint(ckpt.path)}
+                                    disabled={loadingModel}
+                                    className="px-2.5 py-1 rounded text-[10px] font-medium w-12
+                                               bg-blue-600/80 hover:bg-blue-500 disabled:bg-gray-700
+                                               disabled:text-gray-500 text-white transition-colors
+                                               flex items-center justify-center gap-1"
+                                  >
+                                    {isLoading ? (
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                      <>
+                                        <Download className="w-2.5 h-2.5" />
+                                        Load
+                                      </>
+                                    )}
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-3 text-gray-600 shrink-0">
-                              <span>{ckpt.size_mb} MB</span>
-                              <span className="w-14 text-right">
-                                {timeAgo(ckpt.modified)}
-                              </span>
-                            </div>
-                          </button>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
