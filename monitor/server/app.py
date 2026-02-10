@@ -22,6 +22,9 @@ from monitor.server.database import (
 )
 from monitor.server.inference import InferenceEngine
 from monitor.server.models import (
+    BackboneCompareRequest,
+    BackboneCompareResponse,
+    BackboneEncodeResponse,
     CompareRequest,
     CompareResponse,
     CompareResult,
@@ -29,11 +32,17 @@ from monitor.server.models import (
     EncodeResponse,
     EvalMetric,
     HashCode,
+    LoadBackboneRequest,
+    LoadIndexRequest,
     LoadModelRequest,
+    SearchQueryRequest,
+    SearchResponse,
+    SearchResult,
     SystemMetric,
     TrainingMetric,
     TrainingStatus,
 )
+from monitor.server.search_index import SearchIndex
 from monitor.server.system_monitor import SystemMonitorThread
 
 app = FastAPI(title="VLM Quantization Monitor")
@@ -50,6 +59,7 @@ app.add_middleware(
 training_status = TrainingStatus()
 system_monitor = SystemMonitorThread(interval=2.0)
 inference_engine = InferenceEngine()
+search_index = SearchIndex()
 _hash_analysis_data: dict | None = None
 
 
@@ -257,6 +267,130 @@ async def compare_codes(req: CompareRequest):
     )
 
 
+# --- REST: Backbone ---
+@app.post("/api/inference/load-backbone")
+async def load_backbone(req: LoadBackboneRequest):
+    try:
+        result = await asyncio.get_event_loop().run_in_executor(
+            None, inference_engine.load_backbone_only, req.model_name,
+        )
+        return result
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/api/inference/encode-backbone", response_model=BackboneEncodeResponse)
+async def encode_backbone(req: EncodeRequest):
+    try:
+        if req.image_base64:
+            image = InferenceEngine.decode_base64_image(req.image_base64)
+            embedding = inference_engine.encode_image_backbone(image)
+        elif req.image_url:
+            image = InferenceEngine.download_image(req.image_url)
+            embedding = inference_engine.encode_image_backbone(image)
+        elif req.text:
+            embedding = inference_engine.encode_text_backbone(req.text)
+        else:
+            return {"error": "Provide image_base64, image_url, or text"}
+        return BackboneEncodeResponse(embedding=embedding)
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/api/inference/compare-backbone", response_model=BackboneCompareResponse)
+async def compare_backbone(req: BackboneCompareRequest):
+    result = InferenceEngine.compare_backbone(req.embedding_a, req.embedding_b)
+    return BackboneCompareResponse(**result)
+
+
+# --- REST: Search ---
+@app.post("/api/search/load-index")
+async def load_search_index(req: LoadIndexRequest):
+    try:
+        result = await asyncio.get_event_loop().run_in_executor(
+            None, search_index.load, req.index_path,
+        )
+        return result
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/search/status")
+async def get_search_status():
+    return search_index.status
+
+
+@app.post("/api/search/query", response_model=SearchResponse)
+async def search_query(req: SearchQueryRequest):
+    try:
+        # Determine query type and encode
+        if req.image_base64:
+            query_type = "image"
+        elif req.image_url:
+            query_type = "image"
+        elif req.text:
+            query_type = "text"
+        else:
+            return {"error": "Provide image_base64, image_url, or text"}
+
+        if req.mode == "backbone":
+            # Encode query to backbone embedding
+            if query_type == "image":
+                image = (
+                    InferenceEngine.decode_base64_image(req.image_base64)
+                    if req.image_base64
+                    else InferenceEngine.download_image(req.image_url)
+                )
+                embedding = inference_engine.encode_image_backbone(image)
+            else:
+                embedding = inference_engine.encode_text_backbone(req.text)
+
+            # Cross-modal: image query → search text, text query → search image
+            target_modality = "text" if query_type == "image" else "image"
+            results = search_index.query_backbone(
+                embedding, modality=target_modality, top_k=req.top_k,
+            )
+        else:
+            # Hash mode — need full model loaded
+            if inference_engine.model is None:
+                return {"error": "Hash model not loaded (load a checkpoint first)"}
+
+            if query_type == "image":
+                image = (
+                    InferenceEngine.decode_base64_image(req.image_base64)
+                    if req.image_base64
+                    else InferenceEngine.download_image(req.image_url)
+                )
+                codes = inference_engine.encode_image(image)
+            else:
+                codes = inference_engine.encode_text(req.text)
+
+            # Find the right bit level
+            bit_codes = None
+            for c in codes:
+                if c["bits"] == req.bit:
+                    bit_codes = c
+                    break
+            if bit_codes is None:
+                return {"error": f"Bit level {req.bit} not available"}
+
+            # Convert {0,1} back to {-1,+1} for hamming_distance
+            binary_signed = [1 if b == 1 else -1 for b in bit_codes["binary"]]
+
+            target_modality = "text" if query_type == "image" else "image"
+            results = search_index.query_hash(
+                binary_signed, bit=req.bit, modality=target_modality, top_k=req.top_k,
+            )
+
+        return SearchResponse(
+            query_type=query_type,
+            mode=req.mode,
+            results=[SearchResult(**r) for r in results],
+        )
+    except Exception as e:
+        return {"error": str(e)}
+
+
 # --- Static Frontend (Next.js export) ---
 _frontend_out = Path(__file__).resolve().parent.parent / "frontend" / "out"
 
@@ -273,5 +407,9 @@ if _frontend_out.is_dir():
     @app.get("/hash-analysis")
     async def serve_hash_analysis():
         return FileResponse(_frontend_out / "hash-analysis.html")
+
+    @app.get("/search")
+    async def serve_search():
+        return FileResponse(_frontend_out / "search.html")
 
     app.mount("/", StaticFiles(directory=str(_frontend_out)), name="static")

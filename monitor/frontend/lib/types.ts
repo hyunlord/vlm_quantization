@@ -69,6 +69,30 @@ export interface HashAnalysisData {
   bit: number;
 }
 
+// --- Search types ---
+
+export interface SearchResult {
+  rank: number;
+  image_id: number;
+  caption: string;
+  thumbnail: string;
+  score: number;
+  distance: number | null;
+}
+
+export interface SearchResponse {
+  query_type: string;
+  mode: string;
+  results: SearchResult[];
+}
+
+export interface IndexStatus {
+  loaded: boolean;
+  num_items: number;
+  bit_list: number[];
+  index_path: string;
+}
+
 export interface WSMessage {
   type: "training" | "eval" | "system" | "status" | "hash_analysis";
   data:

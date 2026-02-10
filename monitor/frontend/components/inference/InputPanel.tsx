@@ -6,6 +6,8 @@ import { useCallback, useRef, useState } from "react";
 interface Props {
   label: string;
   onEncode: (codes: HashCode[]) => void;
+  onBackboneEncode?: (embedding: number[]) => void;
+  backboneOnly?: boolean;
 }
 
 interface HashCode {
@@ -16,7 +18,7 @@ interface HashCode {
 
 type InputMode = "upload" | "url" | "text";
 
-export default function InputPanel({ label, onEncode }: Props) {
+export default function InputPanel({ label, onEncode, onBackboneEncode, backboneOnly }: Props) {
   const [mode, setMode] = useState<InputMode>("upload");
   const [text, setText] = useState("");
   const [imageUrl, setImageUrl] = useState("");
@@ -67,19 +69,35 @@ export default function InputPanel({ label, onEncode }: Props) {
         return;
       }
 
-      const res = await fetch("/api/inference/encode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
+      // Fetch hash codes (unless backbone-only mode)
+      if (!backboneOnly) {
+        const res = await fetch("/api/inference/encode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || `HTTP ${res.status}`);
+        }
         const data = await res.json();
-        throw new Error(data.error || `HTTP ${res.status}`);
+        onEncode(data.codes);
       }
 
-      const data = await res.json();
-      onEncode(data.codes);
+      // Also fetch backbone embedding if callback provided
+      if (onBackboneEncode) {
+        const bbRes = await fetch("/api/inference/encode-backbone", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (bbRes.ok) {
+          const bbData = await bbRes.json();
+          if (bbData.embedding) {
+            onBackboneEncode(bbData.embedding);
+          }
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Encode failed");
     } finally {

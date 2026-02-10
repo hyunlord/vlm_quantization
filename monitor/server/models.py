@@ -103,3 +103,52 @@ class CompareResult(BaseModel):
 
 class CompareResponse(BaseModel):
     comparisons: list[CompareResult]
+
+
+# --- Backbone models ---
+
+class LoadBackboneRequest(BaseModel):
+    model_name: str = "google/siglip2-so400m-patch14-384"
+
+
+class BackboneEncodeResponse(BaseModel):
+    embedding: list[float]
+
+
+class BackboneCompareRequest(BaseModel):
+    embedding_a: list[float]
+    embedding_b: list[float]
+
+
+class BackboneCompareResponse(BaseModel):
+    cosine_similarity: float
+
+
+# --- Search models ---
+
+class SearchQueryRequest(BaseModel):
+    image_base64: str | None = None
+    image_url: str | None = None
+    text: str | None = None
+    mode: str = "hash"
+    bit: int = 64
+    top_k: int = 20
+
+
+class LoadIndexRequest(BaseModel):
+    index_path: str
+
+
+class SearchResult(BaseModel):
+    rank: int
+    image_id: int
+    caption: str
+    thumbnail: str
+    score: float
+    distance: int | None = None
+
+
+class SearchResponse(BaseModel):
+    query_type: str
+    mode: str
+    results: list[SearchResult]

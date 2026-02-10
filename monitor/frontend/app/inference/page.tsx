@@ -32,6 +32,7 @@ interface Comparison {
 
 interface ModelStatus {
   loaded: boolean;
+  backbone_only?: boolean;
   checkpoint: string;
   model_name: string;
   bit_list: number[];
@@ -108,7 +109,7 @@ function RunHparams({ hp }: { hp: Record<string, unknown> }) {
       </p>
     );
   }
-  const rows: [string, unknown][] = [
+  const rows = ([
     ["backbone", hp.model_name],
     ["bits", hp.bit_list],
     ["hidden", hp.hidden_dim],
@@ -125,7 +126,7 @@ function RunHparams({ hp }: { hp: Record<string, unknown> }) {
     ["o_w", hp.ortho_weight],
     ["cons_w", hp.consistency_weight],
     ["lcs_w", hp.lcs_weight],
-  ].filter(([, v]) => v != null);
+  ] as [string, unknown][]).filter(([, v]) => v != null);
 
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-0.5 px-3 py-2 bg-gray-800/30 text-[10px] border-b border-gray-800/50">
@@ -168,6 +169,11 @@ export default function InferencePage() {
   const [codesB, setCodesB] = useState<HashCode[] | null>(null);
   const [comparisons, setComparisons] = useState<Comparison[] | null>(null);
   const [comparing, setComparing] = useState(false);
+
+  // Backbone embeddings
+  const [embA, setEmbA] = useState<number[] | null>(null);
+  const [embB, setEmbB] = useState<number[] | null>(null);
+  const [backboneSim, setBackboneSim] = useState<number | null>(null);
 
   // Check model status on mount
   useEffect(() => {
@@ -272,6 +278,36 @@ export default function InferencePage() {
     }
   };
 
+  const loadBackboneOnly = async () => {
+    setLoadingModel(true);
+    setLoadError(null);
+    try {
+      const res = await fetch("/api/inference/load-backbone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model_name: "google/siglip2-so400m-patch14-384" }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setLoadError(data.error);
+      } else {
+        setModelStatus(data);
+        setShowBrowser(false);
+        setShowHparams(false);
+        setCodesA(null);
+        setCodesB(null);
+        setComparisons(null);
+        setEmbA(null);
+        setEmbB(null);
+        setBackboneSim(null);
+      }
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Load failed");
+    } finally {
+      setLoadingModel(false);
+    }
+  };
+
   const compare = useCallback(async () => {
     if (!codesA || !codesB) return;
     setComparing(true);
@@ -297,7 +333,26 @@ export default function InferencePage() {
     }
   }, [codesA, codesB, compare]);
 
+  // Auto-compare backbone embeddings
+  useEffect(() => {
+    if (embA && embB) {
+      fetch("/api/inference/compare-backbone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ embedding_a: embA, embedding_b: embB }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.cosine_similarity != null) {
+            setBackboneSim(data.cosine_similarity);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [embA, embB]);
+
   const isModelLoaded = modelStatus?.loaded ?? false;
+  const isBackboneOnly = modelStatus?.backbone_only ?? false;
 
   // Group checkpoints by run_dir
   const grouped = useMemo(() => {
@@ -377,11 +432,17 @@ export default function InferencePage() {
             <span
               className={`text-xs px-2 py-0.5 rounded-full ${
                 isModelLoaded
-                  ? "bg-emerald-900/50 text-emerald-400"
+                  ? isBackboneOnly
+                    ? "bg-blue-900/50 text-blue-400"
+                    : "bg-emerald-900/50 text-emerald-400"
                   : "bg-gray-800 text-gray-500"
               }`}
             >
-              {isModelLoaded ? "Model Loaded" : "No Model"}
+              {isModelLoaded
+                ? isBackboneOnly
+                  ? "Backbone Only"
+                  : "Hash Model"
+                : "No Model"}
             </span>
           </div>
         </div>
@@ -581,6 +642,28 @@ export default function InferencePage() {
               </p>
             )}
 
+            {/* Backbone-only option */}
+            <div className="pt-2 border-t border-gray-800">
+              <button
+                onClick={loadBackboneOnly}
+                disabled={loadingModel}
+                className="w-full py-2.5 rounded-lg text-xs font-medium
+                           border border-blue-600/50 text-blue-400 hover:bg-blue-600/10
+                           disabled:border-gray-700 disabled:text-gray-500
+                           transition-colors flex items-center justify-center gap-2"
+              >
+                {loadingModel && !loadingPath ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Server className="w-3.5 h-3.5" />
+                )}
+                Load Backbone Only (no hash layers)
+              </button>
+              <p className="text-[10px] text-gray-600 text-center mt-1">
+                Compare with raw SigLIP2 cosine similarity as baseline
+              </p>
+            </div>
+
             {/* Error */}
             {loadError && (
               <p className="text-xs text-red-400">{loadError}</p>
@@ -593,13 +676,17 @@ export default function InferencePage() {
           <div className="rounded-xl bg-gray-900 border border-gray-800 p-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                <div className={`w-2 h-2 rounded-full ${isBackboneOnly ? "bg-blue-400" : "bg-emerald-400"}`} />
                 <span className="text-sm font-medium text-gray-200">
                   {modelStatus.model_name.split("/").pop()}
                 </span>
-                <span className="text-xs text-gray-500">
-                  bits: [{modelStatus.bit_list.join(", ")}]
-                </span>
+                {isBackboneOnly ? (
+                  <span className="text-xs text-blue-400">Backbone Only</span>
+                ) : (
+                  <span className="text-xs text-gray-500">
+                    bits: [{modelStatus.bit_list.join(", ")}]
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -701,8 +788,18 @@ export default function InferencePage() {
         {isModelLoaded ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <InputPanel label="Input A" onEncode={setCodesA} />
-              <InputPanel label="Input B" onEncode={setCodesB} />
+              <InputPanel
+                label="Input A"
+                onEncode={setCodesA}
+                onBackboneEncode={setEmbA}
+                backboneOnly={isBackboneOnly}
+              />
+              <InputPanel
+                label="Input B"
+                onEncode={setCodesB}
+                onBackboneEncode={setEmbB}
+                backboneOnly={isBackboneOnly}
+              />
             </div>
 
             {/* Compare button (manual trigger when auto-compare hasn't run) */}
@@ -723,11 +820,39 @@ export default function InferencePage() {
               </div>
             )}
 
-            {/* Results */}
+            {/* Backbone similarity (shown when available) */}
+            {backboneSim != null && (
+              <div className="rounded-xl bg-gray-900 border border-gray-800 p-4">
+                <h2 className="text-sm font-semibold text-gray-200 mb-3">
+                  Backbone Comparison (Cosine Similarity)
+                </h2>
+                <div className="flex items-center justify-between rounded-lg bg-gray-800/50 border border-gray-700 p-3">
+                  <span className="text-xs text-gray-400">
+                    SigLIP2 1152-dim embedding
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-400">Cosine:</span>
+                    <span
+                      className={`text-lg font-bold font-mono ${
+                        backboneSim > 0.8
+                          ? "text-emerald-400"
+                          : backboneSim > 0.6
+                            ? "text-yellow-400"
+                            : "text-red-400"
+                      }`}
+                    >
+                      {(backboneSim * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Hash code results */}
             {comparisons && codesA && codesB && (
               <div className="rounded-xl bg-gray-900 border border-gray-800 p-4">
                 <h2 className="text-sm font-semibold text-gray-200 mb-3">
-                  Hash Code Comparison
+                  Hash Code Comparison (Hamming Distance)
                 </h2>
                 <HashComparison
                   codesA={codesA}
@@ -740,7 +865,7 @@ export default function InferencePage() {
             {/* Hint when only one side encoded */}
             {(codesA && !codesB) || (!codesA && codesB) ? (
               <p className="text-center text-xs text-gray-600">
-                Encode both inputs to compare hash codes
+                Encode both inputs to compare
               </p>
             ) : null}
           </>

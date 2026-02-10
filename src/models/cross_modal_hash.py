@@ -107,6 +107,22 @@ class CrossModalHashModel(pl.LightningModule):
         )
         return self.text_hash(self._pool(outputs))
 
+    def encode_image_backbone(self, pixel_values: torch.Tensor) -> torch.Tensor:
+        """Return raw backbone embedding without hash projection."""
+        outputs = self.backbone.vision_model(pixel_values=pixel_values)
+        return self._pool(outputs)
+
+    def encode_text_backbone(
+        self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        """Return raw backbone embedding without hash projection."""
+        if attention_mask is None:
+            attention_mask = torch.ones_like(input_ids)
+        outputs = self.backbone.text_model(
+            input_ids=input_ids, attention_mask=attention_mask
+        )
+        return self._pool(outputs)
+
     def forward(self, batch: dict) -> dict:
         image_out = self.encode_image(batch["pixel_values"])
         text_out = self.encode_text(batch["input_ids"], batch["attention_mask"])

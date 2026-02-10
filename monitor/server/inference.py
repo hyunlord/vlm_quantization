@@ -10,8 +10,9 @@ from datetime import datetime
 from pathlib import Path
 
 import torch
+import torch.nn.functional as F
 from PIL import Image
-from transformers import AutoProcessor
+from transformers import AutoModel, AutoProcessor
 
 from src.models.cross_modal_hash import CrossModalHashModel
 from src.utils.hamming import to_binary_01
@@ -28,10 +29,13 @@ class InferenceEngine:
         self.bit_list: list[int] = []
         self.model_name: str = ""
         self.checkpoint_path: str = ""
+        # Backbone-only mode (no hash layers)
+        self.backbone: AutoModel | None = None
+        self.backbone_only: bool = False
 
     @property
     def is_loaded(self) -> bool:
-        return self.model is not None
+        return self.model is not None or self.backbone is not None
 
     def load(self, checkpoint_path: str) -> dict:
         """Load model from Lightning checkpoint."""
@@ -49,20 +53,36 @@ class InferenceEngine:
         self.checkpoint_path = checkpoint_path
 
         self.processor = AutoProcessor.from_pretrained(self.model_name)
+        self.backbone = None
+        self.backbone_only = False
         logger.info(
             "Model loaded: %s, bit_list=%s", self.model_name, self.bit_list
         )
+        return self.status()
+
+    def load_backbone_only(self, model_name: str) -> dict:
+        """Load backbone model without hash layers (for baseline comparison)."""
+        logger.info("Loading backbone only: %s", model_name)
+        self.backbone = AutoModel.from_pretrained(model_name)
+        self.backbone.eval()
+        self.processor = AutoProcessor.from_pretrained(model_name)
+        self.model_name = model_name
+        self.model = None
+        self.bit_list = []
+        self.checkpoint_path = ""
+        self.backbone_only = True
+        logger.info("Backbone loaded: %s", model_name)
         return self.status()
 
     def status(self) -> dict:
         hparams: dict = {}
         if self.model is not None:
             hparams = {k: v for k, v in self.model.hparams.items()}
-            # Shorten model_name for display
             if "model_name" in hparams:
                 hparams["model_name"] = hparams["model_name"].split("/")[-1]
         return {
             "loaded": self.is_loaded,
+            "backbone_only": self.backbone_only,
             "checkpoint": self.checkpoint_path,
             "model_name": self.model_name,
             "bit_list": self.bit_list,
@@ -113,6 +133,65 @@ class InferenceEngine:
                 "continuous": out["continuous"].squeeze(0).tolist(),
             })
         return result
+
+    def _get_backbone(self):
+        """Return the backbone model (from hash model or standalone)."""
+        if self.model is not None:
+            return self.model.backbone
+        return self.backbone
+
+    @torch.no_grad()
+    def encode_image_backbone(self, image: Image.Image) -> list[float]:
+        """Encode a PIL image into raw backbone embedding."""
+        backbone = self._get_backbone()
+        if backbone is None or self.processor is None:
+            raise RuntimeError("Model not loaded")
+
+        inputs = self.processor(images=image, return_tensors="pt")
+        pixel_values = inputs["pixel_values"]
+
+        if self.model is not None:
+            emb = self.model.encode_image_backbone(pixel_values)
+        else:
+            outputs = backbone.vision_model(pixel_values=pixel_values)
+            emb = outputs.pooler_output if hasattr(outputs, "pooler_output") and outputs.pooler_output is not None else outputs.last_hidden_state.mean(dim=1)
+        return emb.squeeze(0).tolist()
+
+    @torch.no_grad()
+    def encode_text_backbone(self, text: str) -> list[float]:
+        """Encode text into raw backbone embedding."""
+        backbone = self._get_backbone()
+        if backbone is None or self.processor is None:
+            raise RuntimeError("Model not loaded")
+
+        text_inputs = self.processor.tokenizer(
+            text,
+            padding="max_length",
+            max_length=64,
+            truncation=True,
+            return_tensors="pt",
+        )
+        input_ids = text_inputs["input_ids"]
+        attention_mask = text_inputs.get(
+            "attention_mask", torch.ones_like(input_ids)
+        )
+
+        if self.model is not None:
+            emb = self.model.encode_text_backbone(input_ids, attention_mask)
+        else:
+            outputs = backbone.text_model(
+                input_ids=input_ids, attention_mask=attention_mask
+            )
+            emb = outputs.pooler_output if hasattr(outputs, "pooler_output") and outputs.pooler_output is not None else outputs.last_hidden_state.mean(dim=1)
+        return emb.squeeze(0).tolist()
+
+    @staticmethod
+    def compare_backbone(emb_a: list[float], emb_b: list[float]) -> dict:
+        """Compute cosine similarity between two backbone embeddings."""
+        a = torch.tensor(emb_a, dtype=torch.float32)
+        b = torch.tensor(emb_b, dtype=torch.float32)
+        cosine = F.cosine_similarity(a.unsqueeze(0), b.unsqueeze(0)).item()
+        return {"cosine_similarity": round(cosine, 4)}
 
     @staticmethod
     def compare(codes_a: list[dict], codes_b: list[dict]) -> list[dict]:

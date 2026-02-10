@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, Search, Wifi, WifiOff } from "lucide-react";
+import { BarChart3, Database, Search, Wifi, WifiOff } from "lucide-react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import TrainingStatus from "@/components/TrainingStatus";
 import SystemPanel from "@/components/SystemPanel";
@@ -42,6 +42,13 @@ export default function Dashboard() {
           >
             <Search className="w-3.5 h-3.5" />
             <span>Hash Explorer</span>
+          </Link>
+          <Link
+            href="/search"
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-emerald-400 transition-colors"
+          >
+            <Database className="w-3.5 h-3.5" />
+            <span>Search</span>
           </Link>
           {isConnected ? (
             <div className="flex items-center gap-1.5 text-emerald-400 text-xs">
