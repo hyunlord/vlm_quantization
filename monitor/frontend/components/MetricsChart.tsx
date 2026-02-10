@@ -24,6 +24,10 @@ const DIR_COLORS: Record<string, string> = {
   I2T: "#3b82f6",
   T2I: "#8b5cf6",
 };
+const BACKBONE_COLORS: Record<string, string> = {
+  I2T: "#60a5fa",
+  T2I: "#a78bfa",
+};
 
 export default function MetricsChart({ data }: Props) {
   const [activeTab, setActiveTab] = useState<"map" | "precision">("map");
@@ -33,7 +37,13 @@ export default function MetricsChart({ data }: Props) {
     epoch: d.epoch,
     I2T: d.map_i2t,
     T2I: d.map_t2i,
+    "Backbone I2T": d.backbone_map_i2t,
+    "Backbone T2I": d.backbone_map_t2i,
   }));
+
+  const hasBackbone = data.some(
+    (d) => d.backbone_map_i2t != null || d.backbone_map_t2i != null
+  );
 
   const latest = data[data.length - 1];
   const precisionData = latest
@@ -117,10 +127,24 @@ export default function MetricsChart({ data }: Props) {
                 stroke={DIR_COLORS[dir]}
                 dot={{ r: 3 }}
                 strokeWidth={1.5}
-                name={`${dir} mAP`}
+                name={`Hash ${dir}`}
                 isAnimationActive={false}
               />
             ))}
+            {hasBackbone &&
+              DIRECTIONS.map((dir) => (
+                <Line
+                  key={`backbone-${dir}`}
+                  type="monotone"
+                  dataKey={`Backbone ${dir}`}
+                  stroke={BACKBONE_COLORS[dir]}
+                  dot={{ r: 2 }}
+                  strokeWidth={1.5}
+                  strokeDasharray="6 3"
+                  name={`Backbone ${dir}`}
+                  isAnimationActive={false}
+                />
+              ))}
           </LineChart>
         </ResponsiveContainer>
       ) : !hasPrecision ? (

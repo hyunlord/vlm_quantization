@@ -1,8 +1,58 @@
 from __future__ import annotations
 
 import torch
+import torch.nn.functional as F
 
 from src.utils.hamming import hamming_distance
+
+
+def cosine_mean_average_precision(
+    query_emb: torch.Tensor,
+    database_emb: torch.Tensor,
+    query_labels: torch.Tensor,
+    database_labels: torch.Tensor,
+    k: int = 5000,
+) -> float:
+    """Compute mAP@k using cosine similarity ranking (backbone baseline).
+
+    Args:
+        query_emb: (N_q, D) continuous embeddings.
+        database_emb: (N_db, D) continuous embeddings.
+        query_labels: (N_q,) integer labels (image_id).
+        database_labels: (N_db,) integer labels (image_id).
+        k: top-k for AP computation.
+
+    Returns:
+        mAP@k score.
+    """
+    # Normalize then compute cosine similarity via matmul
+    query_norm = F.normalize(query_emb, dim=1)
+    db_norm = F.normalize(database_emb, dim=1)
+    sim = query_norm @ db_norm.T  # (N_q, N_db)
+
+    N_q = sim.size(0)
+    actual_k = min(k, sim.size(1))
+
+    # Sort by descending similarity
+    _, indices = sim.sort(dim=1, descending=True)
+    top_k_indices = indices[:, :actual_k]
+
+    ap_sum = 0.0
+    for i in range(N_q):
+        retrieved = database_labels[top_k_indices[i]]
+        relevant = (retrieved == query_labels[i]).float()
+
+        if relevant.sum() == 0:
+            continue
+
+        cum_relevant = relevant.cumsum(dim=0)
+        precision_at_j = cum_relevant / torch.arange(
+            1, actual_k + 1, device=relevant.device, dtype=torch.float
+        )
+        ap = (precision_at_j * relevant).sum() / relevant.sum()
+        ap_sum += ap.item()
+
+    return ap_sum / N_q
 
 
 def mean_average_precision(

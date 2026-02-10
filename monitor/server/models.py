@@ -23,6 +23,8 @@ class EvalMetric(BaseModel):
     map_t2i: float | None = None
     map_i2i: float | None = None
     map_t2t: float | None = None
+    backbone_map_i2t: float | None = None
+    backbone_map_t2i: float | None = None
     p1: float | None = None
     p5: float | None = None
     p10: float | None = None

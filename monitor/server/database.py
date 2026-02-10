@@ -41,6 +41,8 @@ def init_db() -> None:
             map_t2i REAL,
             map_i2i REAL,
             map_t2t REAL,
+            backbone_map_i2t REAL,
+            backbone_map_t2i REAL,
             p1 REAL,
             p5 REAL,
             p10 REAL,
@@ -84,7 +86,8 @@ def init_db() -> None:
             pass  # column already exists
     for col in ("step", "val_loss_total", "val_loss_contrastive",
                 "val_loss_quantization", "val_loss_balance",
-                "val_loss_consistency", "val_loss_ortho", "val_loss_lcs"):
+                "val_loss_consistency", "val_loss_ortho", "val_loss_lcs",
+                "backbone_map_i2t", "backbone_map_t2i"):
         try:
             conn.execute(
                 f"ALTER TABLE eval_metrics ADD COLUMN {col} REAL"
@@ -118,13 +121,15 @@ def insert_eval_metric(m: EvalMetric) -> None:
     conn.execute(
         """INSERT INTO eval_metrics
            (epoch, step, map_i2t, map_t2i, map_i2i, map_t2t,
+            backbone_map_i2t, backbone_map_t2i,
             p1, p5, p10, bit_entropy, quant_error,
             val_loss_total, val_loss_contrastive, val_loss_quantization,
             val_loss_balance, val_loss_consistency, val_loss_ortho,
             val_loss_lcs, timestamp)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             m.epoch, m.step, m.map_i2t, m.map_t2i, m.map_i2i, m.map_t2t,
+            m.backbone_map_i2t, m.backbone_map_t2i,
             m.p1, m.p5, m.p10, m.bit_entropy, m.quant_error,
             m.val_loss_total, m.val_loss_contrastive, m.val_loss_quantization,
             m.val_loss_balance, m.val_loss_consistency, m.val_loss_ortho,

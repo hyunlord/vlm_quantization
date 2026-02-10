@@ -129,6 +129,14 @@ class MonitorCallback(pl.Callback):
         eval_data["map_i2t"] = self._to_float(logged.get("val/map_i2t"), None)
         eval_data["map_t2i"] = self._to_float(logged.get("val/map_t2i"), None)
 
+        # Backbone cosine mAP baseline
+        eval_data["backbone_map_i2t"] = self._to_float(
+            logged.get("val/backbone_map_i2t"), None
+        )
+        eval_data["backbone_map_t2i"] = self._to_float(
+            logged.get("val/backbone_map_t2i"), None
+        )
+
         # Precision@K
         eval_data["p1"] = self._to_float(logged.get("val/p1"), None)
         eval_data["p5"] = self._to_float(logged.get("val/p5"), None)

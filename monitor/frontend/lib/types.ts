@@ -18,6 +18,8 @@ export interface EvalMetric {
   map_t2i: number | null;
   map_i2i: number | null;
   map_t2t: number | null;
+  backbone_map_i2t: number | null;
+  backbone_map_t2i: number | null;
   p1: number | null;
   p5: number | null;
   p10: number | null;

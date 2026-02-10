@@ -11,6 +11,7 @@ from src.utils.hamming import hamming_distance, to_binary_01
 from src.utils.metrics import (
     compute_bit_entropy,
     compute_quantization_error,
+    cosine_mean_average_precision,
     mean_average_precision,
     precision_at_k,
 )
@@ -195,6 +196,15 @@ class CrossModalHashModel(pl.LightningModule):
             result[f"image_binary_{bit}"] = img_binary.detach()
             result[f"text_binary_{bit}"] = txt_binary.detach()
 
+        # Backbone embeddings for cosine mAP baseline
+        with torch.no_grad():
+            result["image_backbone_emb"] = self.encode_image_backbone(
+                batch["pixel_values"]
+            ).detach()
+            result["text_backbone_emb"] = self.encode_text_backbone(
+                batch["input_ids"], batch.get("attention_mask")
+            ).detach()
+
         self._val_outputs.append(result)
         return result
 
@@ -247,6 +257,21 @@ class CrossModalHashModel(pl.LightningModule):
         ))
         self.log("val/p10", precision_at_k(
             img_codes, txt_codes, sub_labels, sub_labels, k=10,
+        ))
+
+        # Backbone cosine mAP baseline
+        img_emb = torch.cat(
+            [o["image_backbone_emb"] for o in self._val_outputs]
+        )[idx]
+        txt_emb = torch.cat(
+            [o["text_backbone_emb"] for o in self._val_outputs]
+        )[idx]
+
+        self.log("val/backbone_map_i2t", cosine_mean_average_precision(
+            img_emb, txt_emb, sub_labels, sub_labels,
+        ))
+        self.log("val/backbone_map_t2i", cosine_mean_average_precision(
+            txt_emb, img_emb, sub_labels, sub_labels,
         ))
 
         # --- Hash Analysis for monitoring dashboard ---
