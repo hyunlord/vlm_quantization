@@ -29,7 +29,8 @@ def mean_average_precision(
 
     # Sort by ascending distance
     _, indices = dist.sort(dim=1)
-    top_k_indices = indices[:, :k]
+    actual_k = min(k, dist.size(1))
+    top_k_indices = indices[:, :actual_k]
 
     ap_sum = 0.0
     for i in range(N_q):
@@ -42,7 +43,7 @@ def mean_average_precision(
         # Cumulative precision
         cum_relevant = relevant.cumsum(dim=0)
         precision_at_j = cum_relevant / torch.arange(
-            1, k + 1, device=relevant.device, dtype=torch.float
+            1, actual_k + 1, device=relevant.device, dtype=torch.float
         )
         ap = (precision_at_j * relevant).sum() / relevant.sum()
         ap_sum += ap.item()
@@ -64,7 +65,8 @@ def precision_at_k(
     """
     dist = hamming_distance(query_codes, database_codes)
     _, indices = dist.sort(dim=1)
-    top_k_indices = indices[:, :k]
+    actual_k = min(k, dist.size(1))
+    top_k_indices = indices[:, :actual_k]
 
     N_q = dist.size(0)
     prec_sum = 0.0
