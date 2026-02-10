@@ -12,6 +12,7 @@ from src.utils.metrics import (
     compute_bit_entropy,
     compute_quantization_error,
     cosine_mean_average_precision,
+    cosine_precision_at_k,
     mean_average_precision,
     precision_at_k,
 )
@@ -272,6 +273,17 @@ class CrossModalHashModel(pl.LightningModule):
         ))
         self.log("val/backbone_map_t2i", cosine_mean_average_precision(
             txt_emb, img_emb, sub_labels, sub_labels,
+        ))
+
+        # Backbone P@K baseline
+        self.log("val/backbone_p1", cosine_precision_at_k(
+            img_emb, txt_emb, sub_labels, sub_labels, k=1,
+        ))
+        self.log("val/backbone_p5", cosine_precision_at_k(
+            img_emb, txt_emb, sub_labels, sub_labels, k=5,
+        ))
+        self.log("val/backbone_p10", cosine_precision_at_k(
+            img_emb, txt_emb, sub_labels, sub_labels, k=10,
         ))
 
         # --- Hash Analysis for monitoring dashboard ---

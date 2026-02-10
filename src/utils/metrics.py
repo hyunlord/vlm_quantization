@@ -128,6 +128,25 @@ def precision_at_k(
     return prec_sum / N_q
 
 
+def cosine_precision_at_k(
+    query_emb: torch.Tensor,
+    database_emb: torch.Tensor,
+    query_labels: torch.Tensor,
+    database_labels: torch.Tensor,
+    k: int = 10,
+) -> float:
+    """Precision@k using cosine similarity ranking (backbone baseline)."""
+    query_norm = F.normalize(query_emb, dim=1)
+    db_norm = F.normalize(database_emb, dim=1)
+    sim = query_norm @ db_norm.T
+    actual_k = min(k, sim.size(1))
+    _, indices = sim.topk(actual_k, dim=1)
+
+    retrieved_labels = database_labels[indices]
+    matches = (retrieved_labels == query_labels.unsqueeze(1)).float()
+    return matches.mean().item()
+
+
 def compute_bit_entropy(binary_codes: torch.Tensor) -> torch.Tensor:
     """Compute per-bit entropy of binary codes.
 

@@ -28,6 +28,9 @@ class EvalMetric(BaseModel):
     p1: float | None = None
     p5: float | None = None
     p10: float | None = None
+    backbone_p1: float | None = None
+    backbone_p5: float | None = None
+    backbone_p10: float | None = None
     bit_entropy: float | None = None
     quant_error: float | None = None
     # Per-bit quality metrics

@@ -142,6 +142,17 @@ class MonitorCallback(pl.Callback):
         eval_data["p5"] = self._to_float(logged.get("val/p5"), None)
         eval_data["p10"] = self._to_float(logged.get("val/p10"), None)
 
+        # Backbone P@K baseline
+        eval_data["backbone_p1"] = self._to_float(
+            logged.get("val/backbone_p1"), None
+        )
+        eval_data["backbone_p5"] = self._to_float(
+            logged.get("val/backbone_p5"), None
+        )
+        eval_data["backbone_p10"] = self._to_float(
+            logged.get("val/backbone_p10"), None
+        )
+
         # Validation losses (for train vs val comparison / overfitting detection)
         eval_data["step"] = trainer.global_step
         eval_data["val_loss_total"] = self._to_float(

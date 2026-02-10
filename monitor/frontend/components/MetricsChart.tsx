@@ -46,15 +46,36 @@ export default function MetricsChart({ data }: Props) {
   );
 
   const latest = data[data.length - 1];
+
+  const hasBackbonePK = latest
+    ? latest.backbone_p1 != null ||
+      latest.backbone_p5 != null ||
+      latest.backbone_p10 != null
+    : false;
+
   const precisionData = latest
     ? [
-        { name: "P@1", value: latest.p1 ?? null },
-        { name: "P@5", value: latest.p5 ?? null },
-        { name: "P@10", value: latest.p10 ?? null },
+        {
+          name: "P@1",
+          Hash: latest.p1 ?? 0,
+          Backbone: hasBackbonePK ? (latest.backbone_p1 ?? 0) : undefined,
+        },
+        {
+          name: "P@5",
+          Hash: latest.p5 ?? 0,
+          Backbone: hasBackbonePK ? (latest.backbone_p5 ?? 0) : undefined,
+        },
+        {
+          name: "P@10",
+          Hash: latest.p10 ?? 0,
+          Backbone: hasBackbonePK ? (latest.backbone_p10 ?? 0) : undefined,
+        },
       ]
     : [];
 
-  const hasPrecision = precisionData.some((d) => d.value !== null);
+  const hasPrecision = precisionData.some(
+    (d) => d.Hash > 0 || (d.Backbone !== undefined && d.Backbone > 0)
+  );
 
   return (
     <div className="rounded-xl bg-gray-900 p-4 border border-gray-800 h-full">
@@ -117,6 +138,9 @@ export default function MetricsChart({ data }: Props) {
                   ? `Epoch ${point.epoch}, Step ${step}`
                   : `Step ${step}`;
               }}
+              formatter={(value: unknown) =>
+                typeof value === "number" ? value.toFixed(4) : "N/A"
+              }
             />
             <Legend wrapperStyle={{ fontSize: "11px" }} />
             {DIRECTIONS.map((dir) => (
@@ -126,6 +150,7 @@ export default function MetricsChart({ data }: Props) {
                 dataKey={dir}
                 stroke={DIR_COLORS[dir]}
                 dot={{ r: 3 }}
+                activeDot={{ r: 6 }}
                 strokeWidth={1.5}
                 name={`Hash ${dir}`}
                 isAnimationActive={false}
@@ -138,7 +163,8 @@ export default function MetricsChart({ data }: Props) {
                   type="monotone"
                   dataKey={`Backbone ${dir}`}
                   stroke={BACKBONE_COLORS[dir]}
-                  dot={{ r: 2 }}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 6 }}
                   strokeWidth={1.5}
                   strokeDasharray="6 3"
                   name={`Backbone ${dir}`}
@@ -153,9 +179,7 @@ export default function MetricsChart({ data }: Props) {
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={200}>
-          <BarChart
-            data={precisionData.map((d) => ({ ...d, value: d.value ?? 0 }))}
-          >
+          <BarChart data={precisionData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
             <XAxis
               dataKey="name"
@@ -174,13 +198,26 @@ export default function MetricsChart({ data }: Props) {
                 borderRadius: "8px",
                 fontSize: "11px",
               }}
-              formatter={(value) =>
-                typeof value === "number"
-                  ? [value.toFixed(4), "Precision"]
-                  : [String(value), "Precision"]
+              formatter={(value: unknown) =>
+                typeof value === "number" ? value.toFixed(4) : "N/A"
               }
             />
-            <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+            {hasBackbonePK && <Legend wrapperStyle={{ fontSize: "11px" }} />}
+            <Bar
+              dataKey="Hash"
+              fill="#3b82f6"
+              radius={[4, 4, 0, 0]}
+              name="Hash"
+            />
+            {hasBackbonePK && (
+              <Bar
+                dataKey="Backbone"
+                fill="#60a5fa"
+                radius={[4, 4, 0, 0]}
+                name="Backbone"
+                fillOpacity={0.6}
+              />
+            )}
           </BarChart>
         </ResponsiveContainer>
       )}

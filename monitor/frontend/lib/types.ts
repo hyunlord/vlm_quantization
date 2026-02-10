@@ -23,6 +23,9 @@ export interface EvalMetric {
   p1: number | null;
   p5: number | null;
   p10: number | null;
+  backbone_p1: number | null;
+  backbone_p5: number | null;
+  backbone_p10: number | null;
   bit_entropy: number | null;
   quant_error: number | null;
   val_loss_total: number | null;

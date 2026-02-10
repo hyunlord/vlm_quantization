@@ -46,6 +46,9 @@ def init_db() -> None:
             p1 REAL,
             p5 REAL,
             p10 REAL,
+            backbone_p1 REAL,
+            backbone_p5 REAL,
+            backbone_p10 REAL,
             bit_entropy REAL,
             quant_error REAL,
             val_loss_total REAL,
@@ -87,7 +90,8 @@ def init_db() -> None:
     for col in ("step", "val_loss_total", "val_loss_contrastive",
                 "val_loss_quantization", "val_loss_balance",
                 "val_loss_consistency", "val_loss_ortho", "val_loss_lcs",
-                "backbone_map_i2t", "backbone_map_t2i"):
+                "backbone_map_i2t", "backbone_map_t2i",
+                "backbone_p1", "backbone_p5", "backbone_p10"):
         try:
             conn.execute(
                 f"ALTER TABLE eval_metrics ADD COLUMN {col} REAL"
@@ -122,15 +126,17 @@ def insert_eval_metric(m: EvalMetric) -> None:
         """INSERT INTO eval_metrics
            (epoch, step, map_i2t, map_t2i, map_i2i, map_t2t,
             backbone_map_i2t, backbone_map_t2i,
-            p1, p5, p10, bit_entropy, quant_error,
+            p1, p5, p10, backbone_p1, backbone_p5, backbone_p10,
+            bit_entropy, quant_error,
             val_loss_total, val_loss_contrastive, val_loss_quantization,
             val_loss_balance, val_loss_consistency, val_loss_ortho,
             val_loss_lcs, timestamp)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             m.epoch, m.step, m.map_i2t, m.map_t2i, m.map_i2i, m.map_t2t,
             m.backbone_map_i2t, m.backbone_map_t2i,
-            m.p1, m.p5, m.p10, m.bit_entropy, m.quant_error,
+            m.p1, m.p5, m.p10, m.backbone_p1, m.backbone_p5, m.backbone_p10,
+            m.bit_entropy, m.quant_error,
             m.val_loss_total, m.val_loss_contrastive, m.val_loss_quantization,
             m.val_loss_balance, m.val_loss_consistency, m.val_loss_ortho,
             m.val_loss_lcs, time.time(),
