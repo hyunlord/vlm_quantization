@@ -115,11 +115,9 @@ class MonitorCallback(pl.Callback):
             sum(quant_vals) / len(quant_vals) if quant_vals else None
         )
 
-        # Retrieval metrics (mAP)
+        # Retrieval metrics (mAP — I2T, T2I only)
         eval_data["map_i2t"] = self._to_float(logged.get("val/map_i2t"), None)
         eval_data["map_t2i"] = self._to_float(logged.get("val/map_t2i"), None)
-        eval_data["map_i2i"] = self._to_float(logged.get("val/map_i2i"), None)
-        eval_data["map_t2t"] = self._to_float(logged.get("val/map_t2t"), None)
 
         # Precision@K
         eval_data["p1"] = self._to_float(logged.get("val/p1"), None)

@@ -30,6 +30,7 @@ loss:
 
 data:
   data_root: "/content/data/coco"  # local SSD (zips cached on Drive)
+  karpathy_json: "/content/data/coco/dataset_coco.json"
   num_workers: 4  # overridden when batch_size=auto
   max_text_length: 64
   image_size: 384

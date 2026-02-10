@@ -21,7 +21,7 @@ class CrossModalHashModel(pl.LightningModule):
 
     Produces multi-resolution binary hash codes for images and text
     via NestedHashLayer. Codes can be compared via Hamming distance
-    (XOR + popcount). Supports I2T, T2I, I2I, T2T retrieval.
+    (XOR + popcount). Supports I2T, T2I retrieval.
     """
 
     def __init__(
@@ -208,18 +208,12 @@ class CrossModalHashModel(pl.LightningModule):
         )[idx]
         sub_labels = labels[idx]
 
-        # 4-direction mAP@50
+        # Cross-modal mAP (I2T, T2I only — I2I/T2T are trivially ~1.0 on COCO)
         self.log("val/map_i2t", mean_average_precision(
             img_codes, txt_codes, sub_labels, sub_labels,
         ))
         self.log("val/map_t2i", mean_average_precision(
             txt_codes, img_codes, sub_labels, sub_labels,
-        ))
-        self.log("val/map_i2i", mean_average_precision(
-            img_codes, img_codes, sub_labels, sub_labels,
-        ))
-        self.log("val/map_t2t", mean_average_precision(
-            txt_codes, txt_codes, sub_labels, sub_labels,
         ))
 
         # P@K (I2T direction — primary cross-modal metric)

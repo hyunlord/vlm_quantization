@@ -19,12 +19,10 @@ interface Props {
   data: EvalMetric[];
 }
 
-const DIRECTIONS = ["I2T", "T2I", "I2I", "T2T"] as const;
+const DIRECTIONS = ["I2T", "T2I"] as const;
 const DIR_COLORS: Record<string, string> = {
   I2T: "#3b82f6",
   T2I: "#8b5cf6",
-  I2I: "#10b981",
-  T2T: "#f59e0b",
 };
 
 export default function MetricsChart({ data }: Props) {
@@ -35,8 +33,6 @@ export default function MetricsChart({ data }: Props) {
     epoch: d.epoch,
     I2T: d.map_i2t,
     T2I: d.map_t2i,
-    I2I: d.map_i2i,
-    T2T: d.map_t2t,
   }));
 
   const latest = data[data.length - 1];
@@ -67,7 +63,7 @@ export default function MetricsChart({ data }: Props) {
                   : "text-gray-500 hover:text-gray-300"
               }`}
             >
-              {tab === "map" ? "mAP@50" : "P@k"}
+              {tab === "map" ? "mAP" : "P@k"}
             </button>
           ))}
         </div>
@@ -121,7 +117,7 @@ export default function MetricsChart({ data }: Props) {
                 stroke={DIR_COLORS[dir]}
                 dot={{ r: 3 }}
                 strokeWidth={1.5}
-                name={`${dir} mAP@50`}
+                name={`${dir} mAP`}
                 isAnimationActive={false}
               />
             ))}

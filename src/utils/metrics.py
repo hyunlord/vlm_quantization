@@ -10,7 +10,7 @@ def mean_average_precision(
     database_codes: torch.Tensor,
     query_labels: torch.Tensor,
     database_labels: torch.Tensor,
-    k: int = 50,
+    k: int = 5000,
 ) -> float:
     """Compute mAP@k using Hamming distance ranking.
 

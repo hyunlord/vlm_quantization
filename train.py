@@ -33,6 +33,7 @@ def main():
         cfg["data"]["num_workers"] = gpu_cfg["num_workers"]
 
     # DataModule
+    karpathy_json = cfg["data"].get("karpathy_json")
     datamodule = CrossModalHashDataModule(
         data_root=cfg["data"]["data_root"],
         processor_name=cfg["model"]["backbone"],
@@ -40,11 +41,13 @@ def main():
         num_workers=cfg["data"]["num_workers"],
         max_text_length=cfg["data"]["max_text_length"],
         image_size=cfg["data"]["image_size"],
+        karpathy_json=karpathy_json,
     )
 
     # Estimate max_steps
-    # COCO train2014 has ~82K images
-    steps_per_epoch = 82000 // (
+    # Karpathy train+restval: ~113K images; standard COCO train2014: ~82K
+    num_train_images = 113000 if karpathy_json else 82000
+    steps_per_epoch = num_train_images // (
         cfg["training"]["batch_size"] * cfg["training"]["accumulate_grad_batches"]
     )
     max_steps = steps_per_epoch * cfg["training"]["max_epochs"]

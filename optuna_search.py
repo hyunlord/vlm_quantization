@@ -73,6 +73,7 @@ def objective(trial: optuna.Trial, base_cfg: dict) -> float:
     pl.seed_everything(42, workers=True)
 
     # DataModule
+    karpathy_json = cfg["data"].get("karpathy_json")
     datamodule = CrossModalHashDataModule(
         data_root=cfg["data"]["data_root"],
         processor_name=cfg["model"]["backbone"],
@@ -80,10 +81,12 @@ def objective(trial: optuna.Trial, base_cfg: dict) -> float:
         num_workers=cfg["data"]["num_workers"],
         max_text_length=cfg["data"]["max_text_length"],
         image_size=cfg["data"]["image_size"],
+        karpathy_json=karpathy_json,
     )
 
     # Estimate max_steps for search
-    steps_per_epoch = 82000 // (
+    num_train_images = 113000 if karpathy_json else 82000
+    steps_per_epoch = num_train_images // (
         cfg["training"]["batch_size"] * cfg["training"]["accumulate_grad_batches"]
     )
     max_steps = steps_per_epoch * search_epochs

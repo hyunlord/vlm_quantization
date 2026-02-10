@@ -58,20 +58,18 @@ def evaluate_retrieval(
     image_ids: torch.Tensor,
     k_values: list[int],
 ) -> dict[str, dict[str, float]]:
-    """Evaluate 4-direction retrieval: I2T, T2I, I2I, T2T."""
+    """Evaluate cross-modal retrieval: I2T, T2I."""
     results = {}
 
     directions = {
         "I2T": (image_codes, text_codes, image_ids, image_ids),
         "T2I": (text_codes, image_codes, image_ids, image_ids),
-        "I2I": (image_codes, image_codes, image_ids, image_ids),
-        "T2T": (text_codes, text_codes, image_ids, image_ids),
     }
 
     for name, (query, database, q_labels, db_labels) in directions.items():
         results[name] = {}
-        results[name]["mAP@50"] = mean_average_precision(
-            query, database, q_labels, db_labels, k=50
+        results[name]["mAP"] = mean_average_precision(
+            query, database, q_labels, db_labels,
         )
         for k in k_values:
             results[name][f"P@{k}"] = precision_at_k(
@@ -107,6 +105,7 @@ def main():
         num_workers=cfg["data"]["num_workers"],
         max_text_length=cfg["data"]["max_text_length"],
         image_size=cfg["data"]["image_size"],
+        karpathy_json=cfg["data"].get("karpathy_json"),
     )
     datamodule.setup(stage="test")
 
@@ -131,14 +130,14 @@ def main():
         )
 
         # Print results table
-        print(f"\n{'Direction':<8} {'mAP@50':>8}", end="")
+        print(f"\n{'Direction':<8} {'mAP':>8}", end="")
         for k in k_values:
             print(f" {'P@'+str(k):>8}", end="")
         print()
         print("-" * (8 + 9 + 9 * len(k_values)))
 
         for direction, metrics in results.items():
-            print(f"{direction:<8} {metrics['mAP@50']:>8.4f}", end="")
+            print(f"{direction:<8} {metrics['mAP']:>8.4f}", end="")
             for k in k_values:
                 print(f" {metrics[f'P@{k}']:>8.4f}", end="")
             print()

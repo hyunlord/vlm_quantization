@@ -41,6 +41,7 @@ class CrossModalHashDataModule(pl.LightningDataModule):
         num_workers: int = 4,
         max_text_length: int = 64,
         image_size: int = 384,
+        karpathy_json: str | None = None,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -48,33 +49,70 @@ class CrossModalHashDataModule(pl.LightningDataModule):
         self.processor = AutoProcessor.from_pretrained(processor_name)
 
     def setup(self, stage: str | None = None) -> None:
-        if stage in ("fit", "validate") or stage is None:
-            self.train_dataset = CocoCaptionsDataset(
-                image_dir=self.data_root / "train2014",
-                ann_file=self.data_root / "annotations" / "captions_train2014.json",
-                processor=self.processor,
-                transform=get_train_transforms(self.hparams.image_size),
-                consistency_transform=get_consistency_augmentation(
-                    self.hparams.image_size
-                ),
-                max_text_length=self.hparams.max_text_length,
-            )
-            self.val_dataset = CocoCaptionsDataset(
-                image_dir=self.data_root / "val2014",
-                ann_file=self.data_root / "annotations" / "captions_val2014.json",
-                processor=self.processor,
-                transform=get_val_transforms(self.hparams.image_size),
-                max_text_length=self.hparams.max_text_length,
-            )
+        karpathy = self.hparams.karpathy_json
 
-        if stage == "test":
-            self.test_dataset = CocoCaptionsDataset(
-                image_dir=self.data_root / "val2014",
-                ann_file=self.data_root / "annotations" / "captions_val2014.json",
-                processor=self.processor,
-                transform=get_val_transforms(self.hparams.image_size),
-                max_text_length=self.hparams.max_text_length,
-            )
+        if karpathy:
+            from src.data.karpathy import KarpathyCocoCaptionsDataset
+
+            if stage in ("fit", "validate") or stage is None:
+                self.train_dataset = KarpathyCocoCaptionsDataset(
+                    data_root=self.data_root,
+                    karpathy_json=karpathy,
+                    split="train",
+                    processor=self.processor,
+                    transform=get_train_transforms(self.hparams.image_size),
+                    consistency_transform=get_consistency_augmentation(
+                        self.hparams.image_size
+                    ),
+                    max_text_length=self.hparams.max_text_length,
+                )
+                self.val_dataset = KarpathyCocoCaptionsDataset(
+                    data_root=self.data_root,
+                    karpathy_json=karpathy,
+                    split="test",
+                    processor=self.processor,
+                    transform=get_val_transforms(self.hparams.image_size),
+                    max_text_length=self.hparams.max_text_length,
+                )
+
+            if stage == "test":
+                self.test_dataset = KarpathyCocoCaptionsDataset(
+                    data_root=self.data_root,
+                    karpathy_json=karpathy,
+                    split="test",
+                    processor=self.processor,
+                    transform=get_val_transforms(self.hparams.image_size),
+                    max_text_length=self.hparams.max_text_length,
+                )
+        else:
+            # Fallback: standard COCO 2014 splits
+            if stage in ("fit", "validate") or stage is None:
+                self.train_dataset = CocoCaptionsDataset(
+                    image_dir=self.data_root / "train2014",
+                    ann_file=self.data_root / "annotations" / "captions_train2014.json",
+                    processor=self.processor,
+                    transform=get_train_transforms(self.hparams.image_size),
+                    consistency_transform=get_consistency_augmentation(
+                        self.hparams.image_size
+                    ),
+                    max_text_length=self.hparams.max_text_length,
+                )
+                self.val_dataset = CocoCaptionsDataset(
+                    image_dir=self.data_root / "val2014",
+                    ann_file=self.data_root / "annotations" / "captions_val2014.json",
+                    processor=self.processor,
+                    transform=get_val_transforms(self.hparams.image_size),
+                    max_text_length=self.hparams.max_text_length,
+                )
+
+            if stage == "test":
+                self.test_dataset = CocoCaptionsDataset(
+                    image_dir=self.data_root / "val2014",
+                    ann_file=self.data_root / "annotations" / "captions_val2014.json",
+                    processor=self.processor,
+                    transform=get_val_transforms(self.hparams.image_size),
+                    max_text_length=self.hparams.max_text_length,
+                )
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(
