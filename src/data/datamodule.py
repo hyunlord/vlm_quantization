@@ -16,13 +16,17 @@ from src.data.transforms import (
 
 
 def collate_fn(batch: list[dict]) -> dict[str, torch.Tensor]:
-    """Stack tensors and handle optional aug_pixel_values."""
+    """Stack tensors and handle optional weak/aug pixel_values."""
     result = {
         "pixel_values": torch.stack([b["pixel_values"] for b in batch]),
         "input_ids": torch.stack([b["input_ids"] for b in batch]),
         "attention_mask": torch.stack([b["attention_mask"] for b in batch]),
         "image_ids": [b["image_id"] for b in batch],
     }
+    if "weak_pixel_values" in batch[0]:
+        result["weak_pixel_values"] = torch.stack(
+            [b["weak_pixel_values"] for b in batch]
+        )
     if "aug_pixel_values" in batch[0]:
         result["aug_pixel_values"] = torch.stack(
             [b["aug_pixel_values"] for b in batch]
@@ -65,6 +69,7 @@ class CrossModalHashDataModule(pl.LightningDataModule):
                         self.hparams.image_size
                     ),
                     max_text_length=self.hparams.max_text_length,
+                    image_size=self.hparams.image_size,
                 )
                 self.val_dataset = KarpathyCocoCaptionsDataset(
                     data_root=self.data_root,
@@ -96,6 +101,7 @@ class CrossModalHashDataModule(pl.LightningDataModule):
                         self.hparams.image_size
                     ),
                     max_text_length=self.hparams.max_text_length,
+                    image_size=self.hparams.image_size,
                 )
                 self.val_dataset = CocoCaptionsDataset(
                     image_dir=self.data_root / "val2014",

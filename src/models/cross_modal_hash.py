@@ -111,12 +111,17 @@ class CrossModalHashModel(pl.LightningModule):
         image_out = self.encode_image(batch["pixel_values"])
         text_out = self.encode_text(batch["input_ids"], batch["attention_mask"])
 
+        weak_image_out = None
+        if "weak_pixel_values" in batch:
+            weak_image_out = self.encode_image(batch["weak_pixel_values"])
+
         aug_image_out = None
         if "aug_pixel_values" in batch:
             aug_image_out = self.encode_image(batch["aug_pixel_values"])
 
         return {
             "image": image_out,
+            "weak_image": weak_image_out,
             "text": text_out,
             "aug_image": aug_image_out,
         }
@@ -128,6 +133,7 @@ class CrossModalHashModel(pl.LightningModule):
         losses = self.loss_fn(
             image_outputs=outputs["image"],
             text_outputs=outputs["text"],
+            weak_image_outputs=outputs["weak_image"],
             aug_image_outputs=outputs["aug_image"],
             progress=progress,
         )

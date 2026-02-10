@@ -64,12 +64,15 @@ class KarpathyCocoCaptionsDataset(Dataset):
         transform: A.Compose | None = None,
         consistency_transform: A.Compose | None = None,
         max_text_length: int = 64,
+        image_size: int = 384,
     ):
         self.data_root = Path(data_root)
         self.processor = processor
         self.transform = transform
         self.consistency_transform = consistency_transform
         self.max_text_length = max_text_length
+        self.image_size = image_size
+        self._orig_resize = A.Resize(image_size, image_size)
 
         # Parse Karpathy JSON
         karpathy_path = Path(karpathy_json)
@@ -116,17 +119,10 @@ class KarpathyCocoCaptionsDataset(Dataset):
         # Random caption selection
         caption = random.choice(entry["sentences"])["raw"]
 
-        # Apply augmentations
-        if self.transform is not None:
-            augmented = self.transform(image=image)
-            image_aug = augmented["image"]
-        else:
-            image_aug = image
-
-        # Process image through SigLIP2 processor
-        image_inputs = self.processor(
-            images=Image.fromarray(image_aug),
-            return_tensors="pt",
+        # Original view (Resize only — clean anchor for contrastive loss)
+        orig_resized = self._orig_resize(image=image)["image"]
+        orig_inputs = self.processor(
+            images=Image.fromarray(orig_resized), return_tensors="pt",
         )
 
         # Process text via tokenizer directly
@@ -139,7 +135,7 @@ class KarpathyCocoCaptionsDataset(Dataset):
         )
 
         result = {
-            "pixel_values": image_inputs["pixel_values"].squeeze(0),
+            "pixel_values": orig_inputs["pixel_values"].squeeze(0),
             "input_ids": text_inputs["input_ids"].squeeze(0),
             "image_id": image_id,
         }
@@ -149,12 +145,19 @@ class KarpathyCocoCaptionsDataset(Dataset):
         else:
             result["attention_mask"] = torch.ones_like(result["input_ids"])
 
-        # Consistency augmentation (stronger transform of same image)
+        # Weak augmentation (RandomCrop, Flip, ColorJitter, GaussianBlur)
+        if self.transform is not None:
+            weak_aug = self.transform(image=image)["image"]
+            weak_inputs = self.processor(
+                images=Image.fromarray(weak_aug), return_tensors="pt",
+            )
+            result["weak_pixel_values"] = weak_inputs["pixel_values"].squeeze(0)
+
+        # Strong augmentation (consistency target)
         if self.consistency_transform is not None:
-            cons_aug = self.consistency_transform(image=image)
+            cons_aug = self.consistency_transform(image=image)["image"]
             cons_inputs = self.processor(
-                images=Image.fromarray(cons_aug["image"]),
-                return_tensors="pt",
+                images=Image.fromarray(cons_aug), return_tensors="pt",
             )
             result["aug_pixel_values"] = cons_inputs["pixel_values"].squeeze(0)
 

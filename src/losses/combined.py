@@ -61,14 +61,16 @@ class CombinedHashLoss(nn.Module):
         self,
         image_outputs: list[dict[str, torch.Tensor]],
         text_outputs: list[dict[str, torch.Tensor]],
+        weak_image_outputs: list[dict[str, torch.Tensor]] | None = None,
         aug_image_outputs: list[dict[str, torch.Tensor]] | None = None,
         progress: float = 1.0,
     ) -> dict[str, torch.Tensor]:
         """
         Args:
-            image_outputs: list of {"continuous", "binary"} per bit length
+            image_outputs: list of {"continuous", "binary"} per bit length (original view)
             text_outputs: same structure
-            aug_image_outputs: optional augmented image outputs (same structure)
+            weak_image_outputs: optional weak-augmented image outputs
+            aug_image_outputs: optional strong-augmented image outputs
             progress: training progress in [0, 1] for quantization ramp-up
         """
         device = image_outputs[0]["continuous"].device
@@ -101,7 +103,12 @@ class CombinedHashLoss(nn.Module):
             all_hashes = torch.cat([img_cont, txt_cont], dim=0)
             balance_total = balance_total + self.balance_losses[k](all_hashes)
 
-            # Consistency (augmented image)
+            # Consistency: hub-and-spoke (original as anchor)
+            if weak_image_outputs is not None:
+                weak_cont = weak_image_outputs[k]["continuous"]
+                consistency_total = consistency_total + F.mse_loss(
+                    img_cont, weak_cont
+                )
             if aug_image_outputs is not None:
                 aug_cont = aug_image_outputs[k]["continuous"]
                 consistency_total = consistency_total + F.mse_loss(
