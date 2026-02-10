@@ -7,7 +7,7 @@ model:
 
 training:
   batch_size: auto  # auto-detect based on GPU VRAM (T4→64, A100→320+)
-  max_epochs: 30
+  max_epochs: 10
   hash_lr: 1.0e-3
   backbone_lr: 1.0e-5
   weight_decay: 0.01
@@ -15,7 +15,7 @@ training:
   gradient_clip_val: 1.0
   accumulate_grad_batches: 4  # overridden when batch_size=auto
   val_check_interval: 0.5  # validate 2x per epoch (0.25 = 4x, 1.0 = once)
-  early_stopping_patience: 5
+  early_stopping_patience: 2
   checkpoint_dir: "/content/drive/MyDrive/vlm_quantization/checkpoints"
 
 loss:

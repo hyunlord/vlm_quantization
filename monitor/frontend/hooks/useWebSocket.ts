@@ -27,35 +27,46 @@ export function useWebSocket(url: string) {
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-    const ws = new WebSocket(url);
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(url);
+    } catch {
+      // WebSocket blocked (e.g. mixed content ws:// from https://)
+      reconnectTimeout.current = setTimeout(connect, 5000);
+      return;
+    }
     wsRef.current = ws;
 
     ws.onopen = () => setIsConnected(true);
 
     ws.onmessage = (event) => {
-      const msg: WSMessage = JSON.parse(event.data);
+      try {
+        const msg: WSMessage = JSON.parse(event.data);
 
-      switch (msg.type) {
-        case "system":
-          setSystemData(msg.data as SystemMetric);
-          break;
-        case "training":
-          setTrainingData((prev) => {
-            const next = [...prev, msg.data as TrainingMetric];
-            return next.length > MAX_TRAINING_POINTS
-              ? next.slice(-MAX_TRAINING_POINTS)
-              : next;
-          });
-          break;
-        case "eval":
-          setEvalData((prev) => [...prev, msg.data as EvalMetric]);
-          break;
-        case "status":
-          setStatus(msg.data as TrainingStatus);
-          break;
-        case "hash_analysis":
-          setHashAnalysis(msg.data as HashAnalysisData);
-          break;
+        switch (msg.type) {
+          case "system":
+            setSystemData(msg.data as SystemMetric);
+            break;
+          case "training":
+            setTrainingData((prev) => {
+              const next = [...prev, msg.data as TrainingMetric];
+              return next.length > MAX_TRAINING_POINTS
+                ? next.slice(-MAX_TRAINING_POINTS)
+                : next;
+            });
+            break;
+          case "eval":
+            setEvalData((prev) => [...prev, msg.data as EvalMetric]);
+            break;
+          case "status":
+            setStatus(msg.data as TrainingStatus);
+            break;
+          case "hash_analysis":
+            setHashAnalysis(msg.data as HashAnalysisData);
+            break;
+        }
+      } catch {
+        // Ignore malformed messages
       }
     };
 

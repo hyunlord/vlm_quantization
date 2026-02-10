@@ -126,8 +126,8 @@ def main():
             )
         )
 
-    # Progress bar: reduce refresh rate for non-interactive environments (Colab subprocess)
-    callbacks.append(pl.callbacks.TQDMProgressBar(refresh_rate=50))
+    # Progress bar
+    callbacks.append(pl.callbacks.TQDMProgressBar(refresh_rate=1))
 
     # Trainer
     trainer = pl.Trainer(

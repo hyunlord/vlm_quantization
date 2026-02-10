@@ -28,12 +28,14 @@ def auto_configure(
     cpu_count = os.cpu_count() or 4
 
     # Per-sample memory (GB, empirical for SigLIP2 + hash layers, fp16)
-    # Frozen backbone: only forward activations
+    # Frozen backbone: only forward activations (no backward graph stored)
     # Unfrozen backbone: forward + backward activations + gradients
     # 3-view training: 3 image forward passes + 1 text forward per sample
-    # Image forward ≈ 70% of cost → multiplier = 1 + 0.7*2 = 2.4x
+    # Frozen: extra views are cheap (no grad graph) → multiplier = 1.3x
+    # Unfrozen: backward graph dominates → multiplier = 2.4x
     base_per_sample = 0.11 if freeze_backbone else 0.28
-    per_sample = base_per_sample * 2.4
+    view_multiplier = 1.3 if freeze_backbone else 2.4
+    per_sample = base_per_sample * view_multiplier
     model_overhead = 2.0 if freeze_backbone else 4.0
     utilization = 0.65  # leave 35% headroom for peaks
 

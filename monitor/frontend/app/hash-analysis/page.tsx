@@ -7,12 +7,14 @@ import BitBalanceChart from "@/components/BitBalanceChart";
 import SampleGallery from "@/components/SampleGallery";
 import SimilarityHeatmap from "@/components/SimilarityHeatmap";
 
+function getWsUrl() {
+  if (typeof window === "undefined") return "ws://localhost:8000/ws";
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${window.location.host}/ws`;
+}
+
 export default function HashAnalysisPage() {
-  const wsUrl =
-    typeof window !== "undefined"
-      ? `ws://${window.location.host}/ws`
-      : "ws://localhost:8000/ws";
-  const { hashAnalysis, isConnected } = useWebSocket(wsUrl);
+  const { hashAnalysis, isConnected } = useWebSocket(getWsUrl());
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 p-4 md:p-6">
@@ -57,22 +59,22 @@ export default function HashAnalysisPage() {
           <>
             {/* Bit Balance */}
             <BitBalanceChart
-              bitActivations={hashAnalysis.bit_activations}
+              bitActivations={hashAnalysis.bit_activations ?? {}}
             />
 
             {/* Sample Gallery */}
             <SampleGallery
-              samples={hashAnalysis.samples}
-              imgCodes={hashAnalysis.sample_img_codes}
-              txtCodes={hashAnalysis.sample_txt_codes}
-              similarityMatrix={hashAnalysis.similarity_matrix}
+              samples={hashAnalysis.samples ?? []}
+              imgCodes={hashAnalysis.sample_img_codes ?? []}
+              txtCodes={hashAnalysis.sample_txt_codes ?? []}
+              similarityMatrix={hashAnalysis.similarity_matrix ?? []}
             />
 
             {/* Similarity Heatmap */}
             <SimilarityHeatmap
-              matrix={hashAnalysis.similarity_matrix}
-              samples={hashAnalysis.samples}
-              bit={hashAnalysis.bit}
+              matrix={hashAnalysis.similarity_matrix ?? []}
+              samples={hashAnalysis.samples ?? []}
+              bit={hashAnalysis.bit ?? 64}
             />
           </>
         )}

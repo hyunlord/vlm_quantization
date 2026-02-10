@@ -48,11 +48,12 @@ class MonitorCallback(pl.Callback):
         batches_per_epoch = len(trainer.train_dataloader)
         accum = trainer.accumulate_grad_batches
         steps_per_epoch = batches_per_epoch // accum
+        self._total_steps = steps_per_epoch * (trainer.max_epochs or 0)
         self._post("/api/training/status", {
             "epoch": 0,
             "step": 0,
             "total_epochs": trainer.max_epochs or 0,
-            "total_steps": steps_per_epoch * (trainer.max_epochs or 0),
+            "total_steps": self._total_steps,
             "is_training": True,
             "config": {
                 **dict(pl_module.hparams),
@@ -84,6 +85,15 @@ class MonitorCallback(pl.Callback):
             "loss_ortho": self._to_float(logged.get("train/ortho")),
             "loss_lcs": self._to_float(logged.get("train/lcs")),
             "lr": trainer.optimizers[0].param_groups[0]["lr"],
+        })
+
+        # Update step progress in dashboard header
+        self._post("/api/training/status", {
+            "epoch": trainer.current_epoch,
+            "step": trainer.global_step,
+            "total_epochs": trainer.max_epochs or 0,
+            "total_steps": self._total_steps,
+            "is_training": True,
         })
 
     def on_validation_epoch_end(

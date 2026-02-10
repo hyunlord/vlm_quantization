@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { HashAnalysisSample } from "@/lib/types";
 
 interface Props {
@@ -88,12 +88,9 @@ export default function SimilarityHeatmap({ matrix, samples, bit }: Props) {
 
             {/* Rows */}
             {matrix.map((row, r) => (
-              <>
+              <Fragment key={`row-${r}`}>
                 {/* Row header (image) */}
-                <div
-                  key={`row-${r}`}
-                  className="text-[8px] text-gray-500 flex items-center pr-1"
-                >
+                <div className="text-[8px] text-gray-500 flex items-center pr-1">
                   I{r}
                 </div>
 
@@ -120,7 +117,7 @@ export default function SimilarityHeatmap({ matrix, samples, bit }: Props) {
                     </span>
                   </div>
                 ))}
-              </>
+              </Fragment>
             ))}
           </div>
 
