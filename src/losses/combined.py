@@ -86,10 +86,23 @@ class CombinedHashLoss(nn.Module):
             img_cont = image_outputs[k]["continuous"]
             txt_cont = text_outputs[k]["continuous"]
 
-            # InfoNCE (cross-modal)
+            # InfoNCE (cross-modal): original + augmented views ↔ text
+            n_views = 1
             contrastive_total = contrastive_total + self.contrastive_loss(
                 img_cont, txt_cont
             )
+            if weak_image_outputs is not None:
+                weak_cont = weak_image_outputs[k]["continuous"]
+                contrastive_total = contrastive_total + self.contrastive_loss(
+                    weak_cont, txt_cont
+                )
+                n_views += 1
+            if aug_image_outputs is not None:
+                aug_cont = aug_image_outputs[k]["continuous"]
+                contrastive_total = contrastive_total + self.contrastive_loss(
+                    aug_cont, txt_cont
+                )
+                n_views += 1
 
             # EAQL (both modalities)
             eaql_total = eaql_total + (
@@ -105,18 +118,16 @@ class CombinedHashLoss(nn.Module):
 
             # Consistency: hub-and-spoke (original as anchor)
             if weak_image_outputs is not None:
-                weak_cont = weak_image_outputs[k]["continuous"]
                 consistency_total = consistency_total + F.mse_loss(
-                    img_cont, weak_cont
+                    img_cont, weak_image_outputs[k]["continuous"]
                 )
             if aug_image_outputs is not None:
-                aug_cont = aug_image_outputs[k]["continuous"]
                 consistency_total = consistency_total + F.mse_loss(
-                    img_cont, aug_cont
+                    img_cont, aug_image_outputs[k]["continuous"]
                 )
 
-        # Average over bit lengths
-        contrastive_total = contrastive_total / n_bits
+        # Average over bit lengths (contrastive also averaged over views)
+        contrastive_total = contrastive_total / (n_bits * n_views)
         eaql_total = eaql_total / n_bits
         ortho_total = ortho_total / n_bits
         balance_total = balance_total / n_bits
