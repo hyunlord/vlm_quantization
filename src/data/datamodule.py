@@ -152,9 +152,9 @@ class CrossModalHashDataModule(pl.LightningDataModule):
                 )
 
     def _mp_context(self) -> dict:
-        """Use 'spawn' to avoid all CUDA fork deadlocks."""
+        """Use 'spawn' to avoid all CUDA fork deadlocks, and persistent_workers to prevent semaphore leaks."""
         if self.hparams.num_workers > 0:
-            return {"multiprocessing_context": "spawn"}
+            return {"multiprocessing_context": "spawn", "persistent_workers": True}
         return {}
 
     def train_dataloader(self) -> DataLoader:
