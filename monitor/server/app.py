@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -525,6 +526,72 @@ async def compare_backbone(req: BackboneCompareRequest):
 
 
 # --- REST: Search ---
+@app.get("/api/search/list-indices")
+async def list_search_indices(directory: str = ""):
+    """Scan checkpoint directory for .pt search index files."""
+    dir_to_scan = directory or CHECKPOINT_DIR
+    if not dir_to_scan:
+        return {"indices": []}
+    root = Path(dir_to_scan)
+    if not root.is_dir():
+        return {"indices": []}
+    indices = []
+    for p in sorted(root.rglob("*.pt"), key=lambda x: x.stat().st_mtime, reverse=True):
+        # Skip if it looks like a pytorch model file (not an index)
+        if p.suffix == ".pt" and p.stat().st_size > 1_000_000:  # > 1MB likely an index
+            stat = p.stat()
+            # Try to determine run_dir
+            try:
+                parts = p.relative_to(root).parts
+                run_dir = parts[0] if len(parts) > 1 else ""
+            except ValueError:
+                run_dir = ""
+            indices.append({
+                "path": str(p),
+                "name": p.name,
+                "run_dir": run_dir,
+                "size_mb": round(stat.st_size / 1024 / 1024, 1),
+                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            })
+    return {"indices": indices}
+
+
+@app.post("/api/search/auto-setup")
+async def auto_setup_search(data: dict = None):
+    """Load a checkpoint + index in one call. Convenience for search page."""
+    data = data or {}
+    checkpoint_path = data.get("checkpoint_path")
+    index_path = data.get("index_path")
+    errors = []
+
+    # Load checkpoint if provided and not already loaded
+    if checkpoint_path:
+        status = inference_engine.status()
+        if not status["loaded"] or status["checkpoint"] != checkpoint_path:
+            try:
+                await asyncio.get_event_loop().run_in_executor(
+                    None, inference_engine.load, checkpoint_path,
+                )
+            except Exception as e:
+                errors.append(f"Checkpoint: {e}")
+
+    # Load index if provided and not already loaded
+    if index_path:
+        if not search_index.is_loaded or search_index._index_path != index_path:
+            try:
+                await asyncio.get_event_loop().run_in_executor(
+                    None, search_index.load, index_path,
+                )
+            except Exception as e:
+                errors.append(f"Index: {e}")
+
+    return {
+        "model": inference_engine.status(),
+        "index": search_index.status,
+        "errors": errors if errors else None,
+    }
+
+
 @app.post("/api/search/load-index")
 async def load_search_index(req: LoadIndexRequest):
     try:

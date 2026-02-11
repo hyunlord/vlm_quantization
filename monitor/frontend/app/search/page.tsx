@@ -2,21 +2,45 @@
 
 import {
   ArrowLeft,
+  CheckCircle2,
   Database,
   Globe,
   ImageIcon,
   Loader2,
   Search,
+  Sparkles,
   Type,
   Upload,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RunSelector from "@/components/RunSelector";
 import type { IndexStatus, SearchResult } from "@/lib/types";
 
 type InputMode = "upload" | "url" | "text";
 type SearchMode = "backbone" | "hash";
+
+interface DiscoveredIndex {
+  path: string;
+  name: string;
+  run_dir: string;
+  size_mb: number;
+  modified: string;
+}
+
+interface DiscoveredCheckpoint {
+  path: string;
+  name: string;
+  run_dir: string;
+  size_mb: number;
+  modified: string;
+  epoch: number | null;
+  step: number | null;
+  val_loss: number | null;
+  map_i2t?: number | null;
+  map_t2i?: number | null;
+}
 
 function getApiBase() {
   if (typeof window === "undefined") return "";
@@ -24,12 +48,25 @@ function getApiBase() {
 }
 
 export default function SearchPage() {
-  // Index state
-  const [indexPath, setIndexPath] = useState("");
-  const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null);
-  const [loadingIndex, setLoadingIndex] = useState(false);
+  // Discovery state
+  const [availableIndices, setAvailableIndices] = useState<DiscoveredIndex[]>(
+    [],
+  );
+  const [availableCheckpoints, setAvailableCheckpoints] = useState<
+    DiscoveredCheckpoint[]
+  >([]);
+  const [discovering, setDiscovering] = useState(true);
 
-  // Model status
+  // Setup state
+  const [selectedCheckpoint, setSelectedCheckpoint] = useState<string>("");
+  const [selectedIndex, setSelectedIndex] = useState<string>("");
+  const [loadingSetup, setLoadingSetup] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
+
+  // Index state
+  const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null);
+
+  // Model state
   const [modelLoaded, setModelLoaded] = useState(false);
   const [backboneOnly, setBackboneOnly] = useState(false);
 
@@ -49,49 +86,115 @@ export default function SearchPage() {
   const [resultMode, setResultMode] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
-  const fileRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
-  // Check index and model status on mount
+  const isReady = indexStatus?.loaded && modelLoaded;
+
+  // Auto-discover on mount
   useEffect(() => {
     const base = getApiBase();
-    fetch(`${base}/api/search/status`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.loaded) setIndexStatus(data);
-      })
-      .catch(() => {});
-    fetch(`${base}/api/inference/status`)
-      .then((r) => r.json())
-      .then((data) => {
-        setModelLoaded(data.loaded ?? false);
-        setBackboneOnly(data.backbone_only ?? false);
-      })
-      .catch(() => {});
+    setDiscovering(true);
+
+    Promise.all([
+      fetch(`${base}/api/search/list-indices`)
+        .then((r) => r.json())
+        .then((data) => setAvailableIndices(data.indices || []))
+        .catch(() => setAvailableIndices([])),
+
+      fetch(`${base}/api/inference/checkpoints`)
+        .then((r) => r.json())
+        .then((data) => setAvailableCheckpoints(data.checkpoints || []))
+        .catch(() => setAvailableCheckpoints([])),
+
+      fetch(`${base}/api/search/status`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.loaded) {
+            setIndexStatus(data);
+            if (data.bit_list?.length > 0) {
+              setBit(data.bit_list[data.bit_list.length - 1]);
+            }
+          }
+        })
+        .catch(() => {}),
+
+      fetch(`${base}/api/inference/status`)
+        .then((r) => r.json())
+        .then((data) => {
+          setModelLoaded(data.loaded ?? false);
+          setBackboneOnly(data.backbone_only ?? false);
+        })
+        .catch(() => {}),
+    ]).finally(() => setDiscovering(false));
   }, []);
 
-  const loadIndex = async () => {
-    if (!indexPath.trim()) return;
-    setLoadingIndex(true);
-    setError(null);
+  // Group checkpoints by run_dir
+  const checkpointsByRun = useMemo(() => {
+    const groups: Record<string, DiscoveredCheckpoint[]> = {};
+    availableCheckpoints.forEach((ckpt) => {
+      if (!groups[ckpt.run_dir]) groups[ckpt.run_dir] = [];
+      groups[ckpt.run_dir].push(ckpt);
+    });
+    // Sort each group by epoch desc, then step desc
+    Object.keys(groups).forEach((runDir) => {
+      groups[runDir].sort((a, b) => {
+        if (a.epoch !== b.epoch) return (b.epoch ?? 0) - (a.epoch ?? 0);
+        return (b.step ?? 0) - (a.step ?? 0);
+      });
+    });
+    return groups;
+  }, [availableCheckpoints]);
+
+  // Auto-select matching index when checkpoint is selected
+  useEffect(() => {
+    if (!selectedCheckpoint) return;
+    const ckpt = availableCheckpoints.find((c) => c.path === selectedCheckpoint);
+    if (!ckpt) return;
+
+    // Find index from same run_dir
+    const matchingIndex = availableIndices.find(
+      (idx) => idx.run_dir === ckpt.run_dir,
+    );
+    if (matchingIndex && selectedIndex !== matchingIndex.path) {
+      setSelectedIndex(matchingIndex.path);
+    }
+  }, [selectedCheckpoint, availableCheckpoints, availableIndices, selectedIndex]);
+
+  const handleAutoSetup = async () => {
+    if (!selectedCheckpoint || !selectedIndex) return;
+    setLoadingSetup(true);
+    setSetupError(null);
+
     try {
-      const res = await fetch(`${getApiBase()}/api/search/load-index`, {
+      const res = await fetch(`${getApiBase()}/api/search/auto-setup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ index_path: indexPath.trim() }),
+        body: JSON.stringify({
+          checkpoint_path: selectedCheckpoint,
+          index_path: selectedIndex,
+        }),
       });
       const data = await res.json();
-      if (data.error) {
-        setError(data.error);
+
+      if (data.errors?.length) {
+        setSetupError(data.errors.join("; "));
       } else {
-        setIndexStatus(data);
-        if (data.bit_list?.length > 0 && !data.bit_list.includes(bit)) {
-          setBit(data.bit_list[data.bit_list.length - 1]);
+        // Backend returns { model: {loaded, backbone_only, ...}, index: {loaded, ...} }
+        if (data.model) {
+          setModelLoaded(data.model.loaded ?? false);
+          setBackboneOnly(data.model.backbone_only ?? false);
+        }
+        if (data.index) {
+          setIndexStatus(data.index);
+          if (data.index.bit_list?.length > 0) {
+            setBit(data.index.bit_list[data.index.bit_list.length - 1]);
+          }
         }
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load index");
+      setSetupError(e instanceof Error ? e.message : "Setup failed");
     } finally {
-      setLoadingIndex(false);
+      setLoadingSetup(false);
     }
   };
 
@@ -164,8 +267,7 @@ export default function SearchPage() {
   ];
 
   const canSearch =
-    indexStatus?.loaded &&
-    modelLoaded &&
+    isReady &&
     ((inputMode === "upload" && preview) ||
       (inputMode === "url" && imageUrl.trim()) ||
       (inputMode === "text" && text.trim()));
@@ -198,280 +300,393 @@ export default function SearchPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
-          {/* Left panel: Controls */}
+        <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-4">
+          {/* Left panel: Setup & Controls */}
           <div className="space-y-4">
-            {/* Index panel */}
-            <div className="rounded-xl bg-gray-900 border border-gray-800 p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <Database className="w-4 h-4 text-gray-500" />
-                <span className="text-sm font-medium text-gray-300">
-                  Search Index
-                </span>
-              </div>
+            {/* Setup Panel */}
+            {!isReady && (
+              <div className="rounded-xl bg-gray-900 border border-gray-800 p-4 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  <span className="text-sm font-medium text-gray-300">
+                    Setup Search
+                  </span>
+                </div>
 
-              {indexStatus?.loaded ? (
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    <span className="text-xs text-emerald-400">Loaded</span>
+                {discovering ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-5 h-5 animate-spin text-gray-600" />
                   </div>
-                  <div className="text-[10px] text-gray-500 space-y-0.5">
-                    <p>{indexStatus.num_items.toLocaleString()} items</p>
-                    <p>bits: [{indexStatus.bit_list.join(", ")}]</p>
-                    <p className="truncate" title={indexStatus.index_path}>
-                      {indexStatus.index_path.split("/").pop()}
-                    </p>
+                ) : (
+                  <>
+                    {/* Step 1: Model */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-400">
+                          Step 1: Select Model
+                        </span>
+                        {modelLoaded && (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        )}
+                      </div>
+
+                      {modelLoaded ? (
+                        <div className="bg-gray-800/50 border border-emerald-500/30 rounded-lg p-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            <span className="text-xs text-emerald-400">
+                              Model Loaded
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-gray-500 mt-1">
+                            {backboneOnly ? "Backbone Only" : "Hash Model"}
+                          </p>
+                        </div>
+                      ) : (
+                        <select
+                          value={selectedCheckpoint}
+                          onChange={(e) => setSelectedCheckpoint(e.target.value)}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2
+                                     text-xs text-gray-200
+                                     focus:outline-none focus:border-gray-500"
+                        >
+                          <option value="">Choose a checkpoint...</option>
+                          {Object.entries(checkpointsByRun).map(
+                            ([runDir, ckpts]) => (
+                              <optgroup
+                                key={runDir}
+                                label={runDir.split("/").pop() || runDir}
+                              >
+                                {ckpts.map((ckpt) => {
+                                  const label = `${ckpt.name} • epoch ${ckpt.epoch ?? "?"} step ${ckpt.step ?? "?"} • mAP ${((ckpt.map_i2t ?? 0) * 100).toFixed(1)}%`;
+                                  return (
+                                    <option key={ckpt.path} value={ckpt.path}>
+                                      {label}
+                                    </option>
+                                  );
+                                })}
+                              </optgroup>
+                            ),
+                          )}
+                        </select>
+                      )}
+                    </div>
+
+                    {/* Step 2: Index */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-400">
+                          Step 2: Select Index
+                        </span>
+                        {indexStatus?.loaded && (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        )}
+                      </div>
+
+                      {indexStatus?.loaded ? (
+                        <div className="bg-gray-800/50 border border-emerald-500/30 rounded-lg p-3 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            <span className="text-xs text-emerald-400">
+                              Index Loaded
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-gray-500 space-y-0.5">
+                            <p>{indexStatus.num_items.toLocaleString()} items</p>
+                            <p>bits: [{indexStatus.bit_list.join(", ")}]</p>
+                            <p className="truncate" title={indexStatus.index_path}>
+                              {indexStatus.index_path.split("/").pop()}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <select
+                          value={selectedIndex}
+                          onChange={(e) => setSelectedIndex(e.target.value)}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2
+                                     text-xs text-gray-200
+                                     focus:outline-none focus:border-gray-500"
+                        >
+                          <option value="">Choose a search index...</option>
+                          {availableIndices.map((idx) => {
+                            const label = `${idx.name} • ${idx.size_mb.toFixed(1)} MB • ${idx.run_dir.split("/").pop()}`;
+                            return (
+                              <option key={idx.path} value={idx.path}>
+                                {label}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      )}
+                    </div>
+
+                    {/* Auto Setup Button */}
+                    {!isReady && (
+                      <button
+                        onClick={handleAutoSetup}
+                        disabled={
+                          loadingSetup ||
+                          !selectedCheckpoint ||
+                          !selectedIndex
+                        }
+                        className="w-full py-2.5 rounded-lg text-xs font-medium
+                                   bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700
+                                   disabled:text-gray-500 text-white transition-colors
+                                   flex items-center justify-center gap-2"
+                      >
+                        {loadingSetup ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Setting up...
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="w-3.5 h-3.5" />
+                            Load & Setup
+                          </>
+                        )}
+                      </button>
+                    )}
+
+                    {setupError && (
+                      <p className="text-xs text-red-400">{setupError}</p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Compact status when ready */}
+            {isReady && (
+              <div className="rounded-xl bg-gray-900 border border-gray-800 p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Database className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm font-medium text-gray-300">
+                    System Ready
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-gray-500">Model</span>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      <span className="text-gray-400">
+                        {backboneOnly ? "Backbone" : "Hash"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-gray-500">Index</span>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      <span className="text-gray-400">
+                        {indexStatus?.num_items.toLocaleString()} items
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-gray-500">Bit levels</span>
+                    <span className="text-gray-400 font-mono">
+                      [{indexStatus?.bit_list.join(", ")}]
+                    </span>
                   </div>
                 </div>
-              ) : (
-                <>
+              </div>
+            )}
+
+            {/* Query panel - only show when ready */}
+            {isReady && (
+              <div className="rounded-xl bg-gray-900 border border-gray-800 p-4 space-y-3">
+                <span className="text-sm font-medium text-gray-300">Query</span>
+
+                {/* Input mode tabs */}
+                <div className="flex gap-0.5 bg-gray-800 rounded-lg p-0.5">
+                  {inputTabs.map((tab) => {
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.key}
+                        onClick={() => {
+                          setInputMode(tab.key);
+                          setError(null);
+                        }}
+                        className={`flex-1 flex items-center justify-center gap-1 text-[11px] px-2 py-1.5 rounded-md transition-colors ${
+                          inputMode === tab.key
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-500 hover:text-gray-300"
+                        }`}
+                      >
+                        <Icon className="w-3 h-3" />
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Upload */}
+                {inputMode === "upload" && (
+                  <div
+                    onDrop={handleDrop}
+                    onDragOver={(e) => e.preventDefault()}
+                    onClick={() => fileRef.current?.click()}
+                    className="border-2 border-dashed border-gray-700 rounded-lg p-3 cursor-pointer
+                               hover:border-gray-500 transition-colors min-h-[100px]
+                               flex flex-col items-center justify-center gap-1.5"
+                  >
+                    {preview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={preview}
+                        alt="Preview"
+                        className="max-h-[80px] rounded object-contain"
+                      />
+                    ) : (
+                      <>
+                        <ImageIcon className="w-6 h-6 text-gray-600" />
+                        <p className="text-[10px] text-gray-500">
+                          Drop or click
+                        </p>
+                      </>
+                    )}
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleFile(file);
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* URL */}
+                {inputMode === "url" && (
                   <input
-                    value={indexPath}
-                    onChange={(e) => setIndexPath(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && loadIndex()}
-                    placeholder="/path/to/search_index.pt"
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    placeholder="https://example.com/image.jpg"
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2
                                text-xs text-gray-200 placeholder-gray-600
                                focus:outline-none focus:border-gray-500"
                   />
-                  <button
-                    onClick={loadIndex}
-                    disabled={loadingIndex || !indexPath.trim()}
-                    className="w-full py-2 rounded-lg text-xs font-medium
-                               bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700
-                               disabled:text-gray-500 text-white transition-colors
-                               flex items-center justify-center gap-2"
-                  >
-                    {loadingIndex ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      <Database className="w-3 h-3" />
-                    )}
-                    Load Index
-                  </button>
-                </>
-              )}
-
-              {/* Model status */}
-              <div className="pt-2 border-t border-gray-800">
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`w-1.5 h-1.5 rounded-full ${modelLoaded ? "bg-emerald-400" : "bg-gray-600"}`}
-                  />
-                  <span className="text-[10px] text-gray-500">
-                    Model:{" "}
-                    {modelLoaded
-                      ? backboneOnly
-                        ? "Backbone Only"
-                        : "Hash Model"
-                      : "Not loaded"}
-                  </span>
-                </div>
-                {!modelLoaded && (
-                  <p className="text-[10px] text-gray-600 mt-1">
-                    Load a model from{" "}
-                    <Link
-                      href="/inference"
-                      className="text-blue-400 hover:underline"
-                    >
-                      Hash Explorer
-                    </Link>
-                  </p>
                 )}
-              </div>
-            </div>
 
-            {/* Query panel */}
-            <div className="rounded-xl bg-gray-900 border border-gray-800 p-4 space-y-3">
-              <span className="text-sm font-medium text-gray-300">Query</span>
+                {/* Text */}
+                {inputMode === "text" && (
+                  <textarea
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder="Describe what you're looking for..."
+                    rows={3}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3
+                               text-xs text-gray-200 placeholder-gray-600 resize-none
+                               focus:outline-none focus:border-gray-500"
+                  />
+                )}
 
-              {/* Input mode tabs */}
-              <div className="flex gap-0.5 bg-gray-800 rounded-lg p-0.5">
-                {inputTabs.map((tab) => {
-                  const Icon = tab.icon;
-                  return (
+                {/* Search mode */}
+                <div className="space-y-2">
+                  <span className="text-[10px] uppercase tracking-wider text-gray-500">
+                    Search Mode
+                  </span>
+                  <div className="flex gap-2">
                     <button
-                      key={tab.key}
-                      onClick={() => {
-                        setInputMode(tab.key);
-                        setError(null);
-                      }}
-                      className={`flex-1 flex items-center justify-center gap-1 text-[11px] px-2 py-1.5 rounded-md transition-colors ${
-                        inputMode === tab.key
+                      onClick={() => setSearchMode("backbone")}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        searchMode === "backbone"
                           ? "bg-blue-600 text-white"
-                          : "text-gray-500 hover:text-gray-300"
+                          : "bg-gray-800 text-gray-500 hover:text-gray-300"
                       }`}
                     >
-                      <Icon className="w-3 h-3" />
-                      {tab.label}
+                      Backbone (Cosine)
                     </button>
-                  );
-                })}
-              </div>
-
-              {/* Upload */}
-              {inputMode === "upload" && (
-                <div
-                  onDrop={handleDrop}
-                  onDragOver={(e) => e.preventDefault()}
-                  onClick={() => fileRef.current?.click()}
-                  className="border-2 border-dashed border-gray-700 rounded-lg p-3 cursor-pointer
-                             hover:border-gray-500 transition-colors min-h-[100px]
-                             flex flex-col items-center justify-center gap-1.5"
-                >
-                  {preview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={preview}
-                      alt="Preview"
-                      className="max-h-[80px] rounded object-contain"
-                    />
-                  ) : (
-                    <>
-                      <ImageIcon className="w-6 h-6 text-gray-600" />
-                      <p className="text-[10px] text-gray-500">
-                        Drop or click
-                      </p>
-                    </>
-                  )}
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleFile(file);
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* URL */}
-              {inputMode === "url" && (
-                <input
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="https://example.com/image.jpg"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2
-                             text-xs text-gray-200 placeholder-gray-600
-                             focus:outline-none focus:border-gray-500"
-                />
-              )}
-
-              {/* Text */}
-              {inputMode === "text" && (
-                <textarea
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder="Describe what you're looking for..."
-                  rows={3}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3
-                             text-xs text-gray-200 placeholder-gray-600 resize-none
-                             focus:outline-none focus:border-gray-500"
-                />
-              )}
-
-              {/* Search mode */}
-              <div className="space-y-2">
-                <span className="text-[10px] uppercase tracking-wider text-gray-500">
-                  Search Mode
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setSearchMode("backbone")}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      searchMode === "backbone"
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-800 text-gray-500 hover:text-gray-300"
-                    }`}
-                  >
-                    Backbone (Cosine)
-                  </button>
-                  <button
-                    onClick={() => setSearchMode("hash")}
-                    disabled={backboneOnly}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      searchMode === "hash"
-                        ? "bg-purple-600 text-white"
-                        : "bg-gray-800 text-gray-500 hover:text-gray-300"
-                    } disabled:opacity-30 disabled:cursor-not-allowed`}
-                  >
-                    Hash (Hamming)
-                  </button>
-                </div>
-              </div>
-
-              {/* Bit level (hash mode only) */}
-              {searchMode === "hash" && indexStatus?.bit_list && (
-                <div className="space-y-1.5">
-                  <span className="text-[10px] uppercase tracking-wider text-gray-500">
-                    Bit Level
-                  </span>
-                  <div className="flex gap-1.5">
-                    {indexStatus.bit_list.map((b) => (
-                      <button
-                        key={b}
-                        onClick={() => setBit(b)}
-                        className={`flex-1 py-1 rounded text-[11px] font-mono transition-colors ${
-                          bit === b
-                            ? "bg-purple-600 text-white"
-                            : "bg-gray-800 text-gray-500 hover:text-gray-300"
-                        }`}
-                      >
-                        {b}
-                      </button>
-                    ))}
+                    <button
+                      onClick={() => setSearchMode("hash")}
+                      disabled={backboneOnly}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        searchMode === "hash"
+                          ? "bg-purple-600 text-white"
+                          : "bg-gray-800 text-gray-500 hover:text-gray-300"
+                      } disabled:opacity-30 disabled:cursor-not-allowed`}
+                    >
+                      Hash (Hamming)
+                    </button>
                   </div>
                 </div>
-              )}
 
-              {/* Top-K */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase tracking-wider text-gray-500">
-                    Top-K
-                  </span>
-                  <span className="text-[10px] text-gray-400 font-mono">
-                    {topK}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={5}
-                  max={50}
-                  step={5}
-                  value={topK}
-                  onChange={(e) => setTopK(Number(e.target.value))}
-                  className="w-full accent-blue-500"
-                />
-              </div>
-
-              {/* Search button */}
-              <button
-                onClick={doSearch}
-                disabled={!canSearch || searching}
-                className="w-full py-2.5 rounded-lg text-xs font-medium
-                           bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-700
-                           disabled:text-gray-500 text-white transition-colors
-                           flex items-center justify-center gap-2"
-              >
-                {searching ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Searching...
-                  </>
-                ) : (
-                  <>
-                    <Search className="w-3.5 h-3.5" />
-                    Search
-                  </>
+                {/* Bit level (hash mode only) */}
+                {searchMode === "hash" && indexStatus?.bit_list && (
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] uppercase tracking-wider text-gray-500">
+                      Bit Level
+                    </span>
+                    <div className="flex gap-1.5">
+                      {indexStatus.bit_list.map((b) => (
+                        <button
+                          key={b}
+                          onClick={() => setBit(b)}
+                          className={`flex-1 py-1 rounded text-[11px] font-mono transition-colors ${
+                            bit === b
+                              ? "bg-purple-600 text-white"
+                              : "bg-gray-800 text-gray-500 hover:text-gray-300"
+                          }`}
+                        >
+                          {b}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
-              </button>
 
-              {error && <p className="text-xs text-red-400">{error}</p>}
-            </div>
+                {/* Top-K */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase tracking-wider text-gray-500">
+                      Top-K
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-mono">
+                      {topK}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={5}
+                    max={50}
+                    step={5}
+                    value={topK}
+                    onChange={(e) => setTopK(Number(e.target.value))}
+                    className="w-full accent-blue-500"
+                  />
+                </div>
+
+                {/* Search button */}
+                <button
+                  onClick={doSearch}
+                  disabled={!canSearch || searching}
+                  className="w-full py-2.5 rounded-lg text-xs font-medium
+                             bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-700
+                             disabled:text-gray-500 text-white transition-colors
+                             flex items-center justify-center gap-2"
+                >
+                  {searching ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Searching...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-3.5 h-3.5" />
+                      Search
+                    </>
+                  )}
+                </button>
+
+                {error && <p className="text-xs text-red-400">{error}</p>}
+              </div>
+            )}
           </div>
 
           {/* Right panel: Results */}
@@ -549,12 +764,14 @@ export default function SearchPage() {
             ) : (
               <div className="flex flex-col items-center justify-center h-full min-h-[300px] gap-3">
                 <Search className="w-8 h-8 text-gray-700" />
-                <p className="text-xs text-gray-600 text-center max-w-[250px]">
-                  {!indexStatus?.loaded
-                    ? "Load a search index to get started"
-                    : !modelLoaded
-                      ? "Load a model from Hash Explorer"
-                      : "Enter a query and click Search"}
+                <p className="text-xs text-gray-600 text-center max-w-[280px]">
+                  {!isReady && !discovering && availableCheckpoints.length === 0
+                    ? "No checkpoints found. Train a model first."
+                    : !isReady && !discovering && availableIndices.length === 0
+                      ? "No search indices found. Build an index first."
+                      : !isReady
+                        ? "Set up model and index to start searching"
+                        : "Enter a query and click Search"}
                 </p>
               </div>
             )}
