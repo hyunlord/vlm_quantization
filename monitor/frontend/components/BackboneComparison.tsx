@@ -7,6 +7,7 @@ import type { EvalMetric } from "@/lib/types";
 interface BackboneComparisonProps {
   evalData: EvalMetric[];
   selectedEpoch?: number;
+  selectedStep?: number;
 }
 
 function formatPercent(value: number | null | undefined): string {
@@ -22,15 +23,23 @@ function TrendIcon({ hash, backbone }: { hash: number | null; backbone: number |
   return <Minus className="w-3 h-3 text-gray-500" />;
 }
 
-export default function BackboneComparison({ evalData, selectedEpoch }: BackboneComparisonProps) {
-  // Get the eval data for selected epoch or latest
+export default function BackboneComparison({ evalData, selectedEpoch, selectedStep }: BackboneComparisonProps) {
+  // Get the eval data for selected step/epoch or latest
   const currentEval = useMemo(() => {
     if (evalData.length === 0) return null;
+    // Prefer step-based match (unique), fall back to epoch, then latest
+    if (selectedStep != null) {
+      const byStep = evalData.find((e) => e.step === selectedStep);
+      if (byStep) return byStep;
+    }
     if (selectedEpoch != null) {
-      return evalData.find((e) => e.epoch === selectedEpoch) ?? evalData[evalData.length - 1];
+      // With val_check_interval < 1, multiple evals share the same epoch.
+      // Return the LAST one for that epoch (most recent).
+      const matches = evalData.filter((e) => e.epoch === selectedEpoch);
+      if (matches.length > 0) return matches[matches.length - 1];
     }
     return evalData[evalData.length - 1];
-  }, [evalData, selectedEpoch]);
+  }, [evalData, selectedEpoch, selectedStep]);
 
   // Get baseline (epoch 0) for comparison
   const baselineEval = useMemo(() => {

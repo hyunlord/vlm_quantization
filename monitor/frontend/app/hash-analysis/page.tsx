@@ -191,6 +191,7 @@ export default function HashAnalysisPage() {
             <BackboneComparison
               evalData={evalPoints}
               selectedEpoch={currentData.epoch}
+              selectedStep={currentData.step}
             />
 
             {/* Bit Balance */}

@@ -111,30 +111,40 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(id);
   }, [refreshRuns, refreshCheckpoints]);
 
-  // Load eval points when run changes
+  // Load eval points when run changes + refresh periodically
+  const refreshEvalPoints = useCallback(() => {
+    if (!selectedRunId) return;
+    fetch(`/api/metrics/history?run_id=${encodeURIComponent(selectedRunId)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const evals: EvalMetric[] = data.eval ?? [];
+        setEvalPoints((prev) => {
+          // Only update if data actually changed (new entries)
+          if (evals.length !== prev.length) {
+            // Auto-select latest eval epoch when new data arrives
+            if (evals.length > 0) {
+              setSelectedEvalEpoch(evals[evals.length - 1].epoch);
+            }
+            return evals;
+          }
+          return prev;
+        });
+      })
+      .catch(() => {});
+  }, [selectedRunId]);
+
   useEffect(() => {
     if (!selectedRunId) {
       setEvalPoints([]);
       setSelectedEvalEpoch(null);
       return;
     }
-    fetch(`/api/metrics/history?run_id=${encodeURIComponent(selectedRunId)}`)
-      .then((r) => r.json())
-      .then((data) => {
-        const evals: EvalMetric[] = data.eval ?? [];
-        setEvalPoints(evals);
-        // Auto-select latest eval epoch
-        if (evals.length > 0) {
-          setSelectedEvalEpoch(evals[evals.length - 1].epoch);
-        } else {
-          setSelectedEvalEpoch(null);
-        }
-      })
-      .catch(() => {
-        setEvalPoints([]);
-        setSelectedEvalEpoch(null);
-      });
-  }, [selectedRunId]);
+    // Initial fetch
+    refreshEvalPoints();
+    // Refresh every 15s to pick up new validation results
+    const id = setInterval(refreshEvalPoints, 15000);
+    return () => clearInterval(id);
+  }, [selectedRunId, refreshEvalPoints]);
 
   // Load epoch summaries and run checkpoints when run changes
   useEffect(() => {
