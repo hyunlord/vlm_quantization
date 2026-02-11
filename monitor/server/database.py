@@ -94,12 +94,9 @@ def init_db() -> None:
 
         CREATE INDEX IF NOT EXISTS idx_train_step ON training_metrics(step);
         CREATE INDEX IF NOT EXISTS idx_train_epoch ON training_metrics(epoch);
-        CREATE INDEX IF NOT EXISTS idx_train_run ON training_metrics(run_id);
         CREATE INDEX IF NOT EXISTS idx_eval_epoch ON eval_metrics(epoch);
-        CREATE INDEX IF NOT EXISTS idx_eval_run ON eval_metrics(run_id);
         CREATE INDEX IF NOT EXISTS idx_sys_ts ON system_metrics(timestamp);
         CREATE INDEX IF NOT EXISTS idx_hash_epoch ON hash_analysis_snapshots(epoch);
-        CREATE INDEX IF NOT EXISTS idx_hash_run ON hash_analysis_snapshots(run_id);
     """)
     # Migrate: add columns for existing DBs
     for col in ("loss_ortho", "loss_lcs"):
@@ -125,6 +122,18 @@ def init_db() -> None:
         try:
             conn.execute(
                 f"ALTER TABLE {table} ADD COLUMN run_id TEXT DEFAULT ''"
+            )
+        except sqlite3.OperationalError:
+            pass
+    # Create run_id indexes (after migration ensures the column exists)
+    for idx, table in (
+        ("idx_train_run", "training_metrics"),
+        ("idx_eval_run", "eval_metrics"),
+        ("idx_hash_run", "hash_analysis_snapshots"),
+    ):
+        try:
+            conn.execute(
+                f"CREATE INDEX IF NOT EXISTS {idx} ON {table}(run_id)"
             )
         except sqlite3.OperationalError:
             pass

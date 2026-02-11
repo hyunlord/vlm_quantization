@@ -130,6 +130,7 @@ async def startup():
     # DB polling: detect new rows inserted by external processes (e.g. training
     # notebook writing to shared Google Drive SQLite) and broadcast via WebSocket.
     async def poll_db_for_new_metrics():
+        global _hash_analysis_data
         wm = get_poll_watermarks()
         last_train_id = wm["train_id"]
         last_eval_id = wm["eval_id"]
@@ -152,7 +153,7 @@ async def startup():
                     last_hash_count = wm["hash_count"]
                     latest = get_latest_hash_analysis()
                     if latest is not None:
-                        _hash_analysis_data = latest  # noqa: F841
+                        _hash_analysis_data = latest
                         await manager.broadcast({
                             "type": "hash_analysis", "data": latest,
                         })
