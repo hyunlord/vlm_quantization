@@ -52,8 +52,9 @@ def auto_configure(
         batch_size = optimal_batch
         accum = max(1, -(-target_effective_batch // batch_size))  # ceil div
 
-    # num_workers: scale with batch_size, cap at CPU count and 16
-    num_workers = min(cpu_count, 16, max(4, batch_size // 16))
+    # num_workers: scale with batch_size, cap at 8 to avoid RAM exhaustion
+    # (persistent_workers=True keeps workers alive, accumulating memory)
+    num_workers = min(cpu_count, 8, max(2, batch_size // 32))
 
     effective = batch_size * accum
 
