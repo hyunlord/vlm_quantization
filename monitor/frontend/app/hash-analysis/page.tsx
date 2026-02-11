@@ -9,6 +9,7 @@ import RunSelector from "@/components/RunSelector";
 import BitBalanceChart from "@/components/BitBalanceChart";
 import SampleGallery from "@/components/SampleGallery";
 import SimilarityHeatmap from "@/components/SimilarityHeatmap";
+import BackboneComparison from "@/components/BackboneComparison";
 import type { HashAnalysisData } from "@/lib/types";
 
 interface SnapshotEntry {
@@ -27,7 +28,7 @@ function getWsUrl() {
 const LIVE_VALUE = "live";
 
 export default function HashAnalysisPage() {
-  const { selectedRunId } = useRunContext();
+  const { selectedRunId, evalPoints } = useRunContext();
   const { hashAnalysis: liveData, isConnected } = useWebSocket(getWsUrl(), selectedRunId);
 
   const [snapshots, setSnapshots] = useState<SnapshotEntry[]>([]);
@@ -186,6 +187,12 @@ export default function HashAnalysisPage() {
           </div>
         ) : (
           <>
+            {/* Backbone vs Hash Comparison */}
+            <BackboneComparison
+              evalData={evalPoints}
+              selectedEpoch={currentData.epoch}
+            />
+
             {/* Bit Balance */}
             <BitBalanceChart
               bitActivations={currentData.bit_activations ?? {}}
