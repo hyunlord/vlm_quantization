@@ -8,7 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import type { CheckpointInfo, EvalMetric, RunInfo } from "@/lib/types";
+import type { Checkpoint, CheckpointInfo, EpochSummary, EvalMetric, RunInfo } from "@/lib/types";
 
 interface RunContextType {
   runs: RunInfo[];
@@ -21,6 +21,12 @@ interface RunContextType {
   checkpoints: CheckpointInfo[];
   checkpointsByRun: Record<string, CheckpointInfo[]>;
   refreshCheckpoints: () => Promise<void>;
+  // New: epoch/checkpoint hierarchy
+  epochSummaries: EpochSummary[];
+  selectedCheckpointId: number | null;
+  selectCheckpoint: (id: number | null) => void;
+  runCheckpoints: Checkpoint[];
+  loadCheckpointForInference: (path: string) => Promise<void>;
 }
 
 const RunContext = createContext<RunContextType>({
@@ -34,6 +40,12 @@ const RunContext = createContext<RunContextType>({
   checkpoints: [],
   checkpointsByRun: {},
   refreshCheckpoints: async () => {},
+  // New: epoch/checkpoint hierarchy
+  epochSummaries: [],
+  selectedCheckpointId: null,
+  selectCheckpoint: () => {},
+  runCheckpoints: [],
+  loadCheckpointForInference: async () => {},
 });
 
 export function useRunContext() {
@@ -48,6 +60,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     null,
   );
   const [checkpoints, setCheckpoints] = useState<CheckpointInfo[]>([]);
+  // New state for epoch/checkpoint hierarchy
+  const [epochSummaries, setEpochSummaries] = useState<EpochSummary[]>([]);
+  const [selectedCheckpointId, setSelectedCheckpointId] = useState<number | null>(null);
+  const [runCheckpoints, setRunCheckpoints] = useState<Checkpoint[]>([]);
 
   const checkpointsByRun = useMemo(() => {
     const groups: Record<string, CheckpointInfo[]> = {};
@@ -120,9 +136,70 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       });
   }, [selectedRunId]);
 
+  // Load epoch summaries and run checkpoints when run changes
+  useEffect(() => {
+    if (!selectedRunId) {
+      setEpochSummaries([]);
+      setRunCheckpoints([]);
+      setSelectedCheckpointId(null);
+      return;
+    }
+    // Fetch epoch summaries
+    fetch(`/api/runs/${encodeURIComponent(selectedRunId)}/epochs`)
+      .then((r) => r.json())
+      .then((data) => {
+        const epochs: EpochSummary[] = data.epochs ?? [];
+        setEpochSummaries(epochs);
+        // Auto-select best checkpoint if available
+        const withCkpt = epochs.filter((e) => e.checkpoint);
+        if (withCkpt.length > 0) {
+          // Find epoch with lowest val_loss
+          const best = withCkpt.reduce((a, b) =>
+            (a.checkpoint?.val_loss ?? Infinity) < (b.checkpoint?.val_loss ?? Infinity) ? a : b
+          );
+          if (best.checkpoint) {
+            setSelectedCheckpointId(best.checkpoint.id);
+          }
+        }
+      })
+      .catch(() => setEpochSummaries([]));
+
+    // Fetch checkpoints for this run
+    fetch(`/api/runs/${encodeURIComponent(selectedRunId)}/checkpoints`)
+      .then((r) => r.json())
+      .then((data) => {
+        setRunCheckpoints(data.checkpoints ?? []);
+      })
+      .catch(() => setRunCheckpoints([]));
+  }, [selectedRunId]);
+
   const selectRun = useCallback((id: string | null) => {
     setSelectedRunId(id);
     setSelectedEvalEpoch(null);
+    setSelectedCheckpointId(null);
+  }, []);
+
+  const selectCheckpoint = useCallback((id: number | null) => {
+    setSelectedCheckpointId(id);
+    // Also update selectedEvalEpoch to match checkpoint's epoch
+    if (id !== null) {
+      const ckpt = runCheckpoints.find((c) => c.id === id);
+      if (ckpt) {
+        setSelectedEvalEpoch(ckpt.epoch);
+      }
+    }
+  }, [runCheckpoints]);
+
+  const loadCheckpointForInference = useCallback(async (path: string) => {
+    try {
+      await fetch("/api/inference/load", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ checkpoint_path: path }),
+      });
+    } catch {
+      // ignore
+    }
   }, []);
 
   return (
@@ -138,6 +215,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         checkpoints,
         checkpointsByRun,
         refreshCheckpoints,
+        // New: epoch/checkpoint hierarchy
+        epochSummaries,
+        selectedCheckpointId,
+        selectCheckpoint,
+        runCheckpoints,
+        loadCheckpointForInference,
       }}
     >
       {children}

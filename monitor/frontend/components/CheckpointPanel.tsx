@@ -2,23 +2,37 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { Download, ExternalLink, Star } from "lucide-react";
+import { Download, ExternalLink, Play, Star } from "lucide-react";
 import { useRunContext } from "@/contexts/RunContext";
 
 export default function CheckpointPanel() {
-  const { selectedRunId, checkpointsByRun } = useRunContext();
+  const {
+    selectedRunId,
+    checkpointsByRun,
+    runCheckpoints: dbCheckpoints,
+    selectedCheckpointId,
+    selectCheckpoint,
+    loadCheckpointForInference,
+  } = useRunContext();
 
-  const runCheckpoints = selectedRunId
+  // Use file-based checkpoints (legacy) or DB checkpoints
+  const fileCheckpoints = selectedRunId
     ? checkpointsByRun[selectedRunId] ?? []
     : [];
 
+  // Prefer DB checkpoints if available, fall back to file-based
+  const hasDbCheckpoints = dbCheckpoints.length > 0;
+
   const bestPath = useMemo(() => {
-    const withLoss = runCheckpoints.filter((c) => c.val_loss != null);
+    const source = hasDbCheckpoints
+      ? dbCheckpoints.map((c) => ({ val_loss: c.val_loss, path: c.path }))
+      : fileCheckpoints.map((c) => ({ val_loss: c.val_loss, path: c.path }));
+    const withLoss = source.filter((c) => c.val_loss != null);
     if (withLoss.length === 0) return null;
     return withLoss.reduce((a, b) =>
       (a.val_loss ?? Infinity) < (b.val_loss ?? Infinity) ? a : b,
     ).path;
-  }, [runCheckpoints]);
+  }, [hasDbCheckpoints, dbCheckpoints, fileCheckpoints]);
 
   return (
     <div className="rounded-xl bg-gray-900 border border-gray-800 p-3">
@@ -29,7 +43,7 @@ export default function CheckpointPanel() {
             Checkpoints
           </span>
         </div>
-        {runCheckpoints.length > 0 && (
+        {(hasDbCheckpoints || fileCheckpoints.length > 0) && (
           <Link
             href={`/inference${selectedRunId ? `?run=${selectedRunId}` : ""}`}
             className="flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
@@ -40,15 +54,67 @@ export default function CheckpointPanel() {
         )}
       </div>
 
-      {runCheckpoints.length === 0 ? (
+      {!hasDbCheckpoints && fileCheckpoints.length === 0 ? (
         <p className="text-xs text-gray-600 py-2">
           {selectedRunId
             ? "No checkpoints for this run"
             : "Select a run to view checkpoints"}
         </p>
-      ) : (
+      ) : hasDbCheckpoints ? (
+        /* DB-based checkpoints with selection support */
         <div className="space-y-1 max-h-[200px] overflow-y-auto">
-          {runCheckpoints.map((ckpt) => {
+          {dbCheckpoints.map((ckpt) => {
+            const isBest = ckpt.path === bestPath;
+            const isSelected = ckpt.id === selectedCheckpointId;
+            return (
+              <div
+                key={ckpt.id}
+                className={`rounded-lg px-2.5 py-1.5 text-xs transition-colors cursor-pointer ${
+                  isSelected
+                    ? "bg-blue-900/30 border border-blue-700/50"
+                    : isBest
+                      ? "bg-yellow-900/20 border border-yellow-800/40 hover:bg-yellow-900/30"
+                      : "bg-gray-800/50 hover:bg-gray-800 border border-transparent"
+                }`}
+                onClick={() => selectCheckpoint(ckpt.id)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {isBest && (
+                      <Star className="w-3 h-3 text-yellow-500 shrink-0 fill-yellow-500" />
+                    )}
+                    <span className={`truncate ${isSelected ? "text-blue-300" : "text-gray-300"}`}>
+                      Epoch {ckpt.epoch}{ckpt.step != null ? ` (step ${ckpt.step})` : ""}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {ckpt.val_loss != null && (
+                      <span className="text-[10px] text-gray-500">
+                        loss {ckpt.val_loss.toFixed(4)}
+                      </span>
+                    )}
+                    <span className="text-[10px] text-gray-500">
+                      {ckpt.size_mb?.toFixed(0) ?? "?"}MB
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        loadCheckpointForInference(ckpt.path);
+                      }}
+                      className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-green-700/50 text-green-300 hover:bg-green-700 text-[10px] transition-colors"
+                    >
+                      <Play className="w-2 h-2" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* File-based checkpoints (legacy fallback) */
+        <div className="space-y-1 max-h-[200px] overflow-y-auto">
+          {fileCheckpoints.map((ckpt) => {
             const isBest = ckpt.path === bestPath;
             return (
               <Link

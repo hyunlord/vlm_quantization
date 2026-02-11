@@ -97,6 +97,36 @@ def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_eval_epoch ON eval_metrics(epoch);
         CREATE INDEX IF NOT EXISTS idx_sys_ts ON system_metrics(timestamp);
         CREATE INDEX IF NOT EXISTS idx_hash_epoch ON hash_analysis_snapshots(epoch);
+
+        -- Runs table for tracking training runs
+        CREATE TABLE IF NOT EXISTS runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT UNIQUE NOT NULL,
+            started_at REAL NOT NULL,
+            ended_at REAL,
+            status TEXT DEFAULT 'running',
+            config_json TEXT,
+            total_epochs INTEGER,
+            total_steps INTEGER,
+            best_checkpoint_id INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS idx_runs_started ON runs(started_at DESC);
+
+        -- Checkpoints table for tracking saved model checkpoints
+        CREATE TABLE IF NOT EXISTS checkpoints (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL,
+            epoch INTEGER NOT NULL,
+            step INTEGER,
+            path TEXT UNIQUE NOT NULL,
+            filename TEXT NOT NULL,
+            size_mb REAL,
+            val_loss REAL,
+            created_at REAL NOT NULL,
+            hparams_json TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_ckpt_run ON checkpoints(run_id);
+        CREATE INDEX IF NOT EXISTS idx_ckpt_run_epoch ON checkpoints(run_id, epoch);
     """)
     # Migrate: add columns for existing DBs
     for col in ("loss_ortho", "loss_lcs"):
@@ -393,3 +423,254 @@ def get_new_eval_metrics(after_id: int) -> list[dict]:
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# --- Run Management ---
+
+
+def register_run(run_id: str, config: dict | None = None) -> int:
+    """Register a new training run. Returns the run's row id."""
+    conn = get_connection()
+    cur = conn.execute(
+        """INSERT OR IGNORE INTO runs (run_id, started_at, status, config_json)
+           VALUES (?, ?, 'running', ?)""",
+        (run_id, time.time(), json.dumps(config) if config else None),
+    )
+    row_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return row_id
+
+
+def update_run_status(run_id: str, status: str, total_epochs: int | None = None,
+                      total_steps: int | None = None) -> None:
+    """Update a run's status and optionally total epochs/steps."""
+    conn = get_connection()
+    updates = ["status = ?"]
+    params: list = [status]
+    if status in ("completed", "failed"):
+        updates.append("ended_at = ?")
+        params.append(time.time())
+    if total_epochs is not None:
+        updates.append("total_epochs = ?")
+        params.append(total_epochs)
+    if total_steps is not None:
+        updates.append("total_steps = ?")
+        params.append(total_steps)
+    params.append(run_id)
+    conn.execute(
+        f"UPDATE runs SET {', '.join(updates)} WHERE run_id = ?",
+        params,
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_run_details(run_id: str) -> dict | None:
+    """Get detailed info for a specific run including checkpoint count."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM runs WHERE run_id = ?", (run_id,)
+    ).fetchone()
+    if row is None:
+        conn.close()
+        return None
+    result = dict(row)
+    # Get checkpoint count
+    ckpt_count = conn.execute(
+        "SELECT COUNT(*) FROM checkpoints WHERE run_id = ?", (run_id,)
+    ).fetchone()[0]
+    result["checkpoint_count"] = ckpt_count
+    # Get best checkpoint
+    best = conn.execute(
+        """SELECT id, epoch, val_loss, path FROM checkpoints
+           WHERE run_id = ? AND val_loss IS NOT NULL
+           ORDER BY val_loss ASC LIMIT 1""",
+        (run_id,),
+    ).fetchone()
+    if best:
+        result["best_checkpoint"] = dict(best)
+    conn.close()
+    return result
+
+
+def get_runs_with_checkpoints() -> list[dict]:
+    """List all runs with checkpoint info."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT r.*,
+               (SELECT COUNT(*) FROM checkpoints c WHERE c.run_id = r.run_id) as checkpoint_count,
+               (SELECT MIN(val_loss) FROM checkpoints c WHERE c.run_id = r.run_id) as best_val_loss
+        FROM runs r
+        ORDER BY r.started_at DESC
+    """).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# --- Checkpoint Management ---
+
+
+def register_checkpoint(
+    run_id: str,
+    epoch: int,
+    path: str,
+    val_loss: float | None = None,
+    step: int | None = None,
+    size_mb: float | None = None,
+    hparams: dict | None = None,
+) -> int:
+    """Register a checkpoint. Returns the checkpoint id."""
+    conn = get_connection()
+    filename = Path(path).name
+    cur = conn.execute(
+        """INSERT OR REPLACE INTO checkpoints
+           (run_id, epoch, step, path, filename, size_mb, val_loss, created_at, hparams_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (run_id, epoch, step, path, filename, size_mb, val_loss, time.time(),
+         json.dumps(hparams) if hparams else None),
+    )
+    ckpt_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return ckpt_id
+
+
+def get_checkpoints_for_run(run_id: str) -> list[dict]:
+    """Get all checkpoints for a specific run, ordered by epoch."""
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT * FROM checkpoints WHERE run_id = ?
+           ORDER BY epoch, step""",
+        (run_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_checkpoint_by_id(checkpoint_id: int) -> dict | None:
+    """Get a checkpoint by its ID."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM checkpoints WHERE id = ?", (checkpoint_id,)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_checkpoint_by_path(path: str) -> dict | None:
+    """Get a checkpoint by its file path."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM checkpoints WHERE path = ?", (path,)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_epochs_for_run(run_id: str) -> list[dict]:
+    """Get epoch summaries for a run with checkpoint and metrics info."""
+    conn = get_connection()
+    # Get epochs from training metrics
+    epochs = conn.execute("""
+        SELECT epoch,
+               MIN(step) as start_step,
+               MAX(step) as end_step,
+               COUNT(*) as num_steps,
+               MIN(timestamp) as started_at,
+               MAX(timestamp) as ended_at
+        FROM training_metrics
+        WHERE run_id = ?
+        GROUP BY epoch
+        ORDER BY epoch
+    """, (run_id,)).fetchall()
+
+    result = []
+    for e in epochs:
+        epoch_data = dict(e)
+        # Check for checkpoint at this epoch
+        ckpt = conn.execute(
+            """SELECT id, path, val_loss, size_mb FROM checkpoints
+               WHERE run_id = ? AND epoch = ?""",
+            (run_id, e["epoch"]),
+        ).fetchone()
+        if ckpt:
+            epoch_data["checkpoint"] = dict(ckpt)
+        # Get eval metrics for this epoch
+        eval_row = conn.execute(
+            """SELECT map_i2t, map_t2i, val_loss_total FROM eval_metrics
+               WHERE run_id = ? AND epoch = ?""",
+            (run_id, e["epoch"]),
+        ).fetchone()
+        if eval_row:
+            epoch_data["eval"] = dict(eval_row)
+        result.append(epoch_data)
+    conn.close()
+    return result
+
+
+def get_all_checkpoints() -> list[dict]:
+    """Get all checkpoints across all runs."""
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT c.*, r.status as run_status
+           FROM checkpoints c
+           LEFT JOIN runs r ON c.run_id = r.run_id
+           ORDER BY c.created_at DESC"""
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def sync_checkpoints_from_disk(checkpoint_dir: str, run_id: str | None = None) -> int:
+    """Scan checkpoint directory and register any untracked checkpoints.
+    Returns the number of newly registered checkpoints."""
+    import re
+    ckpt_path = Path(checkpoint_dir)
+    if not ckpt_path.exists():
+        return 0
+
+    conn = get_connection()
+    count = 0
+
+    # Pattern to extract epoch from filename
+    epoch_pattern = re.compile(r"epoch[=_](\d+)")
+    val_loss_pattern = re.compile(r"val[/_]total[=_]?([\d.]+)")
+
+    for ckpt_file in ckpt_path.rglob("*.ckpt"):
+        path_str = str(ckpt_file)
+        # Skip if already registered
+        existing = conn.execute(
+            "SELECT id FROM checkpoints WHERE path = ?", (path_str,)
+        ).fetchone()
+        if existing:
+            continue
+
+        # Extract run_id from directory structure
+        rel_path = ckpt_file.relative_to(ckpt_path)
+        parts = rel_path.parts
+        detected_run_id = parts[0] if len(parts) > 1 else (run_id or "unknown")
+
+        # Extract epoch from filename
+        epoch_match = epoch_pattern.search(ckpt_file.name)
+        epoch = int(epoch_match.group(1)) if epoch_match else 0
+
+        # Extract val_loss from filename
+        val_match = val_loss_pattern.search(ckpt_file.name)
+        val_loss = float(val_match.group(1)) if val_match else None
+
+        # Get file size
+        size_mb = ckpt_file.stat().st_size / (1024 * 1024)
+
+        conn.execute(
+            """INSERT INTO checkpoints
+               (run_id, epoch, path, filename, size_mb, val_loss, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (detected_run_id, epoch, path_str, ckpt_file.name, size_mb, val_loss,
+             ckpt_file.stat().st_mtime),
+        )
+        count += 1
+
+    conn.commit()
+    conn.close()
+    return count

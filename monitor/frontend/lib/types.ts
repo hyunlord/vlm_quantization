@@ -5,6 +5,51 @@ export interface RunInfo {
   num_training_points: number;
   num_eval_points: number;
   has_hash_analysis: boolean;
+  // Enhanced fields from runs table
+  status?: "running" | "completed" | "failed";
+  ended_at?: number;
+  checkpoint_count?: number;
+  best_val_loss?: number;
+  best_checkpoint?: {
+    id: number;
+    epoch: number;
+    val_loss: number;
+    path: string;
+  };
+}
+
+export interface EpochSummary {
+  epoch: number;
+  start_step: number;
+  end_step: number;
+  num_steps: number;
+  started_at: number;
+  ended_at: number;
+  checkpoint?: {
+    id: number;
+    path: string;
+    val_loss: number | null;
+    size_mb: number | null;
+  };
+  eval?: {
+    map_i2t: number | null;
+    map_t2i: number | null;
+    val_loss_total: number | null;
+  };
+}
+
+export interface Checkpoint {
+  id: number;
+  run_id: string;
+  epoch: number;
+  step: number | null;
+  path: string;
+  filename: string;
+  size_mb: number | null;
+  val_loss: number | null;
+  created_at: number;
+  hparams_json?: string;
+  run_status?: string;
 }
 
 export interface TrainingMetric {

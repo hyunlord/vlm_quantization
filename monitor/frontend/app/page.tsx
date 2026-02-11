@@ -11,6 +11,7 @@ import LossChart from "@/components/LossChart";
 import MetricsChart from "@/components/MetricsChart";
 import HashQuality from "@/components/HashQuality";
 import CheckpointPanel from "@/components/CheckpointPanel";
+import EpochNavigator from "@/components/EpochNavigator";
 
 function getWsUrl() {
   if (typeof window === "undefined") return "ws://localhost:8000/ws";
@@ -76,9 +77,10 @@ export default function Dashboard() {
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
-        {/* Sidebar: System + Checkpoints */}
+        {/* Sidebar: System + Epochs + Checkpoints */}
         <div className="space-y-4">
           <SystemPanel data={systemData} />
+          <EpochNavigator />
           <CheckpointPanel />
         </div>
 

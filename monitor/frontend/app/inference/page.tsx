@@ -156,7 +156,7 @@ export default function InferencePageWrapper() {
 }
 
 function InferencePage() {
-  const { selectedRunId } = useRunContext();
+  const { selectedRunId, selectedCheckpointId, runCheckpoints, selectCheckpoint } = useRunContext();
   const searchParams = useSearchParams();
   const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
   const [loadingModel, setLoadingModel] = useState(false);
@@ -307,6 +307,11 @@ function InferencePage() {
         setCodesA(null);
         setCodesB(null);
         setComparisons(null);
+        // Sync with context: find matching checkpoint and select it
+        const matchingCkpt = runCheckpoints.find((c) => c.path === path);
+        if (matchingCkpt && matchingCkpt.id !== selectedCheckpointId) {
+          selectCheckpoint(matchingCkpt.id);
+        }
       }
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Load failed");
@@ -316,14 +321,22 @@ function InferencePage() {
     }
   };
 
-  // Handle ?load= query param (auto-load checkpoint from CheckpointPanel)
+  // Handle ?load= query param OR auto-load from context checkpoint selection
   useEffect(() => {
     const loadPath = searchParams.get("load");
     if (loadPath && !modelStatus?.loaded && !loadingModel) {
       loadCheckpoint(loadPath);
+      return;
+    }
+    // Auto-load from context if a checkpoint is selected but not yet loaded
+    if (selectedCheckpointId && runCheckpoints.length > 0 && !modelStatus?.loaded && !loadingModel) {
+      const ckpt = runCheckpoints.find((c) => c.id === selectedCheckpointId);
+      if (ckpt && ckpt.path) {
+        loadCheckpoint(ckpt.path);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, [searchParams, selectedCheckpointId, runCheckpoints]);
 
   const loadBackboneOnly = async () => {
     setLoadingModel(true);

@@ -36,3 +36,5 @@ monitor/metrics.db
 *.log
 wandb/
 lightning_logs/
+
+.omc/

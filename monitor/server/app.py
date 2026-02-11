@@ -29,6 +29,18 @@ from monitor.server.database import (
     insert_hash_analysis,
     insert_system_metric,
     insert_training_metric,
+    # New checkpoint/run management
+    get_all_checkpoints,
+    get_checkpoint_by_id,
+    get_checkpoint_by_path,
+    get_checkpoints_for_run,
+    get_epochs_for_run,
+    get_run_details,
+    get_runs_with_checkpoints,
+    register_checkpoint,
+    register_run,
+    sync_checkpoints_from_disk,
+    update_run_status,
 )
 from monitor.server.inference import InferenceEngine
 from monitor.server.models import (
@@ -208,6 +220,112 @@ async def post_eval_metric(metric: EvalMetric):
 @app.get("/api/runs")
 async def list_runs():
     return {"runs": get_runs()}
+
+
+@app.get("/api/runs/with-checkpoints")
+async def list_runs_with_checkpoints():
+    """List all runs with checkpoint summary info."""
+    return {"runs": get_runs_with_checkpoints()}
+
+
+@app.get("/api/runs/{run_id}")
+async def get_run(run_id: str):
+    """Get detailed info for a specific run."""
+    details = get_run_details(run_id)
+    if details is None:
+        return {"error": f"Run {run_id} not found"}
+    return {"run": details}
+
+
+@app.get("/api/runs/{run_id}/epochs")
+async def get_run_epochs(run_id: str):
+    """Get epoch summaries for a run with checkpoint info."""
+    epochs = get_epochs_for_run(run_id)
+    return {"run_id": run_id, "epochs": epochs}
+
+
+@app.get("/api/runs/{run_id}/checkpoints")
+async def get_run_checkpoints(run_id: str):
+    """Get all checkpoints for a specific run."""
+    checkpoints = get_checkpoints_for_run(run_id)
+    return {"run_id": run_id, "checkpoints": checkpoints}
+
+
+@app.post("/api/runs/register")
+async def register_new_run(data: dict):
+    """Register a new training run."""
+    run_id = data.get("run_id")
+    if not run_id:
+        return {"error": "run_id is required"}
+    config = data.get("config")
+    row_id = register_run(run_id, config)
+    return {"status": "ok", "id": row_id, "run_id": run_id}
+
+
+@app.post("/api/runs/{run_id}/status")
+async def update_run(run_id: str, data: dict):
+    """Update a run's status."""
+    status = data.get("status", "running")
+    total_epochs = data.get("total_epochs")
+    total_steps = data.get("total_steps")
+    update_run_status(run_id, status, total_epochs, total_steps)
+    return {"status": "ok"}
+
+
+# --- REST: Checkpoints ---
+@app.get("/api/checkpoints")
+async def list_all_checkpoints():
+    """List all checkpoints across all runs."""
+    return {"checkpoints": get_all_checkpoints()}
+
+
+@app.get("/api/checkpoints/{checkpoint_id}")
+async def get_checkpoint(checkpoint_id: int):
+    """Get checkpoint details by ID."""
+    ckpt = get_checkpoint_by_id(checkpoint_id)
+    if ckpt is None:
+        return {"error": f"Checkpoint {checkpoint_id} not found"}
+    return {"checkpoint": ckpt}
+
+
+@app.get("/api/checkpoints/by-path")
+async def get_checkpoint_path(path: str):
+    """Get checkpoint details by file path."""
+    ckpt = get_checkpoint_by_path(path)
+    if ckpt is None:
+        return {"error": f"Checkpoint not found at {path}"}
+    return {"checkpoint": ckpt}
+
+
+@app.post("/api/checkpoints/register")
+async def register_new_checkpoint(data: dict):
+    """Register a new checkpoint (called by training callback)."""
+    run_id = data.get("run_id")
+    epoch = data.get("epoch")
+    path = data.get("path")
+    if not all([run_id, epoch is not None, path]):
+        return {"error": "run_id, epoch, and path are required"}
+    ckpt_id = register_checkpoint(
+        run_id=run_id,
+        epoch=epoch,
+        path=path,
+        val_loss=data.get("val_loss"),
+        step=data.get("step"),
+        size_mb=data.get("size_mb"),
+        hparams=data.get("hparams"),
+    )
+    return {"status": "ok", "id": ckpt_id}
+
+
+@app.post("/api/checkpoints/sync")
+async def sync_checkpoints(data: dict = None):
+    """Scan checkpoint directory and register untracked checkpoints."""
+    directory = (data or {}).get("directory") or CHECKPOINT_DIR
+    if not directory:
+        return {"error": "No checkpoint directory configured"}
+    run_id = (data or {}).get("run_id")
+    count = sync_checkpoints_from_disk(directory, run_id)
+    return {"status": "ok", "synced": count}
 
 
 @app.get("/api/metrics/history")
