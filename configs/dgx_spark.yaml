@@ -1,0 +1,46 @@
+model:
+  backbone: "google/siglip2-so400m-patch14-384"
+  bit_list: [16, 32, 64, 128]
+  hidden_dim: 512
+  dropout: 0.1
+  freeze_backbone: true
+
+training:
+  batch_size: auto  # auto-detect: GB10 128GB unified → ~320-512 with frozen backbone
+  max_epochs: 30
+  hash_lr: 1.0e-3
+  backbone_lr: 1.0e-5
+  weight_decay: 0.01
+  warmup_steps: 500
+  gradient_clip_val: 1.0
+  accumulate_grad_batches: 1  # overridden when batch_size=auto
+  val_check_interval: 0.5
+  early_stopping_patience: 5
+  checkpoint_dir: "checkpoints"
+
+loss:
+  contrastive_weight: 1.0
+  ortho_weight: 0.1
+  quantization_weight: 0.1
+  balance_weight: 0.01
+  consistency_weight: 0.5
+  lcs_weight: 0.5
+  temperature: 0.07
+  ema_decay: 0.99
+
+data:
+  data_root: "data/coco"
+  karpathy_json: "data/coco/dataset_coco.json"
+  num_workers: 8  # overridden when batch_size=auto (Grace CPU has 20 cores)
+  max_text_length: 64
+  image_size: 384
+  extra_datasets:
+    - jsonl_path: "data/aihub/aihub_71454.jsonl"
+      data_root: "data/aihub"
+    - jsonl_path: "data/cc3m_ko/cc3m_ko.jsonl"
+      data_root: "data/cc3m_ko"
+
+monitor:
+  enabled: true
+  server_url: "http://localhost:8000"
+  log_every_n_steps: 10
