@@ -20,6 +20,7 @@ export default function RunSelector() {
     evalPoints,
     selectedEvalEpoch,
     selectEvalEpoch,
+    checkpointsByRun,
   } = useRunContext();
 
   if (runs.length === 0) return null;
@@ -32,11 +33,15 @@ export default function RunSelector() {
         onChange={(e) => selectRun(e.target.value || null)}
         className="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-blue-500"
       >
-        {runs.map((run) => (
-          <option key={run.run_id} value={run.run_id}>
-            {formatRunId(run.run_id)} ({run.num_eval_points} evals)
-          </option>
-        ))}
+        {runs.map((run) => {
+          const ckptCount = checkpointsByRun[run.run_id]?.length ?? 0;
+          return (
+            <option key={run.run_id} value={run.run_id}>
+              {formatRunId(run.run_id)} — {run.num_eval_points} evals
+              {ckptCount > 0 ? `, ${ckptCount} ckpts` : ""}
+            </option>
+          );
+        })}
       </select>
 
       {/* Eval epoch selector */}

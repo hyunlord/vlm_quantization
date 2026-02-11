@@ -10,6 +10,7 @@ import SystemPanel from "@/components/SystemPanel";
 import LossChart from "@/components/LossChart";
 import MetricsChart from "@/components/MetricsChart";
 import HashQuality from "@/components/HashQuality";
+import CheckpointPanel from "@/components/CheckpointPanel";
 
 function getWsUrl() {
   if (typeof window === "undefined") return "ws://localhost:8000/ws";
@@ -75,8 +76,11 @@ export default function Dashboard() {
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
-        {/* Sidebar: System */}
-        <SystemPanel data={systemData} />
+        {/* Sidebar: System + Checkpoints */}
+        <div className="space-y-4">
+          <SystemPanel data={systemData} />
+          <CheckpointPanel />
+        </div>
 
         {/* Main content */}
         <div className="space-y-4">

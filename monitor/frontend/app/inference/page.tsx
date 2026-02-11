@@ -13,7 +13,9 @@ import {
   Star,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useRunContext } from "@/contexts/RunContext";
 import RunSelector from "@/components/RunSelector";
 import HashComparison from "@/components/inference/HashComparison";
 import InputPanel from "@/components/inference/InputPanel";
@@ -145,7 +147,17 @@ function RunHparams({ hp }: { hp: Record<string, unknown> }) {
 
 // ========== Main Component ==========
 
-export default function InferencePage() {
+export default function InferencePageWrapper() {
+  return (
+    <Suspense>
+      <InferencePage />
+    </Suspense>
+  );
+}
+
+function InferencePage() {
+  const { selectedRunId } = useRunContext();
+  const searchParams = useSearchParams();
   const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
   const [loadingModel, setLoadingModel] = useState(false);
   const [loadingPath, setLoadingPath] = useState<string | null>(null);
@@ -201,15 +213,16 @@ export default function InferencePage() {
   }, []);
 
   const scanCheckpoints = useCallback(async (dir?: string) => {
-    const target = dir || DEFAULT_CKPT_DIR;
     setScanning(true);
     setHasScanned(true);
     setRunHparams({});
     setExpandedRun(null);
     try {
-      const res = await fetch(
-        `/api/inference/checkpoints?directory=${encodeURIComponent(target.trim())}`,
-      );
+      // If explicit dir provided, pass it; otherwise let server use CHECKPOINT_DIR env var
+      const qs = dir
+        ? `?directory=${encodeURIComponent(dir.trim())}`
+        : "";
+      const res = await fetch(`/api/inference/checkpoints${qs}`);
       const data = await res.json();
       setCheckpoints(data.checkpoints || []);
     } catch {
@@ -219,11 +232,35 @@ export default function InferencePage() {
     }
   }, []);
 
-  // Auto-scan on mount
+  // Auto-scan on mount (uses server-configured CHECKPOINT_DIR)
   useEffect(() => {
-    scanCheckpoints(ckptDir);
+    scanCheckpoints();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-expand the group matching selectedRunId
+  useEffect(() => {
+    if (selectedRunId && checkpoints.length > 0 && !expandedRun) {
+      const match = checkpoints.find((c) => c.run_dir === selectedRunId);
+      if (match) {
+        setExpandedRun(selectedRunId);
+        // Also fetch hparams for the expanded run
+        if (!runHparams[selectedRunId]) {
+          fetch(
+            `/api/inference/checkpoint-info?path=${encodeURIComponent(match.path)}`,
+          )
+            .then((r) => r.json())
+            .then((data) => {
+              setRunHparams((prev) => ({
+                ...prev,
+                [selectedRunId]: data.hparams || {},
+              }));
+            })
+            .catch(() => {});
+        }
+      }
+    }
+  }, [selectedRunId, checkpoints, expandedRun, runHparams]);
 
   const toggleRunExpand = async (runDir: string, firstCkptPath: string) => {
     if (expandedRun === runDir) {
@@ -278,6 +315,15 @@ export default function InferencePage() {
       setLoadingPath(null);
     }
   };
+
+  // Handle ?load= query param (auto-load checkpoint from CheckpointPanel)
+  useEffect(() => {
+    const loadPath = searchParams.get("load");
+    if (loadPath && !modelStatus?.loaded && !loadingModel) {
+      loadCheckpoint(loadPath);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const loadBackboneOnly = async () => {
     setLoadingModel(true);
@@ -464,7 +510,7 @@ export default function InferencePage() {
               <input
                 value={ckptDir}
                 onChange={(e) => setCkptDir(e.target.value)}
-                placeholder="/path/to/checkpoints"
+                placeholder="Auto-detected from server (override here)"
                 onKeyDown={(e) =>
                   e.key === "Enter" && scanCheckpoints(ckptDir)
                 }

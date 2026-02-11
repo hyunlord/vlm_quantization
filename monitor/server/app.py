@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -67,6 +68,7 @@ app.add_middleware(
 )
 
 # --- State ---
+CHECKPOINT_DIR = os.environ.get("CHECKPOINT_DIR", "")
 training_status = TrainingStatus()
 system_monitor = SystemMonitorThread(interval=2.0)
 inference_engine = InferenceEngine()
@@ -304,9 +306,10 @@ async def get_inference_status():
 
 @app.get("/api/inference/checkpoints")
 async def list_checkpoints(directory: str = ""):
-    if not directory:
-        return {"checkpoints": [], "error": "Provide directory parameter"}
-    return {"checkpoints": InferenceEngine.list_checkpoints(directory)}
+    dir_to_scan = directory or CHECKPOINT_DIR
+    if not dir_to_scan:
+        return {"checkpoints": [], "error": "No checkpoint directory configured"}
+    return {"checkpoints": InferenceEngine.list_checkpoints(dir_to_scan)}
 
 
 @app.get("/api/inference/checkpoint-info")

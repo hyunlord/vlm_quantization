@@ -5,9 +5,10 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from "react";
-import type { EvalMetric, RunInfo } from "@/lib/types";
+import type { CheckpointInfo, EvalMetric, RunInfo } from "@/lib/types";
 
 interface RunContextType {
   runs: RunInfo[];
@@ -17,6 +18,9 @@ interface RunContextType {
   selectedEvalEpoch: number | null;
   selectEvalEpoch: (epoch: number | null) => void;
   refreshRuns: () => Promise<void>;
+  checkpoints: CheckpointInfo[];
+  checkpointsByRun: Record<string, CheckpointInfo[]>;
+  refreshCheckpoints: () => Promise<void>;
 }
 
 const RunContext = createContext<RunContextType>({
@@ -27,6 +31,9 @@ const RunContext = createContext<RunContextType>({
   selectedEvalEpoch: null,
   selectEvalEpoch: () => {},
   refreshRuns: async () => {},
+  checkpoints: [],
+  checkpointsByRun: {},
+  refreshCheckpoints: async () => {},
 });
 
 export function useRunContext() {
@@ -40,6 +47,26 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const [selectedEvalEpoch, setSelectedEvalEpoch] = useState<number | null>(
     null,
   );
+  const [checkpoints, setCheckpoints] = useState<CheckpointInfo[]>([]);
+
+  const checkpointsByRun = useMemo(() => {
+    const groups: Record<string, CheckpointInfo[]> = {};
+    for (const ckpt of checkpoints) {
+      (groups[ckpt.run_dir] ??= []).push(ckpt);
+    }
+    return groups;
+  }, [checkpoints]);
+
+  const refreshCheckpoints = useCallback(async () => {
+    try {
+      const res = await fetch("/api/inference/checkpoints");
+      const data = await res.json();
+      if (data.checkpoints?.length) setCheckpoints(data.checkpoints);
+      else setCheckpoints([]);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const refreshRuns = useCallback(async () => {
     try {
@@ -56,13 +83,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
   }, [selectedRunId]);
 
-  // Load runs on mount
+  // Load runs and checkpoints on mount
   useEffect(() => {
     refreshRuns();
-    // Refresh every 30s to detect new runs
-    const id = setInterval(refreshRuns, 30000);
+    refreshCheckpoints();
+    // Refresh every 30s to detect new runs/checkpoints
+    const id = setInterval(() => {
+      refreshRuns();
+      refreshCheckpoints();
+    }, 30000);
     return () => clearInterval(id);
-  }, [refreshRuns]);
+  }, [refreshRuns, refreshCheckpoints]);
 
   // Load eval points when run changes
   useEffect(() => {
@@ -104,6 +135,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         selectedEvalEpoch,
         selectEvalEpoch: setSelectedEvalEpoch,
         refreshRuns,
+        checkpoints,
+        checkpointsByRun,
+        refreshCheckpoints,
       }}
     >
       {children}

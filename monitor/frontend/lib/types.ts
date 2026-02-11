@@ -86,6 +86,16 @@ export interface HashAnalysisData {
   bit: number;
 }
 
+export interface CheckpointInfo {
+  path: string;
+  name: string;
+  run_dir: string;
+  size_mb: number;
+  modified: string;
+  epoch: number | null;
+  val_loss: number | null;
+}
+
 // --- Search types ---
 
 export interface SearchResult {
