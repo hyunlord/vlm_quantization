@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import time
@@ -80,10 +81,19 @@ def init_db() -> None:
             timestamp REAL NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS hash_analysis_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            epoch INTEGER NOT NULL,
+            step INTEGER NOT NULL,
+            data TEXT NOT NULL,
+            timestamp REAL NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_train_step ON training_metrics(step);
         CREATE INDEX IF NOT EXISTS idx_train_epoch ON training_metrics(epoch);
         CREATE INDEX IF NOT EXISTS idx_eval_epoch ON eval_metrics(epoch);
         CREATE INDEX IF NOT EXISTS idx_sys_ts ON system_metrics(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_hash_epoch ON hash_analysis_snapshots(epoch);
     """)
     # Migrate: add columns for existing DBs
     for col in ("loss_ortho", "loss_lcs"):
@@ -181,10 +191,11 @@ def clear_training_metrics() -> None:
 
 
 def clear_all_metrics() -> None:
-    """Delete all training and eval metrics (full reset)."""
+    """Delete all training, eval, and hash analysis metrics (full reset)."""
     conn = get_connection()
     conn.execute("DELETE FROM training_metrics")
     conn.execute("DELETE FROM eval_metrics")
+    conn.execute("DELETE FROM hash_analysis_snapshots")
     conn.commit()
     conn.close()
 
@@ -224,3 +235,54 @@ def get_system_metrics(limit: int = 100) -> list[dict]:
     ).fetchall()
     conn.close()
     return [dict(r) for r in reversed(rows)]
+
+
+# --- Hash Analysis Snapshots ---
+
+
+def insert_hash_analysis(epoch: int, step: int, data: dict) -> int:
+    """Insert a hash analysis snapshot. Returns the new row id."""
+    conn = get_connection()
+    cur = conn.execute(
+        "INSERT INTO hash_analysis_snapshots (epoch, step, data, timestamp) VALUES (?, ?, ?, ?)",
+        (epoch, step, json.dumps(data), time.time()),
+    )
+    row_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return row_id
+
+
+def get_hash_analysis_list() -> list[dict]:
+    """Return lightweight list of snapshots (no data blob)."""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT id, epoch, step, timestamp FROM hash_analysis_snapshots ORDER BY id"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_hash_analysis_by_id(snapshot_id: int) -> dict | None:
+    """Return a specific snapshot's full data by id."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT data FROM hash_analysis_snapshots WHERE id = ?",
+        (snapshot_id,),
+    ).fetchone()
+    conn.close()
+    if row is None:
+        return None
+    return json.loads(row["data"])
+
+
+def get_latest_hash_analysis() -> dict | None:
+    """Return the most recent snapshot's full data."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT data FROM hash_analysis_snapshots ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+    if row is None:
+        return None
+    return json.loads(row["data"])

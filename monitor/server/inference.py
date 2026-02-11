@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import logging
 import re
 import urllib.request
@@ -253,10 +254,25 @@ class InferenceEngine:
 
     @staticmethod
     def peek_hparams(checkpoint_path: str) -> dict:
-        """Extract hyperparameters from a checkpoint without full model load."""
+        """Extract hyperparameters from a checkpoint without full model load.
+
+        Uses a JSON sidecar cache (``<path>.hparams.json``) to avoid
+        expensive ``torch.load()`` calls on subsequent accesses.
+        """
         path = Path(checkpoint_path)
         if not path.exists():
             return {}
+
+        # Fast path: read from cached JSON sidecar
+        sidecar = Path(str(path) + ".hparams.json")
+        if sidecar.is_file():
+            try:
+                with open(sidecar) as f:
+                    return json.load(f)
+            except Exception:
+                pass  # fall through to torch.load
+
+        # Slow path: full checkpoint read
         try:
             kwargs: dict = {"map_location": "cpu", "weights_only": False}
             try:
@@ -266,6 +282,14 @@ class InferenceEngine:
                 ckpt = torch.load(str(path), **kwargs)
             hparams = dict(ckpt.get("hyper_parameters", {}))
             del ckpt
+
+            # Cache for future lookups
+            try:
+                with open(sidecar, "w") as f:
+                    json.dump(hparams, f)
+            except Exception as e:
+                logger.warning("Failed to write hparams cache: %s", e)
+
             return hparams
         except Exception as e:
             logger.warning("peek_hparams failed for %s: %s", checkpoint_path, e)

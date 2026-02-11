@@ -15,10 +15,14 @@ from monitor.server.database import (
     clear_all_metrics,
     clear_training_metrics,
     get_eval_metrics,
+    get_hash_analysis_by_id,
+    get_hash_analysis_list,
+    get_latest_hash_analysis,
     get_system_metrics as get_system_metrics_db,
     get_training_metrics,
     init_db,
     insert_eval_metric,
+    insert_hash_analysis,
     insert_system_metric,
     insert_training_metric,
 )
@@ -50,8 +54,6 @@ from monitor.server.system_monitor import SystemMonitorThread
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="VLM Quantization Monitor")
-
-_hash_analysis_path = DB_PATH.parent / "hash_analysis.json"
 
 app.add_middleware(
     CORSMiddleware,
@@ -102,15 +104,12 @@ async def startup():
     init_db()
     system_monitor.start()
 
-    # Restore hash analysis from persistent JSON (if available)
+    # Restore latest hash analysis from DB
     global _hash_analysis_data
-    if _hash_analysis_path.is_file():
-        try:
-            with open(_hash_analysis_path) as f:
-                _hash_analysis_data = json.load(f)
-            logger.info("Loaded hash analysis from %s", _hash_analysis_path)
-        except Exception as e:
-            logger.warning("Failed to load hash analysis: %s", e)
+    latest = get_latest_hash_analysis()
+    if latest is not None:
+        _hash_analysis_data = latest
+        logger.info("Loaded latest hash analysis from DB")
 
     # Periodically broadcast system metrics via WebSocket
     async def broadcast_system():
@@ -208,20 +207,31 @@ async def update_training_status(status: TrainingStatus):
 async def post_hash_analysis(data: dict):
     global _hash_analysis_data
     _hash_analysis_data = data
-    # Persist to JSON alongside metrics DB
+    # Persist every snapshot to DB for history browsing
     try:
-        _hash_analysis_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(_hash_analysis_path, "w") as f:
-            json.dump(data, f)
+        insert_hash_analysis(
+            epoch=data.get("epoch", 0),
+            step=data.get("step", 0),
+            data=data,
+        )
     except Exception as e:
-        logger.warning("Failed to save hash analysis: %s", e)
+        logger.warning("Failed to save hash analysis to DB: %s", e)
     await manager.broadcast({"type": "hash_analysis", "data": data})
     return {"status": "ok"}
 
 
 @app.get("/api/metrics/hash_analysis")
-async def get_hash_analysis():
+async def get_hash_analysis(id: int | None = None):
+    if id is not None:
+        snapshot = get_hash_analysis_by_id(id)
+        return {"hash_analysis": snapshot}
     return {"hash_analysis": _hash_analysis_data}
+
+
+@app.get("/api/metrics/hash_analysis/list")
+async def get_hash_analysis_snapshots():
+    """Return lightweight list of available snapshots (no data blobs)."""
+    return {"snapshots": get_hash_analysis_list()}
 
 
 @app.post("/api/metrics/reset")
