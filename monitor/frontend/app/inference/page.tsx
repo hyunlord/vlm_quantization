@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import RunSelector from "@/components/RunSelector";
 import HashComparison from "@/components/inference/HashComparison";
 import InputPanel from "@/components/inference/InputPanel";
 
@@ -426,6 +427,7 @@ export default function InferencePage() {
             <h1 className="text-lg font-bold text-gray-200">
               VLM Hash Explorer
             </h1>
+            <RunSelector />
           </div>
           <div className="flex items-center gap-2">
             <Server className="w-3.5 h-3.5 text-gray-500" />

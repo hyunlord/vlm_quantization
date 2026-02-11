@@ -18,9 +18,11 @@ class MonitorCallback(pl.Callback):
         self,
         server_url: str = "http://localhost:8000",
         log_every_n_steps: int = 10,
+        run_id: str = "",
     ):
         self.server_url = server_url.rstrip("/")
         self.log_every_n_steps = log_every_n_steps
+        self.run_id = run_id
         self._client = httpx.Client(timeout=2.0)
         self._fail_count = 0
 
@@ -50,6 +52,7 @@ class MonitorCallback(pl.Callback):
         steps_per_epoch = batches_per_epoch // accum
         self._total_steps = steps_per_epoch * (trainer.max_epochs or 0)
         self._post("/api/training/status", {
+            "run_id": self.run_id,
             "epoch": 0,
             "step": 0,
             "total_epochs": trainer.max_epochs or 0,
@@ -75,6 +78,7 @@ class MonitorCallback(pl.Callback):
 
         logged = trainer.callback_metrics
         self._post("/api/metrics/training", {
+            "run_id": self.run_id,
             "step": trainer.global_step,
             "epoch": trainer.current_epoch,
             "loss_total": self._to_float(logged.get("train/total")),
@@ -89,6 +93,7 @@ class MonitorCallback(pl.Callback):
 
         # Update step progress in dashboard header
         self._post("/api/training/status", {
+            "run_id": self.run_id,
             "epoch": trainer.current_epoch,
             "step": trainer.global_step,
             "total_epochs": trainer.max_epochs or 0,
@@ -102,7 +107,7 @@ class MonitorCallback(pl.Callback):
         logged = trainer.callback_metrics
         bit_list = pl_module.hparams.get("bit_list", [64])
 
-        eval_data = {"epoch": trainer.current_epoch}
+        eval_data = {"run_id": self.run_id, "epoch": trainer.current_epoch}
 
         # Per-bit hash quality metrics
         for bit in bit_list:
@@ -198,6 +203,7 @@ class MonitorCallback(pl.Callback):
                         "thumbnail": thumbnail,
                     })
                 self._post("/api/metrics/hash_analysis", {
+                    "run_id": self.run_id,
                     "epoch": trainer.current_epoch,
                     "step": trainer.global_step,
                     "bit_activations": {
@@ -232,6 +238,7 @@ class MonitorCallback(pl.Callback):
         self, trainer: pl.Trainer, pl_module: pl.LightningModule
     ) -> None:
         self._post("/api/training/status", {
+            "run_id": self.run_id,
             "epoch": trainer.current_epoch,
             "step": trainer.global_step,
             "total_epochs": trainer.max_epochs or 0,

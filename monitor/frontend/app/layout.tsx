@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist_Mono } from "next/font/google";
+import { RunProvider } from "@/contexts/RunContext";
 import "./globals.css";
 
 const mono = Geist_Mono({
@@ -20,7 +21,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${mono.variable} font-mono antialiased bg-gray-950 text-gray-100`}>
-        {children}
+        <RunProvider>{children}</RunProvider>
       </body>
     </html>
   );

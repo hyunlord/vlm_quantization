@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useRunContext } from "@/contexts/RunContext";
+import RunSelector from "@/components/RunSelector";
 import BitBalanceChart from "@/components/BitBalanceChart";
 import SampleGallery from "@/components/SampleGallery";
 import SimilarityHeatmap from "@/components/SimilarityHeatmap";
@@ -25,22 +27,27 @@ function getWsUrl() {
 const LIVE_VALUE = "live";
 
 export default function HashAnalysisPage() {
-  const { hashAnalysis: liveData, isConnected } = useWebSocket(getWsUrl());
+  const { selectedRunId } = useRunContext();
+  const { hashAnalysis: liveData, isConnected } = useWebSocket(getWsUrl(), selectedRunId);
 
   const [snapshots, setSnapshots] = useState<SnapshotEntry[]>([]);
   const [selectedId, setSelectedId] = useState<string>(LIVE_VALUE);
   const [displayData, setDisplayData] = useState<HashAnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Load snapshot list on mount
+  // Load snapshot list on mount and when run changes
   useEffect(() => {
-    fetch("/api/metrics/hash_analysis/list")
+    const qs = selectedRunId
+      ? `?run_id=${encodeURIComponent(selectedRunId)}`
+      : "";
+    fetch(`/api/metrics/hash_analysis/list${qs}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.snapshots?.length) setSnapshots(data.snapshots);
+        else setSnapshots([]);
       })
       .catch(() => {});
-  }, []);
+  }, [selectedRunId]);
 
   // When new live data arrives via WebSocket, append to snapshot list
   useEffect(() => {
@@ -98,14 +105,17 @@ export default function HashAnalysisPage() {
   // Reload snapshot list when switching away from live (to pick up new IDs)
   useEffect(() => {
     if (!isLive) {
-      fetch("/api/metrics/hash_analysis/list")
+      const qs = selectedRunId
+        ? `?run_id=${encodeURIComponent(selectedRunId)}`
+        : "";
+      fetch(`/api/metrics/hash_analysis/list${qs}`)
         .then((r) => r.json())
         .then((data) => {
           if (data.snapshots?.length) setSnapshots(data.snapshots);
         })
         .catch(() => {});
     }
-  }, [isLive]);
+  }, [isLive, selectedRunId]);
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 p-4 md:p-6">
@@ -120,6 +130,7 @@ export default function HashAnalysisPage() {
               <ArrowLeft size={18} />
             </Link>
             <h1 className="text-lg font-semibold">Hash Analysis</h1>
+            <RunSelector />
 
             {/* Epoch Selector */}
             <select

@@ -13,11 +13,14 @@ from fastapi.staticfiles import StaticFiles
 from monitor.server.database import (
     DB_PATH,
     clear_all_metrics,
-    clear_training_metrics,
     get_eval_metrics,
     get_hash_analysis_by_id,
     get_hash_analysis_list,
     get_latest_hash_analysis,
+    get_new_eval_metrics,
+    get_new_training_metrics,
+    get_poll_watermarks,
+    get_runs,
     get_system_metrics as get_system_metrics_db,
     get_training_metrics,
     init_db,
@@ -124,6 +127,40 @@ async def startup():
 
     asyncio.create_task(broadcast_system())
 
+    # DB polling: detect new rows inserted by external processes (e.g. training
+    # notebook writing to shared Google Drive SQLite) and broadcast via WebSocket.
+    async def poll_db_for_new_metrics():
+        wm = get_poll_watermarks()
+        last_train_id = wm["train_id"]
+        last_eval_id = wm["eval_id"]
+        last_hash_count = wm["hash_count"]
+        while True:
+            await asyncio.sleep(5)
+            try:
+                new_train = get_new_training_metrics(last_train_id)
+                for row in new_train:
+                    await manager.broadcast({"type": "training", "data": row})
+                    last_train_id = max(last_train_id, row["id"])
+
+                new_eval = get_new_eval_metrics(last_eval_id)
+                for row in new_eval:
+                    await manager.broadcast({"type": "eval", "data": row})
+                    last_eval_id = max(last_eval_id, row["id"])
+
+                wm = get_poll_watermarks()
+                if wm["hash_count"] > last_hash_count:
+                    last_hash_count = wm["hash_count"]
+                    latest = get_latest_hash_analysis()
+                    if latest is not None:
+                        _hash_analysis_data = latest  # noqa: F841
+                        await manager.broadcast({
+                            "type": "hash_analysis", "data": latest,
+                        })
+            except Exception as e:
+                logger.debug("DB poll error: %s", e)
+
+    asyncio.create_task(poll_db_for_new_metrics())
+
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -165,11 +202,20 @@ async def post_eval_metric(metric: EvalMetric):
     return {"status": "ok"}
 
 
+@app.get("/api/runs")
+async def list_runs():
+    return {"runs": get_runs()}
+
+
 @app.get("/api/metrics/history")
-async def get_metrics_history(start_step: int = 0, end_step: int | None = None):
+async def get_metrics_history(
+    start_step: int = 0,
+    end_step: int | None = None,
+    run_id: str | None = None,
+):
     return {
-        "training": get_training_metrics(start_step, end_step),
-        "eval": get_eval_metrics(),
+        "training": get_training_metrics(start_step, end_step, run_id=run_id),
+        "eval": get_eval_metrics(run_id=run_id),
     }
 
 
@@ -185,16 +231,13 @@ async def get_training_status():
 
 @app.post("/api/training/status")
 async def update_training_status(status: TrainingStatus):
-    # Clear previous run data when a new training session begins
-    if status.is_training and status.step == 0:
-        clear_training_metrics()
-
     training_status.epoch = status.epoch
     training_status.step = status.step
     training_status.total_epochs = status.total_epochs
     training_status.total_steps = status.total_steps
     training_status.is_training = status.is_training
     training_status.config = status.config
+    training_status.run_id = status.run_id
     await manager.broadcast({
         "type": "status",
         "data": status.model_dump(),
@@ -213,6 +256,7 @@ async def post_hash_analysis(data: dict):
             epoch=data.get("epoch", 0),
             step=data.get("step", 0),
             data=data,
+            run_id=data.get("run_id", ""),
         )
     except Exception as e:
         logger.warning("Failed to save hash analysis to DB: %s", e)
@@ -229,9 +273,9 @@ async def get_hash_analysis(id: int | None = None):
 
 
 @app.get("/api/metrics/hash_analysis/list")
-async def get_hash_analysis_snapshots():
+async def get_hash_analysis_snapshots(run_id: str | None = None):
     """Return lightweight list of available snapshots (no data blobs)."""
-    return {"snapshots": get_hash_analysis_list()}
+    return {"snapshots": get_hash_analysis_list(run_id=run_id)}
 
 
 @app.post("/api/metrics/reset")

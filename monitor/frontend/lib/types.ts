@@ -1,4 +1,14 @@
+export interface RunInfo {
+  run_id: string;
+  started_at: number;
+  epochs: number;
+  num_training_points: number;
+  num_eval_points: number;
+  has_hash_analysis: boolean;
+}
+
 export interface TrainingMetric {
+  run_id?: string;
   step: number;
   epoch: number;
   loss_total: number;
@@ -12,6 +22,7 @@ export interface TrainingMetric {
 }
 
 export interface EvalMetric {
+  run_id?: string;
   epoch: number;
   step: number | null;
   map_i2t: number | null;
@@ -49,6 +60,7 @@ export interface SystemMetric {
 }
 
 export interface TrainingStatus {
+  run_id?: string;
   epoch: number;
   step: number;
   total_epochs: number;

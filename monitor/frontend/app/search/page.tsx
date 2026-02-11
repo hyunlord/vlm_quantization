@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import RunSelector from "@/components/RunSelector";
 import type { IndexStatus, SearchResult } from "@/lib/types";
 
 type InputMode = "upload" | "url" | "text";
@@ -184,6 +185,7 @@ export default function SearchPage() {
             <h1 className="text-lg font-bold text-gray-200">
               VLM Hash Search
             </h1>
+            <RunSelector />
           </div>
           <div className="flex items-center gap-2">
             <Link

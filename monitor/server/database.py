@@ -27,6 +27,7 @@ def init_db() -> None:
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS training_metrics (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL DEFAULT '',
             step INTEGER NOT NULL,
             epoch INTEGER NOT NULL,
             loss_total REAL,
@@ -42,6 +43,7 @@ def init_db() -> None:
 
         CREATE TABLE IF NOT EXISTS eval_metrics (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL DEFAULT '',
             epoch INTEGER NOT NULL,
             step INTEGER,
             map_i2t REAL,
@@ -83,6 +85,7 @@ def init_db() -> None:
 
         CREATE TABLE IF NOT EXISTS hash_analysis_snapshots (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL DEFAULT '',
             epoch INTEGER NOT NULL,
             step INTEGER NOT NULL,
             data TEXT NOT NULL,
@@ -91,9 +94,12 @@ def init_db() -> None:
 
         CREATE INDEX IF NOT EXISTS idx_train_step ON training_metrics(step);
         CREATE INDEX IF NOT EXISTS idx_train_epoch ON training_metrics(epoch);
+        CREATE INDEX IF NOT EXISTS idx_train_run ON training_metrics(run_id);
         CREATE INDEX IF NOT EXISTS idx_eval_epoch ON eval_metrics(epoch);
+        CREATE INDEX IF NOT EXISTS idx_eval_run ON eval_metrics(run_id);
         CREATE INDEX IF NOT EXISTS idx_sys_ts ON system_metrics(timestamp);
         CREATE INDEX IF NOT EXISTS idx_hash_epoch ON hash_analysis_snapshots(epoch);
+        CREATE INDEX IF NOT EXISTS idx_hash_run ON hash_analysis_snapshots(run_id);
     """)
     # Migrate: add columns for existing DBs
     for col in ("loss_ortho", "loss_lcs"):
@@ -114,6 +120,14 @@ def init_db() -> None:
             )
         except sqlite3.OperationalError:
             pass
+    # Migrate: add run_id column to existing tables
+    for table in ("training_metrics", "eval_metrics", "hash_analysis_snapshots"):
+        try:
+            conn.execute(
+                f"ALTER TABLE {table} ADD COLUMN run_id TEXT DEFAULT ''"
+            )
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     conn.close()
 
@@ -122,11 +136,11 @@ def insert_training_metric(m: TrainingMetric) -> None:
     conn = get_connection()
     conn.execute(
         """INSERT INTO training_metrics
-           (step, epoch, loss_total, loss_contrastive, loss_quantization,
+           (run_id, step, epoch, loss_total, loss_contrastive, loss_quantization,
             loss_balance, loss_consistency, loss_ortho, loss_lcs, lr, timestamp)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            m.step, m.epoch, m.loss_total, m.loss_contrastive,
+            m.run_id, m.step, m.epoch, m.loss_total, m.loss_contrastive,
             m.loss_quantization, m.loss_balance, m.loss_consistency,
             m.loss_ortho, m.loss_lcs,
             m.lr, time.time(),
@@ -140,16 +154,16 @@ def insert_eval_metric(m: EvalMetric) -> None:
     conn = get_connection()
     conn.execute(
         """INSERT INTO eval_metrics
-           (epoch, step, map_i2t, map_t2i, map_i2i, map_t2t,
+           (run_id, epoch, step, map_i2t, map_t2i, map_i2i, map_t2t,
             backbone_map_i2t, backbone_map_t2i,
             p1, p5, p10, backbone_p1, backbone_p5, backbone_p10,
             bit_entropy, quant_error,
             val_loss_total, val_loss_contrastive, val_loss_quantization,
             val_loss_balance, val_loss_consistency, val_loss_ortho,
             val_loss_lcs, timestamp)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            m.epoch, m.step, m.map_i2t, m.map_t2i, m.map_i2i, m.map_t2t,
+            m.run_id, m.epoch, m.step, m.map_i2t, m.map_t2i, m.map_i2i, m.map_t2t,
             m.backbone_map_i2t, m.backbone_map_t2i,
             m.p1, m.p5, m.p10, m.backbone_p1, m.backbone_p5, m.backbone_p10,
             m.bit_entropy, m.quant_error,
@@ -178,18 +192,6 @@ def insert_system_metric(m: SystemMetric) -> None:
     conn.close()
 
 
-def clear_training_metrics() -> None:
-    """Delete training metrics from previous run (called on new training run).
-
-    Eval metrics are preserved so baseline validation data (collected before
-    training) survives the on_train_start clear.
-    """
-    conn = get_connection()
-    conn.execute("DELETE FROM training_metrics")
-    conn.commit()
-    conn.close()
-
-
 def clear_all_metrics() -> None:
     """Delete all training, eval, and hash analysis metrics (full reset)."""
     conn = get_connection()
@@ -200,29 +202,76 @@ def clear_all_metrics() -> None:
     conn.close()
 
 
+def get_runs() -> list[dict]:
+    """List all distinct training runs with summary stats."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT
+            run_id,
+            MIN(timestamp) as started_at,
+            MAX(epoch) as epochs,
+            COUNT(*) as num_training_points
+        FROM training_metrics
+        WHERE run_id != ''
+        GROUP BY run_id
+        ORDER BY run_id DESC
+    """).fetchall()
+    runs = []
+    for r in rows:
+        run_id = r["run_id"]
+        eval_count = conn.execute(
+            "SELECT COUNT(*) FROM eval_metrics WHERE run_id = ?", (run_id,)
+        ).fetchone()[0]
+        hash_count = conn.execute(
+            "SELECT COUNT(*) FROM hash_analysis_snapshots WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()[0]
+        runs.append({
+            "run_id": run_id,
+            "started_at": r["started_at"],
+            "epochs": r["epochs"],
+            "num_training_points": r["num_training_points"],
+            "num_eval_points": eval_count,
+            "has_hash_analysis": hash_count > 0,
+        })
+    conn.close()
+    return runs
+
+
 def get_training_metrics(
-    start_step: int = 0, end_step: int | None = None
+    start_step: int = 0,
+    end_step: int | None = None,
+    run_id: str | None = None,
 ) -> list[dict]:
     conn = get_connection()
+    conditions = ["step >= ?"]
+    params: list = [start_step]
     if end_step is not None:
-        rows = conn.execute(
-            "SELECT * FROM training_metrics WHERE step >= ? AND step <= ? ORDER BY step",
-            (start_step, end_step),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT * FROM training_metrics WHERE step >= ? ORDER BY step",
-            (start_step,),
-        ).fetchall()
+        conditions.append("step <= ?")
+        params.append(end_step)
+    if run_id:
+        conditions.append("run_id = ?")
+        params.append(run_id)
+    where = " AND ".join(conditions)
+    rows = conn.execute(
+        f"SELECT * FROM training_metrics WHERE {where} ORDER BY step",
+        params,
+    ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
-def get_eval_metrics() -> list[dict]:
+def get_eval_metrics(run_id: str | None = None) -> list[dict]:
     conn = get_connection()
-    rows = conn.execute(
-        "SELECT * FROM eval_metrics ORDER BY epoch"
-    ).fetchall()
+    if run_id:
+        rows = conn.execute(
+            "SELECT * FROM eval_metrics WHERE run_id = ? ORDER BY epoch",
+            (run_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM eval_metrics ORDER BY epoch"
+        ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -240,12 +289,13 @@ def get_system_metrics(limit: int = 100) -> list[dict]:
 # --- Hash Analysis Snapshots ---
 
 
-def insert_hash_analysis(epoch: int, step: int, data: dict) -> int:
+def insert_hash_analysis(epoch: int, step: int, data: dict,
+                         run_id: str = "") -> int:
     """Insert a hash analysis snapshot. Returns the new row id."""
     conn = get_connection()
     cur = conn.execute(
-        "INSERT INTO hash_analysis_snapshots (epoch, step, data, timestamp) VALUES (?, ?, ?, ?)",
-        (epoch, step, json.dumps(data), time.time()),
+        "INSERT INTO hash_analysis_snapshots (run_id, epoch, step, data, timestamp) VALUES (?, ?, ?, ?, ?)",
+        (run_id, epoch, step, json.dumps(data), time.time()),
     )
     row_id = cur.lastrowid
     conn.commit()
@@ -253,12 +303,18 @@ def insert_hash_analysis(epoch: int, step: int, data: dict) -> int:
     return row_id
 
 
-def get_hash_analysis_list() -> list[dict]:
+def get_hash_analysis_list(run_id: str | None = None) -> list[dict]:
     """Return lightweight list of snapshots (no data blob)."""
     conn = get_connection()
-    rows = conn.execute(
-        "SELECT id, epoch, step, timestamp FROM hash_analysis_snapshots ORDER BY id"
-    ).fetchall()
+    if run_id:
+        rows = conn.execute(
+            "SELECT id, run_id, epoch, step, timestamp FROM hash_analysis_snapshots WHERE run_id = ? ORDER BY id",
+            (run_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT id, run_id, epoch, step, timestamp FROM hash_analysis_snapshots ORDER BY id"
+        ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -286,3 +342,45 @@ def get_latest_hash_analysis() -> dict | None:
     if row is None:
         return None
     return json.loads(row["data"])
+
+
+def get_poll_watermarks() -> dict:
+    """Get current max IDs for DB polling watermarks."""
+    conn = get_connection()
+    train_id = conn.execute(
+        "SELECT COALESCE(MAX(id), 0) FROM training_metrics"
+    ).fetchone()[0]
+    eval_id = conn.execute(
+        "SELECT COALESCE(MAX(id), 0) FROM eval_metrics"
+    ).fetchone()[0]
+    hash_count = conn.execute(
+        "SELECT COUNT(*) FROM hash_analysis_snapshots"
+    ).fetchone()[0]
+    conn.close()
+    return {
+        "train_id": train_id,
+        "eval_id": eval_id,
+        "hash_count": hash_count,
+    }
+
+
+def get_new_training_metrics(after_id: int) -> list[dict]:
+    """Get training metrics with id > after_id."""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM training_metrics WHERE id > ? ORDER BY id",
+        (after_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_new_eval_metrics(after_id: int) -> list[dict]:
+    """Get eval metrics with id > after_id."""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM eval_metrics WHERE id > ? ORDER BY id",
+        (after_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { BarChart3, Database, Search, Wifi, WifiOff } from "lucide-react";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useRunContext } from "@/contexts/RunContext";
+import RunSelector from "@/components/RunSelector";
 import TrainingStatus from "@/components/TrainingStatus";
 import SystemPanel from "@/components/SystemPanel";
 import LossChart from "@/components/LossChart";
@@ -16,8 +18,9 @@ function getWsUrl() {
 }
 
 export default function Dashboard() {
+  const { selectedRunId } = useRunContext();
   const { isConnected, systemData, trainingData, evalData, status } =
-    useWebSocket(getWsUrl());
+    useWebSocket(getWsUrl(), selectedRunId);
 
   const latestMetric = trainingData[trainingData.length - 1];
 
@@ -25,9 +28,12 @@ export default function Dashboard() {
     <div className="min-h-screen p-4 max-w-[1400px] mx-auto space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold text-gray-200">
-          VLM Quantization Monitor
-        </h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-bold text-gray-200">
+            VLM Quantization Monitor
+          </h1>
+          <RunSelector />
+        </div>
         <div className="flex items-center gap-3">
           <Link
             href="/hash-analysis"

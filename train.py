@@ -126,6 +126,7 @@ def main():
             MonitorCallback(
                 server_url=monitor_cfg["server_url"],
                 log_every_n_steps=monitor_cfg.get("log_every_n_steps", 10),
+                run_id=run_id,
             )
         )
 

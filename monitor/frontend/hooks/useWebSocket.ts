@@ -12,7 +12,7 @@ import type {
 
 const MAX_TRAINING_POINTS = 2000;
 
-export function useWebSocket(url: string) {
+export function useWebSocket(url: string, runId?: string | null) {
   const [isConnected, setIsConnected] = useState(false);
   const [systemData, setSystemData] = useState<SystemMetric | null>(null);
   const [trainingData, setTrainingData] = useState<TrainingMetric[]>([]);
@@ -23,6 +23,8 @@ export function useWebSocket(url: string) {
   );
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeout = useRef<NodeJS.Timeout>(undefined);
+  const runIdRef = useRef(runId);
+  runIdRef.current = runId;
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -47,32 +49,28 @@ export function useWebSocket(url: string) {
           case "system":
             setSystemData(msg.data as SystemMetric);
             break;
-          case "training":
+          case "training": {
+            const tm = msg.data as TrainingMetric;
+            // Filter by run_id if set
+            if (runIdRef.current && tm.run_id && tm.run_id !== runIdRef.current)
+              break;
             setTrainingData((prev) => {
-              const next = [...prev, msg.data as TrainingMetric];
+              const next = [...prev, tm];
               return next.length > MAX_TRAINING_POINTS
                 ? next.slice(-MAX_TRAINING_POINTS)
                 : next;
             });
             break;
-          case "eval":
-            setEvalData((prev) => [...prev, msg.data as EvalMetric]);
+          }
+          case "eval": {
+            const em = msg.data as EvalMetric;
+            if (runIdRef.current && em.run_id && em.run_id !== runIdRef.current)
+              break;
+            setEvalData((prev) => [...prev, em]);
             break;
+          }
           case "status": {
             const s = msg.data as TrainingStatus;
-            // New training run — reset accumulated data
-            if (s.is_training && s.step === 0 && s.config) {
-              setTrainingData([]);
-              setHashAnalysis(null);
-              // Reload eval data from server (preserves baseline)
-              fetch("/api/metrics/history")
-                .then((r) => r.json())
-                .then((data) => {
-                  if (data.eval?.length) setEvalData(data.eval);
-                  else setEvalData([]);
-                })
-                .catch(() => setEvalData([]));
-            }
             setStatus(s);
             break;
           }
@@ -101,13 +99,16 @@ export function useWebSocket(url: string) {
     };
   }, [connect]);
 
-  // Load historical data on mount
+  // Load historical data when runId changes
   useEffect(() => {
-    fetch("/api/metrics/history")
+    const qs = runId ? `?run_id=${encodeURIComponent(runId)}` : "";
+    fetch(`/api/metrics/history${qs}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.training?.length) setTrainingData(data.training);
+        else setTrainingData([]);
         if (data.eval?.length) setEvalData(data.eval);
+        else setEvalData([]);
       })
       .catch(() => {});
 
@@ -115,7 +116,7 @@ export function useWebSocket(url: string) {
       .then((r) => r.json())
       .then((data) => setStatus(data))
       .catch(() => {});
-  }, []);
+  }, [runId]);
 
   // Load hash analysis on mount
   useEffect(() => {

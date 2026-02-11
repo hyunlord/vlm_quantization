@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class TrainingMetric(BaseModel):
     step: int
     epoch: int
+    run_id: str = ""
     loss_total: float
     loss_contrastive: float
     loss_quantization: float
@@ -18,6 +19,7 @@ class TrainingMetric(BaseModel):
 
 class EvalMetric(BaseModel):
     epoch: int
+    run_id: str = ""
     step: int | None = None
     map_i2t: float | None = None
     map_t2i: float | None = None
@@ -70,6 +72,7 @@ class TrainingStatus(BaseModel):
     total_steps: int = 0
     is_training: bool = False
     config: dict | None = None
+    run_id: str = ""
 
 
 # --- Inference models ---
