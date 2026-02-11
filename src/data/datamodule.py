@@ -55,14 +55,21 @@ class CrossModalHashDataModule(pl.LightningDataModule):
 
     def _build_extra_datasets(self) -> list:
         """Build GenericImageTextDataset instances from extra_datasets config."""
+        import logging
+
         from src.data.generic import GenericImageTextDataset
 
+        log = logging.getLogger(__name__)
         extra = []
         for ds_cfg in self.hparams.extra_datasets or []:
+            jsonl = Path(ds_cfg["jsonl_path"])
+            if not jsonl.exists():
+                log.warning("Extra dataset JSONL not found, skipping: %s", jsonl)
+                continue
             extra.append(
                 GenericImageTextDataset(
                     data_root=ds_cfg["data_root"],
-                    jsonl_path=ds_cfg["jsonl_path"],
+                    jsonl_path=jsonl,
                     processor=self.processor,
                     transform=get_train_transforms(self.hparams.image_size),
                     consistency_transform=get_consistency_augmentation(
