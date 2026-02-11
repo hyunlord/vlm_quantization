@@ -68,26 +68,36 @@ function timeAgo(iso: string) {
 
 function formatDate(iso: string) {
   const d = new Date(iso);
-  return (
-    d.toLocaleDateString("en", { month: "short", day: "numeric" }) +
-    " " +
-    d.toLocaleTimeString("en", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    })
-  );
+  // Use ko-KR locale for Korean timezone display
+  return d.toLocaleString("ko-KR", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Seoul",
+  });
 }
 
 function formatRunDir(runDir: string) {
-  // Parse YYYYMMDD_HHMMSS format
+  // Parse YYYYMMDD_HHMMSS format (server time, assumed UTC)
+  // Convert to KST (UTC+9) for display
   const m = runDir.match(/^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})$/);
   if (m) {
-    const months = [
-      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-    ];
-    return `${months[parseInt(m[2]) - 1]} ${parseInt(m[3])}, ${m[1]} ${m[4]}:${m[5]}`;
+    // Create date assuming UTC, then format in KST
+    const utcDate = new Date(Date.UTC(
+      parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]),
+      parseInt(m[4]), parseInt(m[5]), parseInt(m[6])
+    ));
+    return utcDate.toLocaleString("ko-KR", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "Asia/Seoul",
+    });
   }
   return runDir;
 }
