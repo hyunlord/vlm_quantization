@@ -71,13 +71,6 @@ def main():
     )
     max_steps = steps_per_epoch * cfg["training"]["max_epochs"]
 
-    # Clamp val_check_interval to fit within an epoch
-    vci = cfg["training"].get("val_check_interval", 1.0)
-    if isinstance(vci, int) and vci > steps_per_epoch:
-        clamped = max(steps_per_epoch, 1)
-        print(f"  val_check_interval {vci} > steps_per_epoch {steps_per_epoch}, clamping to {clamped}")
-        cfg["training"]["val_check_interval"] = clamped
-
     # Model
     model = CrossModalHashModel(
         model_name=cfg["model"]["backbone"],
@@ -143,7 +136,7 @@ def main():
     # Trainer
     trainer = pl.Trainer(
         max_epochs=cfg["training"]["max_epochs"],
-        val_check_interval=cfg["training"].get("val_check_interval", 1.0),
+        val_check_interval=cfg["training"].get("val_check_interval", 0.5),
         accelerator="auto",
         devices="auto",
         precision="bf16-mixed" if torch.cuda.is_bf16_supported() else "16-mixed",

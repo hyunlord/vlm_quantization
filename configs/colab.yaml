@@ -14,7 +14,7 @@ training:
   warmup_steps: 2000  # increased: ~10x more data needs longer warmup
   gradient_clip_val: 1.0
   accumulate_grad_batches: 4  # overridden when batch_size=auto
-  val_check_interval: 5000  # steps-based: validate every 5K steps (not epoch fraction)
+  val_check_interval: 0.5  # validate at epoch midpoint + epoch end
   early_stopping_patience: 3  # increased: fewer validations per epoch
   checkpoint_dir: "/content/drive/MyDrive/vlm_quantization/checkpoints"
 
