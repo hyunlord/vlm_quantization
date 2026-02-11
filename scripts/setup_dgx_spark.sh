@@ -9,10 +9,14 @@
 #   bash scripts/setup_dgx_spark.sh
 #
 # What it does:
-#   1. Creates a Python virtual environment
-#   2. Installs PyTorch + dependencies
-#   3. Downloads COCO dataset + Karpathy split
+#   1. Creates a Python virtual environment + installs deps
+#   2. Downloads COCO dataset + Karpathy split
+#   3. Syncs extra datasets from Google Drive (AIHub, CC3M) + auto-prepares JSONL
 #   4. Builds the monitoring dashboard frontend
+#
+# Prerequisites for Google Drive sync:
+#   rclone config  (add a remote of type "drive", e.g. named "gdrive")
+#   Data expected at: <drive>/data/aihub/ and <drive>/data/cc3m_ko/
 # ==============================================================================
 
 set -euo pipefail
@@ -104,16 +108,113 @@ echo "    train2014: $(ls "$DATA_DIR/train2014/" | wc -l) images"
 echo "    val2014:   $(ls "$DATA_DIR/val2014/" | wc -l) images"
 echo "    Karpathy:  $([ -f "$KARPATHY_JSON" ] && echo 'OK' || echo 'MISSING')"
 
-# ---------- 3. Extra datasets (instructions only) ----------
+# ---------- 3. Extra datasets (auto-sync from Google Drive) ----------
 echo ""
-echo "[3/4] Extra datasets (optional):"
-echo "  To add AIHub #71454:"
-echo "    1. Place data in: $PROJECT_DIR/data/aihub/"
-echo "    2. Run: python scripts/prepare_datasets.py aihub --input data/aihub --output data/aihub"
-echo ""
-echo "  To add CC3M-Ko:"
-echo "    1. Place data in: $PROJECT_DIR/data/cc3m_ko/"
-echo "    2. Run: python scripts/prepare_datasets.py cc3m-ko --input <en.tsv> --ko-input <ko.tsv> --output data/cc3m_ko"
+echo "[3/4] Extra datasets..."
+
+# Install rclone if not present
+if ! command -v rclone &>/dev/null; then
+    echo "  Installing rclone for Google Drive sync..."
+    curl -fsSL https://rclone.org/install.sh | sudo bash -s beta >/dev/null 2>&1
+fi
+
+# Check if rclone has a Google Drive remote configured
+GDRIVE_REMOTE=""
+if command -v rclone &>/dev/null; then
+    # Look for any remote of type "drive"
+    for remote in $(rclone listremotes 2>/dev/null); do
+        rtype=$(rclone config show "${remote%:}" 2>/dev/null | grep "^type" | awk '{print $3}')
+        if [ "$rtype" = "drive" ]; then
+            GDRIVE_REMOTE="${remote%:}"
+            break
+        fi
+    done
+
+    if [ -z "$GDRIVE_REMOTE" ]; then
+        echo "  No Google Drive remote found in rclone."
+        echo "  Run 'rclone config' to add one (type: drive), then re-run this script."
+        echo "  Or manually place datasets in data/aihub/ and data/cc3m_ko/"
+    fi
+fi
+
+# Sync extra datasets from Google Drive
+GDRIVE_DATA_PATH="data"  # path inside Google Drive (relative to root)
+
+sync_from_drive() {
+    local name="$1"
+    local drive_path="$2"
+    local local_path="$3"
+
+    if [ -z "$GDRIVE_REMOTE" ]; then
+        return
+    fi
+
+    # Check if remote path exists
+    if rclone lsd "${GDRIVE_REMOTE}:${drive_path}" &>/dev/null; then
+        if [ -d "$local_path" ]; then
+            echo "  $name — already local, syncing updates..."
+        else
+            echo "  $name — downloading from Google Drive..."
+        fi
+        mkdir -p "$local_path"
+        rclone sync "${GDRIVE_REMOTE}:${drive_path}" "$local_path" \
+            --progress --transfers=8 --checkers=16
+        echo "  $name — sync complete"
+    else
+        echo "  $name — not found on Drive (${GDRIVE_REMOTE}:${drive_path}), skipping"
+    fi
+}
+
+sync_from_drive "AIHub" "${GDRIVE_DATA_PATH}/aihub" "$PROJECT_DIR/data/aihub"
+sync_from_drive "CC3M-Ko" "${GDRIVE_DATA_PATH}/cc3m_ko" "$PROJECT_DIR/data/cc3m_ko"
+
+# Auto-prepare JSONL for any datasets that have raw data but no JSONL
+AIHUB_DIR="$PROJECT_DIR/data/aihub"
+AIHUB_JSONL="$AIHUB_DIR/aihub_71454.jsonl"
+if [ -d "$AIHUB_DIR" ] && [ ! -f "$AIHUB_JSONL" ]; then
+    # Check if there are JSON annotation files
+    if ls "$AIHUB_DIR"/*.json &>/dev/null || ls "$AIHUB_DIR"/**/*.json &>/dev/null 2>&1; then
+        echo "  AIHub: Preparing JSONL from raw annotations..."
+        python scripts/prepare_datasets.py aihub \
+            --input "$AIHUB_DIR" --output "$AIHUB_DIR" || true
+    fi
+fi
+if [ -f "$AIHUB_JSONL" ]; then
+    echo "  AIHub: $(wc -l < "$AIHUB_JSONL") entries ready"
+fi
+
+CC3M_DIR="$PROJECT_DIR/data/cc3m_ko"
+CC3M_JSONL="$CC3M_DIR/cc3m_ko.jsonl"
+if [ -d "$CC3M_DIR" ] && [ ! -f "$CC3M_JSONL" ]; then
+    # Find TSV files
+    EN_TSV="" KO_TSV=""
+    for f in "$CC3M_DIR"/*.tsv; do
+        [ -f "$f" ] || continue
+        fname=$(basename "$f" | tr '[:upper:]' '[:lower:]')
+        if echo "$fname" | grep -qE "ko|korean"; then
+            KO_TSV="$f"
+        else
+            EN_TSV="$f"
+        fi
+    done
+
+    if [ -n "$EN_TSV" ] && [ -n "$KO_TSV" ]; then
+        echo "  CC3M-Ko: Preparing bilingual JSONL..."
+        python scripts/prepare_datasets.py cc3m-ko \
+            --input "$EN_TSV" --ko-input "$KO_TSV" --output "$CC3M_DIR" || true
+    elif [ -n "$EN_TSV" ]; then
+        echo "  CC3M: Preparing English-only JSONL..."
+        python scripts/prepare_datasets.py cc3m \
+            --input "$EN_TSV" --output "$CC3M_DIR" || true
+        # Rename to match config expectation
+        if [ -f "$CC3M_DIR/cc3m.jsonl" ] && [ ! -f "$CC3M_JSONL" ]; then
+            mv "$CC3M_DIR/cc3m.jsonl" "$CC3M_JSONL"
+        fi
+    fi
+fi
+if [ -f "$CC3M_JSONL" ]; then
+    echo "  CC3M-Ko: $(wc -l < "$CC3M_JSONL") entries ready"
+fi
 
 # ---------- 4. Build monitoring frontend ----------
 echo ""
