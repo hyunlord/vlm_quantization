@@ -7,7 +7,7 @@ model:
 
 training:
   batch_size: auto  # auto-detect based on GPU VRAM (T4→64, A100→320+)
-  max_epochs: 5  # reduced: extra datasets provide more data per epoch
+  max_epochs: 15  # reduced: extra datasets provide more data per epoch
   hash_lr: 1.0e-3
   backbone_lr: 1.0e-5
   weight_decay: 0.01
