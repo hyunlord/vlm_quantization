@@ -101,7 +101,8 @@ def prepare_coco_ko(input_path: Path, output_dir: Path) -> None:
           "id": 391895,
           "caption_ko": ["한국어 캡션 1", ...]}, ...]
 
-    Output: one JSONL entry per Korean caption.
+    Output: one JSONL entry per image with multi-caption list.
+    GenericImageTextDataset randomly selects one caption per sample.
     data_root should point to existing COCO directory (images reused).
     """
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -111,6 +112,7 @@ def prepare_coco_ko(input_path: Path, output_dir: Path) -> None:
         data = json.load(f)
 
     count = 0
+    total_captions = 0
     skipped = 0
     with open(jsonl_path, "w", encoding="utf-8") as out:
         for item in data:
@@ -123,16 +125,21 @@ def prepare_coco_ko(input_path: Path, output_dir: Path) -> None:
             if isinstance(ko_captions, str):
                 ko_captions = [ko_captions]
 
-            for caption in ko_captions:
-                caption = caption.strip()
-                if caption:
-                    entry = {"image_path": img_path, "caption": caption}
-                    out.write(json.dumps(entry, ensure_ascii=False) + "\n")
-                    count += 1
+            # Filter empty captions
+            ko_captions = [c.strip() for c in ko_captions if c.strip()]
+            if not ko_captions:
+                skipped += 1
+                continue
 
-    print(f"  Wrote {count:,} entries ({count // max(len(data), 1)} captions/image avg) to {jsonl_path}")
+            entry = {"image_path": img_path, "captions": ko_captions}
+            out.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            count += 1
+            total_captions += len(ko_captions)
+
+    avg = total_captions / max(count, 1)
+    print(f"  Wrote {count:,} images ({total_captions:,} captions, {avg:.1f}/image avg) to {jsonl_path}")
     if skipped:
-        print(f"  Skipped {skipped} items with no file_path")
+        print(f"  Skipped {skipped} items with no file_path or captions")
 
 
 def prepare_cc3m(input_path: Path, output_dir: Path) -> None:
