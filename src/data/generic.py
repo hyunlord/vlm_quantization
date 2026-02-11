@@ -74,17 +74,22 @@ class GenericImageTextDataset(Dataset):
             return random.choice(entry["captions"])
         return entry["caption"]
 
-    def __getitem__(self, idx: int) -> dict[str, torch.Tensor | int]:
+    def __getitem__(self, idx: int, _retry: int = 0) -> dict[str, torch.Tensor | int]:
         entry = self._entries[idx]
 
-        # Load image (with fallback on failure)
+        # Load image (with fallback on failure, bounded retries)
         image_path = self.data_root / entry["image_path"]
         try:
             image = np.array(Image.open(image_path).convert("RGB"))
         except Exception:
-            # Skip corrupt images — return next valid sample
+            if _retry >= 10:
+                raise RuntimeError(
+                    f"Failed to load image after {_retry} retries. "
+                    f"Last attempt: {image_path}. "
+                    "Check that images exist in the dataset directory."
+                )
             logger.warning("Failed to load image: %s", image_path)
-            return self.__getitem__((idx + 1) % len(self))
+            return self.__getitem__((idx + 1) % len(self), _retry + 1)
 
         caption = self._get_caption(entry)
 
