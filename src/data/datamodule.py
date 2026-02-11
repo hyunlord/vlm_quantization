@@ -151,33 +151,33 @@ class CrossModalHashDataModule(pl.LightningDataModule):
                     max_text_length=self.hparams.max_text_length,
                 )
 
+    def _mp_context(self) -> dict:
+        """Use 'spawn' to avoid all CUDA fork deadlocks."""
+        if self.hparams.num_workers > 0:
+            return {"multiprocessing_context": "spawn"}
+        return {}
+
     def train_dataloader(self) -> DataLoader:
-        nw = self.hparams.num_workers
-        extra: dict = {}
-        if nw > 0:
-            extra["persistent_workers"] = True
-            extra["multiprocessing_context"] = "forkserver"
         return DataLoader(
             self.train_dataset,
             batch_size=self.hparams.batch_size,
             shuffle=True,
-            num_workers=nw,
+            num_workers=self.hparams.num_workers,
             collate_fn=collate_fn,
             pin_memory=True,
             drop_last=True,
-            **extra,
+            **self._mp_context(),
         )
 
     def val_dataloader(self) -> DataLoader:
-        # num_workers=0: run in main process to avoid conflicts with
-        # persistent train workers (val runs infrequently, no perf issue).
         return DataLoader(
             self.val_dataset,
             batch_size=self.hparams.batch_size,
             shuffle=False,
-            num_workers=0,
+            num_workers=min(self.hparams.num_workers, 4),
             collate_fn=collate_fn,
             pin_memory=True,
+            **self._mp_context(),
         )
 
     def test_dataloader(self) -> DataLoader:
@@ -185,7 +185,8 @@ class CrossModalHashDataModule(pl.LightningDataModule):
             self.test_dataset,
             batch_size=self.hparams.batch_size,
             shuffle=False,
-            num_workers=0,
+            num_workers=min(self.hparams.num_workers, 4),
             collate_fn=collate_fn,
             pin_memory=True,
+            **self._mp_context(),
         )

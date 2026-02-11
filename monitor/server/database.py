@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 import time
 from pathlib import Path
 
 from monitor.server.models import EvalMetric, SystemMetric, TrainingMetric
 
-DB_PATH = Path(__file__).parent.parent / "metrics.db"
+DB_PATH = Path(
+    os.environ.get(
+        "MONITOR_DB_PATH",
+        str(Path(__file__).parent.parent / "metrics.db"),
+    )
+)
 
 
 def get_connection() -> sqlite3.Connection:

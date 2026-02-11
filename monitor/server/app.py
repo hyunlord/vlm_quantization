@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -10,6 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from monitor.server.database import (
+    DB_PATH,
     clear_all_metrics,
     clear_training_metrics,
     get_eval_metrics,
@@ -45,7 +47,11 @@ from monitor.server.models import (
 from monitor.server.search_index import SearchIndex
 from monitor.server.system_monitor import SystemMonitorThread
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="VLM Quantization Monitor")
+
+_hash_analysis_path = DB_PATH.parent / "hash_analysis.json"
 
 app.add_middleware(
     CORSMiddleware,
@@ -95,6 +101,16 @@ manager = ConnectionManager()
 async def startup():
     init_db()
     system_monitor.start()
+
+    # Restore hash analysis from persistent JSON (if available)
+    global _hash_analysis_data
+    if _hash_analysis_path.is_file():
+        try:
+            with open(_hash_analysis_path) as f:
+                _hash_analysis_data = json.load(f)
+            logger.info("Loaded hash analysis from %s", _hash_analysis_path)
+        except Exception as e:
+            logger.warning("Failed to load hash analysis: %s", e)
 
     # Periodically broadcast system metrics via WebSocket
     async def broadcast_system():
@@ -192,6 +208,13 @@ async def update_training_status(status: TrainingStatus):
 async def post_hash_analysis(data: dict):
     global _hash_analysis_data
     _hash_analysis_data = data
+    # Persist to JSON alongside metrics DB
+    try:
+        _hash_analysis_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(_hash_analysis_path, "w") as f:
+            json.dump(data, f)
+    except Exception as e:
+        logger.warning("Failed to save hash analysis: %s", e)
     await manager.broadcast({"type": "hash_analysis", "data": data})
     return {"status": "ok"}
 
