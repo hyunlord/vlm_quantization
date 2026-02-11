@@ -7,15 +7,15 @@ model:
 
 training:
   batch_size: auto  # auto-detect based on GPU VRAM (T4→64, A100→320+)
-  max_epochs: 10
+  max_epochs: 5  # reduced: extra datasets provide more data per epoch
   hash_lr: 1.0e-3
   backbone_lr: 1.0e-5
   weight_decay: 0.01
-  warmup_steps: 500
+  warmup_steps: 2000  # increased: ~10x more data needs longer warmup
   gradient_clip_val: 1.0
   accumulate_grad_batches: 4  # overridden when batch_size=auto
-  val_check_interval: 0.5  # validate 2x per epoch (0.25 = 4x, 1.0 = once)
-  early_stopping_patience: 2
+  val_check_interval: 5000  # steps-based: validate every 5K steps (not epoch fraction)
+  early_stopping_patience: 3  # increased: fewer validations per epoch
   checkpoint_dir: "/content/drive/MyDrive/vlm_quantization/checkpoints"
 
 loss:
@@ -34,8 +34,13 @@ data:
   num_workers: 4  # overridden when batch_size=auto
   max_text_length: 64
   image_size: 384
+  extra_datasets:
+    - jsonl_path: "/content/data/aihub/aihub_71454.jsonl"
+      data_root: "/content/data/aihub"
+    - jsonl_path: "/content/data/cc3m_ko/cc3m_ko.jsonl"
+      data_root: "/content/data/cc3m_ko"
 
 monitor:
   enabled: true
   server_url: "http://localhost:8000"
-  log_every_n_steps: 10
+  log_every_n_steps: 50  # reduced frequency: less overhead with large datasets
