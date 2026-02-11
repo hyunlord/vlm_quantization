@@ -35,6 +35,8 @@ data:
   max_text_length: 64
   image_size: 384
   extra_datasets:
+    - jsonl_path: "data/coco_ko/coco_ko.jsonl"
+      data_root: "data/coco"
     - jsonl_path: "data/aihub/aihub_71454.jsonl"
       data_root: "data/aihub"
     - jsonl_path: "data/cc3m_ko/cc3m_ko.jsonl"

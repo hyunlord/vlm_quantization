@@ -9,6 +9,7 @@ Usage:
     python scripts/prepare_datasets.py aihub --input /path/to/aihub --output /path/to/output
     python scripts/prepare_datasets.py cc3m --input /path/to/cc3m_tsv --output /path/to/output
     python scripts/prepare_datasets.py cc3m-ko --input /path/to/cc3m --ko-input /path/to/ko_cc3m --output /path/to/output
+    python scripts/prepare_datasets.py coco-ko --input /path/to/MSCOCO_train_val_Korean.json --output /path/to/output
 """
 from __future__ import annotations
 
@@ -89,6 +90,49 @@ def prepare_aihub(input_dir: Path, output_dir: Path) -> None:
                     count += 1
 
     print(f"  Wrote {count:,} entries to {jsonl_path}")
+
+
+def prepare_coco_ko(input_path: Path, output_dir: Path) -> None:
+    """Convert AIHub #261 COCO Korean captions JSON to JSONL.
+
+    Input format (list of dicts):
+        [{"file_path": "val2014/COCO_val2014_000000391895.jpg",
+          "captions": ["English cap 1", ...],
+          "id": 391895,
+          "caption_ko": ["한국어 캡션 1", ...]}, ...]
+
+    Output: one JSONL entry per Korean caption.
+    data_root should point to existing COCO directory (images reused).
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    jsonl_path = output_dir / "coco_ko.jsonl"
+
+    with open(input_path, encoding="utf-8") as f:
+        data = json.load(f)
+
+    count = 0
+    skipped = 0
+    with open(jsonl_path, "w", encoding="utf-8") as out:
+        for item in data:
+            img_path = item.get("file_path", "")
+            if not img_path:
+                skipped += 1
+                continue
+
+            ko_captions = item.get("caption_ko", [])
+            if isinstance(ko_captions, str):
+                ko_captions = [ko_captions]
+
+            for caption in ko_captions:
+                caption = caption.strip()
+                if caption:
+                    entry = {"image_path": img_path, "caption": caption}
+                    out.write(json.dumps(entry, ensure_ascii=False) + "\n")
+                    count += 1
+
+    print(f"  Wrote {count:,} entries ({count // max(len(data), 1)} captions/image avg) to {jsonl_path}")
+    if skipped:
+        print(f"  Skipped {skipped} items with no file_path")
 
 
 def prepare_cc3m(input_path: Path, output_dir: Path) -> None:
@@ -184,6 +228,11 @@ def main():
     p_cc3m.add_argument("--input", type=Path, required=True, help="CC3M TSV file")
     p_cc3m.add_argument("--output", type=Path, required=True, help="Output dir")
 
+    # COCO Korean (AIHub #261)
+    p_coco_ko = subparsers.add_parser("coco-ko", help="AIHub #261 COCO Korean captions")
+    p_coco_ko.add_argument("--input", type=Path, required=True, help="MSCOCO_train_val_Korean.json path")
+    p_coco_ko.add_argument("--output", type=Path, required=True, help="Output dir")
+
     # CC3M + Ko-CC3M (bilingual)
     p_cc3m_ko = subparsers.add_parser("cc3m-ko", help="CC3M + Ko-CC3M bilingual")
     p_cc3m_ko.add_argument("--input", type=Path, required=True, help="CC3M English TSV")
@@ -198,6 +247,8 @@ def main():
 
     if args.dataset == "aihub":
         prepare_aihub(args.input, args.output)
+    elif args.dataset == "coco-ko":
+        prepare_coco_ko(args.input, args.output)
     elif args.dataset == "cc3m":
         prepare_cc3m(args.input, args.output)
     elif args.dataset == "cc3m-ko":
