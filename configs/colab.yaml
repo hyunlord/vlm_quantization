@@ -43,4 +43,4 @@ data:
 monitor:
   enabled: true
   server_url: "http://localhost:8000"
-  log_every_n_steps: 50  # reduced frequency: less overhead with large datasets
+  log_every_n_steps: 10
