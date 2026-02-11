@@ -234,9 +234,34 @@ class MonitorCallback(pl.Callback):
         b64 = base64.b64encode(buf.getvalue()).decode()
         return f"data:image/jpeg;base64,{b64}"
 
+    def on_save_checkpoint(
+        self,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        checkpoint: dict,
+    ) -> None:
+        """Called when a checkpoint is saved. Register it in the monitoring DB."""
+        # Find the ModelCheckpoint callback to get the saved path
+        for cb in trainer.callbacks:
+            if isinstance(cb, pl.callbacks.ModelCheckpoint):
+                if cb.best_model_path:
+                    self._post("/api/checkpoints/register", {
+                        "run_id": self.run_id,
+                        "epoch": trainer.current_epoch,
+                        "step": trainer.global_step,
+                        "path": cb.best_model_path,
+                        "val_loss": self._to_float(
+                            trainer.callback_metrics.get("val/total")
+                        ),
+                    })
+                break
+
     def on_fit_end(
         self, trainer: pl.Trainer, pl_module: pl.LightningModule
     ) -> None:
+        # Final checkpoint sync to catch any missed checkpoints
+        self._post("/api/checkpoints/sync", {"run_id": self.run_id})
+
         self._post("/api/training/status", {
             "run_id": self.run_id,
             "epoch": trainer.current_epoch,

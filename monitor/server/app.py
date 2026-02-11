@@ -121,6 +121,12 @@ async def startup():
     init_db()
     system_monitor.start()
 
+    # Auto-sync checkpoints from disk on startup
+    if CHECKPOINT_DIR:
+        synced = sync_checkpoints_from_disk(CHECKPOINT_DIR)
+        if synced > 0:
+            logger.info("Synced %d checkpoints from disk on startup", synced)
+
     # Restore latest hash analysis from DB
     global _hash_analysis_data
     latest = get_latest_hash_analysis()
@@ -171,6 +177,10 @@ async def startup():
                         await manager.broadcast({
                             "type": "hash_analysis", "data": latest,
                         })
+
+                # Periodically sync checkpoints from disk
+                if CHECKPOINT_DIR:
+                    sync_checkpoints_from_disk(CHECKPOINT_DIR)
             except Exception as e:
                 logger.debug("DB poll error: %s", e)
 
