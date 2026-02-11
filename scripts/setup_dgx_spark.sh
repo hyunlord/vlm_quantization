@@ -165,10 +165,27 @@ sync_from_drive() {
     fi
 }
 
+sync_from_drive "COCO-Ko" "${GDRIVE_DATA_PATH}/coco_ko" "$PROJECT_DIR/data/coco_ko"
 sync_from_drive "AIHub" "${GDRIVE_DATA_PATH}/aihub" "$PROJECT_DIR/data/aihub"
 sync_from_drive "CC3M-Ko" "${GDRIVE_DATA_PATH}/cc3m_ko" "$PROJECT_DIR/data/cc3m_ko"
 
 # Auto-prepare JSONL for any datasets that have raw data but no JSONL
+
+# COCO Korean (AIHub #261) — reuses existing COCO images
+COCO_KO_DIR="$PROJECT_DIR/data/coco_ko"
+COCO_KO_JSONL="$COCO_KO_DIR/coco_ko.jsonl"
+if [ -d "$COCO_KO_DIR" ] && [ ! -f "$COCO_KO_JSONL" ]; then
+    COCO_KO_JSON="$COCO_KO_DIR/MSCOCO_train_val_Korean.json"
+    if [ -f "$COCO_KO_JSON" ]; then
+        echo "  COCO-Ko: Preparing JSONL from Korean captions..."
+        python scripts/prepare_datasets.py coco-ko \
+            --input "$COCO_KO_JSON" --output "$COCO_KO_DIR" || true
+    fi
+fi
+if [ -f "$COCO_KO_JSONL" ]; then
+    echo "  COCO-Ko: $(wc -l < "$COCO_KO_JSONL") entries ready"
+fi
+
 AIHUB_DIR="$PROJECT_DIR/data/aihub"
 AIHUB_JSONL="$AIHUB_DIR/aihub_71454.jsonl"
 if [ -d "$AIHUB_DIR" ] && [ ! -f "$AIHUB_JSONL" ]; then
