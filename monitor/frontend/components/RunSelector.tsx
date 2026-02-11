@@ -55,20 +55,20 @@ export default function RunSelector() {
         })}
       </select>
 
-      {/* Eval epoch selector */}
+      {/* Eval point selector (step-based for uniqueness) */}
       {evalPoints.length > 0 && (
         <select
-          value={selectedEvalEpoch ?? ""}
+          value={evalPoints.find((ep) => ep.epoch === selectedEvalEpoch)?.step ?? ""}
           onChange={(e) => {
-            const v = e.target.value;
-            selectEvalEpoch(v ? Number(v) : null);
+            const step = Number(e.target.value);
+            const ep = evalPoints.find((p) => (p.step ?? p.epoch) === step);
+            if (ep) selectEvalEpoch(ep.epoch);
           }}
           className="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-blue-500"
         >
           {evalPoints.map((ep) => (
-            <option key={`${ep.epoch}-${ep.step}`} value={ep.epoch}>
-              Epoch {ep.epoch}
-              {ep.step != null ? `, Step ${ep.step}` : ""}
+            <option key={`${ep.epoch}-${ep.step}`} value={ep.step ?? ep.epoch}>
+              Epoch {ep.epoch}, Step {ep.step ?? 0}
             </option>
           ))}
         </select>
