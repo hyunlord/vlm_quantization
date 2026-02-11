@@ -49,7 +49,13 @@ interface Checkpoint {
   size_mb: number;
   modified: string;
   epoch: number | null;
+  step: number | null;
   val_loss: number | null;
+  map_i2t?: number | null;
+  map_t2i?: number | null;
+  p1?: number | null;
+  p5?: number | null;
+  p10?: number | null;
 }
 
 const DEFAULT_CKPT_DIR =
@@ -639,7 +645,7 @@ function InferencePage() {
                                   className={`font-mono ${isCurrent ? "text-emerald-300" : "text-gray-300"}`}
                                 >
                                   {ckpt.epoch != null
-                                    ? `Epoch ${ckpt.epoch}`
+                                    ? `Ep ${ckpt.epoch}${ckpt.step != null ? ` / Step ${ckpt.step}` : ""}`
                                     : ckpt.name}
                                 </span>
 
@@ -655,6 +661,20 @@ function InferencePage() {
                                     >
                                       {ckpt.val_loss.toFixed(4)}
                                     </span>
+                                  </span>
+                                )}
+
+                                {(ckpt.map_i2t != null || ckpt.map_t2i != null) && (
+                                  <span className="text-gray-500">
+                                    mAP:{" "}
+                                    <span className="text-blue-400">
+                                      {ckpt.map_i2t != null ? (ckpt.map_i2t * 100).toFixed(1) : "—"}
+                                    </span>
+                                    /
+                                    <span className="text-purple-400">
+                                      {ckpt.map_t2i != null ? (ckpt.map_t2i * 100).toFixed(1) : "—"}
+                                    </span>
+                                    <span className="text-gray-600 text-[10px] ml-0.5">%</span>
                                   </span>
                                 )}
                               </div>

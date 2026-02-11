@@ -609,6 +609,51 @@ def get_epochs_for_run(run_id: str) -> list[dict]:
     return result
 
 
+def get_eval_metrics_for_checkpoints(checkpoints: list[dict]) -> dict[str, dict]:
+    """Look up eval metrics (mAP, P@k) for a list of checkpoints.
+
+    Returns a dict keyed by (run_id, epoch, step) tuple-string with metric values.
+    Matches by (run_id, epoch) with optional step refinement.
+    """
+    if not checkpoints:
+        return {}
+
+    conn = get_connection()
+    result: dict[str, dict] = {}
+
+    for ckpt in checkpoints:
+        run_id = ckpt.get("run_dir") or ckpt.get("run_id", "")
+        epoch = ckpt.get("epoch")
+        step = ckpt.get("step")
+        if epoch is None:
+            continue
+
+        # Try exact match on (run_id, epoch, step) first, then fall back to (run_id, epoch)
+        row = None
+        if step is not None:
+            row = conn.execute(
+                """SELECT map_i2t, map_t2i, p1, p5, p10
+                   FROM eval_metrics
+                   WHERE run_id = ? AND epoch = ? AND step = ?""",
+                (run_id, epoch, step),
+            ).fetchone()
+        if row is None:
+            row = conn.execute(
+                """SELECT map_i2t, map_t2i, p1, p5, p10
+                   FROM eval_metrics
+                   WHERE run_id = ? AND epoch = ?
+                   ORDER BY step DESC LIMIT 1""",
+                (run_id, epoch),
+            ).fetchone()
+
+        if row:
+            key = ckpt.get("path", f"{run_id}_{epoch}_{step}")
+            result[key] = dict(row)
+
+    conn.close()
+    return result
+
+
 def get_all_checkpoints() -> list[dict]:
     """Get all checkpoints across all runs."""
     conn = get_connection()

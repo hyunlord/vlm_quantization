@@ -34,6 +34,7 @@ from monitor.server.database import (
     get_checkpoint_by_id,
     get_checkpoint_by_path,
     get_checkpoints_for_run,
+    get_eval_metrics_for_checkpoints,
     get_epochs_for_run,
     get_run_details,
     get_runs_with_checkpoints,
@@ -437,7 +438,18 @@ async def list_checkpoints(directory: str = ""):
     dir_to_scan = directory or CHECKPOINT_DIR
     if not dir_to_scan:
         return {"checkpoints": [], "error": "No checkpoint directory configured"}
-    return {"checkpoints": InferenceEngine.list_checkpoints(dir_to_scan)}
+    ckpts = InferenceEngine.list_checkpoints(dir_to_scan)
+    # Enrich with eval metrics (mAP, P@k) from database
+    metrics_map = get_eval_metrics_for_checkpoints(ckpts)
+    for ckpt in ckpts:
+        m = metrics_map.get(ckpt["path"])
+        if m:
+            ckpt["map_i2t"] = m.get("map_i2t")
+            ckpt["map_t2i"] = m.get("map_t2i")
+            ckpt["p1"] = m.get("p1")
+            ckpt["p5"] = m.get("p5")
+            ckpt["p10"] = m.get("p10")
+    return {"checkpoints": ckpts}
 
 
 @app.get("/api/inference/checkpoint-info")

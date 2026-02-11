@@ -237,6 +237,10 @@ class InferenceEngine:
             epoch_match = re.search(r"epoch[=_](\d+)", str(p))
             epoch = int(epoch_match.group(1)) if epoch_match else None
 
+            # Extract step from full path
+            step_match = re.search(r"step[=_](\d+)", str(p))
+            step = int(step_match.group(1)) if step_match else None
+
             # Extract val_loss from filename (float with 3+ decimals)
             loss_match = re.search(r"(\d+\.\d{3,})", p.name)
             val_loss = float(loss_match.group(1)) if loss_match else None
@@ -248,6 +252,7 @@ class InferenceEngine:
                 "size_mb": round(stat.st_size / 1024 / 1024),
                 "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
                 "epoch": epoch,
+                "step": step,
                 "val_loss": val_loss,
             })
         return ckpts

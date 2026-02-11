@@ -138,7 +138,13 @@ export interface CheckpointInfo {
   size_mb: number;
   modified: string;
   epoch: number | null;
+  step: number | null;
   val_loss: number | null;
+  map_i2t?: number | null;
+  map_t2i?: number | null;
+  p1?: number | null;
+  p5?: number | null;
+  p10?: number | null;
 }
 
 // --- Search types ---
