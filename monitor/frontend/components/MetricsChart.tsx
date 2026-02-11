@@ -154,6 +154,7 @@ export default function MetricsChart({ data }: Props) {
                 strokeWidth={1.5}
                 name={`Hash ${dir}`}
                 isAnimationActive={false}
+                connectNulls
               />
             ))}
             {hasBackbone &&
@@ -169,6 +170,7 @@ export default function MetricsChart({ data }: Props) {
                   strokeDasharray="6 3"
                   name={`Backbone ${dir}`}
                   isAnimationActive={false}
+                  connectNulls
                 />
               ))}
           </LineChart>

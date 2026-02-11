@@ -19,11 +19,11 @@ interface Props {
 export default function HashQuality({ data }: Props) {
   const entropyData = data
     .filter((d) => d.bit_entropy !== null)
-    .map((d) => ({ epoch: d.epoch, entropy: d.bit_entropy }));
+    .map((d) => ({ step: d.step ?? d.epoch, epoch: d.epoch, entropy: d.bit_entropy }));
 
   const quantData = data
     .filter((d) => d.quant_error !== null)
-    .map((d) => ({ epoch: d.epoch, error: d.quant_error }));
+    .map((d) => ({ step: d.step ?? d.epoch, epoch: d.epoch, error: d.quant_error }));
 
   const latestEntropy = entropyData[entropyData.length - 1]?.entropy ?? null;
   const latestError = quantData[quantData.length - 1]?.error ?? null;
@@ -62,13 +62,13 @@ export default function HashQuality({ data }: Props) {
           {entropyData.length > 0 && (
             <div>
               <p className="text-xs text-gray-500 mb-1">
-                Bit Entropy per Epoch
+                Bit Entropy per Step
               </p>
               <ResponsiveContainer width="100%" height={100}>
                 <LineChart data={entropyData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
                   <XAxis
-                    dataKey="epoch"
+                    dataKey="step"
                     tick={{ fontSize: 9, fill: "#6b7280" }}
                     stroke="#374151"
                   />
@@ -84,6 +84,15 @@ export default function HashQuality({ data }: Props) {
                       borderRadius: "8px",
                       fontSize: "11px",
                     }}
+                    labelFormatter={(step) => {
+                      const point = entropyData.find((d) => d.step === step);
+                      return point
+                        ? `Epoch ${point.epoch}, Step ${step}`
+                        : `Step ${step}`;
+                    }}
+                    formatter={(value: unknown) =>
+                      typeof value === "number" ? value.toFixed(4) : "N/A"
+                    }
                   />
                   <ReferenceLine
                     y={1}
@@ -108,13 +117,13 @@ export default function HashQuality({ data }: Props) {
           {quantData.length > 0 && (
             <div>
               <p className="text-xs text-gray-500 mb-1">
-                Quantization Error per Epoch
+                Quantization Error per Step
               </p>
               <ResponsiveContainer width="100%" height={100}>
                 <LineChart data={quantData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
                   <XAxis
-                    dataKey="epoch"
+                    dataKey="step"
                     tick={{ fontSize: 9, fill: "#6b7280" }}
                     stroke="#374151"
                   />
@@ -129,6 +138,15 @@ export default function HashQuality({ data }: Props) {
                       borderRadius: "8px",
                       fontSize: "11px",
                     }}
+                    labelFormatter={(step) => {
+                      const point = quantData.find((d) => d.step === step);
+                      return point
+                        ? `Epoch ${point.epoch}, Step ${step}`
+                        : `Step ${step}`;
+                    }}
+                    formatter={(value: unknown) =>
+                      typeof value === "number" ? value.toFixed(4) : "N/A"
+                    }
                   />
                   <ReferenceLine
                     y={0}
