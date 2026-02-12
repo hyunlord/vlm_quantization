@@ -19,11 +19,13 @@ interface Props {
 export default function HashQuality({ data }: Props) {
   const entropyData = data
     .filter((d) => d.bit_entropy !== null)
-    .map((d) => ({ step: d.step ?? d.epoch, epoch: d.epoch, entropy: d.bit_entropy }));
+    .map((d) => ({ step: d.step ?? d.epoch, epoch: d.epoch, entropy: d.bit_entropy }))
+    .sort((a, b) => a.step - b.step);
 
   const quantData = data
     .filter((d) => d.quant_error !== null)
-    .map((d) => ({ step: d.step ?? d.epoch, epoch: d.epoch, error: d.quant_error }));
+    .map((d) => ({ step: d.step ?? d.epoch, epoch: d.epoch, error: d.quant_error }))
+    .sort((a, b) => a.step - b.step);
 
   const latestEntropy = entropyData[entropyData.length - 1]?.entropy ?? null;
   const latestError = quantData[quantData.length - 1]?.error ?? null;

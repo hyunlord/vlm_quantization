@@ -89,7 +89,8 @@ export default function LossChart({ data, evalData }: Props) {
         lcs: e.val_loss_lcs,
         distillation: e.val_loss_distillation,
         adapter_align: e.val_loss_adapter_align,
-      }));
+      }))
+      .sort((a, b) => a.step - b.step);
   }, [evalData]);
 
   // --- Y-axis domains ---

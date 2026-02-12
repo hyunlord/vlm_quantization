@@ -32,14 +32,16 @@ const BACKBONE_COLORS: Record<string, string> = {
 export default function MetricsChart({ data }: Props) {
   const [activeTab, setActiveTab] = useState<"map" | "precision">("map");
 
-  const mapData = data.map((d) => ({
-    step: d.step ?? d.epoch,
-    epoch: d.epoch,
-    I2T: d.map_i2t,
-    T2I: d.map_t2i,
-    "Backbone I2T": d.backbone_map_i2t,
-    "Backbone T2I": d.backbone_map_t2i,
-  }));
+  const mapData = data
+    .map((d) => ({
+      step: d.step ?? d.epoch,
+      epoch: d.epoch,
+      I2T: d.map_i2t,
+      T2I: d.map_t2i,
+      "Backbone I2T": d.backbone_map_i2t,
+      "Backbone T2I": d.backbone_map_t2i,
+    }))
+    .sort((a, b) => a.step - b.step);
 
   const hasBackbone = data.some(
     (d) => d.backbone_map_i2t != null || d.backbone_map_t2i != null

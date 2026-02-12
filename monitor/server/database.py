@@ -298,12 +298,24 @@ def get_runs() -> list[dict]:
     return runs
 
 
+def _latest_run_id(conn: sqlite3.Connection, table: str) -> str | None:
+    """Auto-detect the most recent run_id from a table."""
+    row = conn.execute(
+        f"SELECT run_id FROM {table} WHERE run_id != '' "
+        "ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    return row["run_id"] if row else None
+
+
 def get_training_metrics(
     start_step: int = 0,
     end_step: int | None = None,
     run_id: str | None = None,
 ) -> list[dict]:
     conn = get_connection()
+    # Auto-select latest run when no run_id specified
+    if not run_id:
+        run_id = _latest_run_id(conn, "training_metrics")
     conditions = ["step >= ?"]
     params: list = [start_step]
     if end_step is not None:
@@ -323,14 +335,17 @@ def get_training_metrics(
 
 def get_eval_metrics(run_id: str | None = None) -> list[dict]:
     conn = get_connection()
+    # Auto-select latest run when no run_id specified
+    if not run_id:
+        run_id = _latest_run_id(conn, "eval_metrics")
     if run_id:
         rows = conn.execute(
-            "SELECT * FROM eval_metrics WHERE run_id = ? ORDER BY epoch",
+            "SELECT * FROM eval_metrics WHERE run_id = ? ORDER BY id",
             (run_id,),
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT * FROM eval_metrics ORDER BY epoch"
+            "SELECT * FROM eval_metrics ORDER BY id"
         ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
