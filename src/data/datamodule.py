@@ -6,7 +6,7 @@ from pathlib import Path
 import pytorch_lightning as pl
 import torch
 from torch.utils.data import ConcatDataset, DataLoader, Subset
-from transformers import AutoProcessor
+from transformers import AutoProcessor, SiglipProcessor
 
 from src.data.coco import CocoCaptionsDataset
 from src.data.transforms import (
@@ -65,7 +65,11 @@ class CrossModalHashDataModule(pl.LightningDataModule):
         super().__init__()
         self.save_hyperparameters()
         self.data_root = Path(data_root)
-        self.processor = AutoProcessor.from_pretrained(processor_name)
+        try:
+            self.processor = AutoProcessor.from_pretrained(processor_name)
+        except AttributeError:
+            # transformers tokenizer mapping bug for siglip2 models
+            self.processor = SiglipProcessor.from_pretrained(processor_name)
 
     def _build_extra_datasets(self) -> list:
         """Build GenericImageTextDataset instances from extra_datasets config."""
