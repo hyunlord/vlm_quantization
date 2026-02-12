@@ -695,6 +695,7 @@ if _frontend_out.is_dir():
     _page_routes = [
         ("/inference", "inference.html"),
         ("/hash-analysis", "hash-analysis.html"),
+        ("/augmentation", "augmentation.html"),
         ("/search", "search.html"),
         ("/optuna", "optuna.html"),
     ]

@@ -202,7 +202,12 @@ class MonitorCallback(pl.Callback):
                         "caption": caption,
                         "thumbnail": thumbnail,
                     })
-                self._post("/api/metrics/hash_analysis", {
+                # Augmentation robustness analysis
+                augmentation_data = self._compute_augmentation_analysis(
+                    pl_module, val_dataset, analysis,
+                )
+
+                hash_payload = {
                     "run_id": self.run_id,
                     "epoch": trainer.current_epoch,
                     "step": trainer.global_step,
@@ -215,7 +220,11 @@ class MonitorCallback(pl.Callback):
                     "sample_txt_codes": analysis["sample_txt_codes"],
                     "similarity_matrix": analysis["similarity_matrix"],
                     "bit": analysis["bit"],
-                })
+                }
+                if augmentation_data is not None:
+                    hash_payload["augmentation"] = augmentation_data
+
+                self._post("/api/metrics/hash_analysis", hash_payload)
             except Exception as e:
                 logger.warning("Hash analysis POST failed: %s", e)
 
@@ -233,6 +242,171 @@ class MonitorCallback(pl.Callback):
         img.save(buf, format="JPEG", quality=70)
         b64 = base64.b64encode(buf.getvalue()).decode()
         return f"data:image/jpeg;base64,{b64}"
+
+    @staticmethod
+    def _make_thumbnail_from_array(arr, size: int = 128) -> str:
+        """Convert numpy array to base64 thumbnail data URI."""
+        import base64
+        import io
+
+        from PIL import Image
+
+        img = Image.fromarray(arr)
+        img.thumbnail((size, size))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=70)
+        b64 = base64.b64encode(buf.getvalue()).decode()
+        return f"data:image/jpeg;base64,{b64}"
+
+    def _compute_augmentation_analysis(
+        self,
+        pl_module: pl.LightningModule,
+        val_dataset,
+        analysis: dict,
+    ) -> dict | None:
+        """Compare original vs augmented image hash codes for robustness check.
+
+        Applies weak and strong augmentations to sample images, encodes them
+        through the model, and measures Hamming similarity to the original codes.
+        """
+        try:
+            import numpy as np
+            import torch
+            from PIL import Image
+
+            from src.data.transforms import (
+                get_consistency_augmentation,
+                get_train_transforms,
+            )
+            from src.utils.hamming import to_binary_01
+
+            device = pl_module.device
+            processor = val_dataset.processor
+            image_size = getattr(val_dataset, "image_size", 384)
+            bit = analysis["bit"]
+            bit_list = pl_module.hparams.get("bit_list", [64])
+            bit_idx = bit_list.index(bit) if bit in bit_list else 0
+            n_augs = 3
+
+            weak_tf = get_train_transforms(image_size)
+            strong_tf = get_consistency_augmentation(image_size)
+
+            all_weak_pvs: list = []
+            all_strong_pvs: list = []
+            weak_thumbs: list[str] = []
+            strong_thumbs: list[str] = []
+
+            for img_id in analysis["sample_image_ids"]:
+                info = val_dataset.coco.imgs[img_id]
+                img_path = val_dataset.image_dir / info["file_name"]
+                raw = np.array(Image.open(img_path).convert("RGB"))
+
+                for j in range(n_augs):
+                    w_aug = weak_tf(image=raw)["image"]
+                    w_pv = processor(
+                        images=Image.fromarray(w_aug), return_tensors="pt",
+                    )["pixel_values"].squeeze(0)
+                    all_weak_pvs.append(w_pv)
+                    if j == 0:
+                        weak_thumbs.append(
+                            self._make_thumbnail_from_array(w_aug)
+                        )
+
+                    s_aug = strong_tf(image=raw)["image"]
+                    s_pv = processor(
+                        images=Image.fromarray(s_aug), return_tensors="pt",
+                    )["pixel_values"].squeeze(0)
+                    all_strong_pvs.append(s_pv)
+                    if j == 0:
+                        strong_thumbs.append(
+                            self._make_thumbnail_from_array(s_aug)
+                        )
+
+            n_samples = len(analysis["sample_image_ids"])
+
+            # Batch encode all augmented images
+            with torch.no_grad():
+                weak_batch = torch.stack(all_weak_pvs).to(device)
+                weak_out = pl_module.encode_image(weak_batch)
+                weak_codes = to_binary_01(
+                    weak_out[bit_idx]["binary"]
+                ).cpu()
+
+                strong_batch = torch.stack(all_strong_pvs).to(device)
+                strong_out = pl_module.encode_image(strong_batch)
+                strong_codes = to_binary_01(
+                    strong_out[bit_idx]["binary"]
+                ).cpu()
+
+            # Reshape: (n_samples, n_augs, bit)
+            weak_codes = weak_codes.view(n_samples, n_augs, -1)
+            strong_codes = strong_codes.view(n_samples, n_augs, -1)
+            orig_codes = torch.tensor(
+                analysis["sample_img_codes"], dtype=torch.float32,
+            )
+
+            # Per-sample similarity results
+            aug_samples = []
+            for i in range(n_samples):
+                orig = orig_codes[i]
+                w_sims = [
+                    (orig == weak_codes[i, j]).float().mean().item()
+                    for j in range(n_augs)
+                ]
+                s_sims = [
+                    (orig == strong_codes[i, j]).float().mean().item()
+                    for j in range(n_augs)
+                ]
+                aug_samples.append({
+                    "image_id": int(analysis["sample_image_ids"][i]),
+                    "weak_mean_sim": round(
+                        sum(w_sims) / len(w_sims), 4,
+                    ),
+                    "weak_min_sim": round(min(w_sims), 4),
+                    "strong_mean_sim": round(
+                        sum(s_sims) / len(s_sims), 4,
+                    ),
+                    "strong_min_sim": round(min(s_sims), 4),
+                    "weak_code": weak_codes[i, 0].int().tolist(),
+                    "strong_code": strong_codes[i, 0].int().tolist(),
+                    "weak_thumbnail": weak_thumbs[i],
+                    "strong_thumbnail": strong_thumbs[i],
+                })
+
+            # Per-bit stability: how often each bit stays the same
+            weak_stability = []
+            strong_stability = []
+            for b_pos in range(bit):
+                orig_bits = orig_codes[:, b_pos]
+                w_match = (
+                    weak_codes[:, :, b_pos] == orig_bits.unsqueeze(1)
+                ).float().mean().item()
+                s_match = (
+                    strong_codes[:, :, b_pos] == orig_bits.unsqueeze(1)
+                ).float().mean().item()
+                weak_stability.append(round(w_match, 4))
+                strong_stability.append(round(s_match, 4))
+
+            return {
+                "samples": aug_samples,
+                "weak_mean_overall": round(
+                    sum(s["weak_mean_sim"] for s in aug_samples)
+                    / len(aug_samples),
+                    4,
+                ),
+                "strong_mean_overall": round(
+                    sum(s["strong_mean_sim"] for s in aug_samples)
+                    / len(aug_samples),
+                    4,
+                ),
+                "weak_bit_stability": weak_stability,
+                "strong_bit_stability": strong_stability,
+                "bit": bit,
+                "n_augs": n_augs,
+            }
+        except Exception as e:
+            logger.warning("Augmentation analysis failed: %s", e)
+            return None
 
     def on_save_checkpoint(
         self,

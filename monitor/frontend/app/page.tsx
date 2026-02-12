@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, Database, FlaskConical, Search, Wifi, WifiOff } from "lucide-react";
+import { BarChart3, Database, FlaskConical, Layers, Search, Wifi, WifiOff } from "lucide-react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useRunContext } from "@/contexts/RunContext";
 import RunSelector from "@/components/RunSelector";
@@ -43,6 +43,13 @@ export default function Dashboard() {
           >
             <BarChart3 className="w-3.5 h-3.5" />
             <span>Hash Analysis</span>
+          </Link>
+          <Link
+            href="/augmentation"
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-cyan-400 transition-colors"
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Augmentation</span>
           </Link>
           <Link
             href="/inference"

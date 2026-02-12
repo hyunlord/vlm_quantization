@@ -319,8 +319,8 @@ class CrossModalHashModel(pl.LightningModule):
             activation = (combined > 0).float().mean(dim=0).cpu().tolist()
             hash_analysis[f"activation_{b}"] = activation
 
-        # 2) Fixed 8 samples for qualitative check (deterministic seed)
-        n_samples = min(8, len(idx))
+        # 2) Fixed 16 samples for qualitative check (deterministic seed)
+        n_samples = min(16, len(idx))
         gen = torch.Generator().manual_seed(42)
         sample_perm = torch.randperm(len(idx), generator=gen)[:n_samples]
 

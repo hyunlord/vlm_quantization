@@ -33,8 +33,8 @@ export default function SampleGallery({
         Sample Quality Check
       </h2>
       <p className="text-[10px] text-gray-500 mb-3">
-        Fixed 8 validation samples — image vs. matched text hash similarity
-        (diagonal of similarity matrix).
+        Fixed {samples.length} validation samples — image vs. matched text hash
+        similarity (diagonal of similarity matrix).
       </p>
 
       {samples.length === 0 ? (
@@ -42,7 +42,7 @@ export default function SampleGallery({
           Waiting for validation data...
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
           {samples.map((sample, i) => {
             const diagSim = similarityMatrix[i]?.[i] ?? 0;
             const imgCode = imgCodes[i] ?? [];

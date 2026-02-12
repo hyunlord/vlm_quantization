@@ -129,6 +129,31 @@ export interface HashAnalysisData {
   sample_txt_codes: number[][];
   similarity_matrix: number[][];
   bit: number;
+  augmentation?: AugmentationAnalysis;
+}
+
+// --- Augmentation robustness types ---
+
+export interface AugmentationSample {
+  image_id: number;
+  weak_mean_sim: number;
+  weak_min_sim: number;
+  strong_mean_sim: number;
+  strong_min_sim: number;
+  weak_code: number[];
+  strong_code: number[];
+  weak_thumbnail: string;
+  strong_thumbnail: string;
+}
+
+export interface AugmentationAnalysis {
+  samples: AugmentationSample[];
+  weak_mean_overall: number;
+  strong_mean_overall: number;
+  weak_bit_stability: number[];
+  strong_bit_stability: number[];
+  bit: number;
+  n_augs: number;
 }
 
 export interface CheckpointInfo {
