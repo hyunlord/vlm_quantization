@@ -48,7 +48,7 @@ class CrossModalHashModel(pl.LightningModule):
     ):
         super().__init__()
         if bit_list is None:
-            bit_list = [16, 32, 64, 128]
+            bit_list = [8, 16, 32, 48, 64, 128]
         self.save_hyperparameters()
         self._val_outputs: list[dict] = []
         # Cache backbone mAP when frozen (embeddings never change)

@@ -87,7 +87,7 @@ class SearchIndex:
 
         Args:
             binary_codes: Query hash code in {-1, +1} format.
-            bit: Bit level (16, 32, 64, 128).
+            bit: Bit level (e.g. 8, 16, 32, 48, 64, 128).
             modality: Target modality to search: "image" or "text".
             top_k: Number of results to return.
         """

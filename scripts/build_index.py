@@ -137,7 +137,7 @@ def main():
     model.eval()
     model.to(device)
 
-    bit_list = list(model.hparams.get("bit_list", [16, 32, 64, 128]))
+    bit_list = list(model.hparams.get("bit_list", [8, 16, 32, 48, 64, 128]))
     model_name = model.hparams.get("model_name", "google/siglip2-so400m-patch14-384")
     logger.info("Model: %s, bit_list=%s", model_name, bit_list)
 

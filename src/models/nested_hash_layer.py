@@ -32,7 +32,7 @@ class NestedHashLayer(nn.Module):
     ):
         super().__init__()
         if bit_list is None:
-            bit_list = [16, 32, 64, 128]
+            bit_list = [8, 16, 32, 48, 64, 128]
         self.bit_list = sorted(bit_list)
         self.max_bit = self.bit_list[-1]
 
