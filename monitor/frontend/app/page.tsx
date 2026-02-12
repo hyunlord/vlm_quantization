@@ -90,7 +90,7 @@ export default function Dashboard() {
       <TrainingStatus status={status} latestMetric={latestMetric} />
 
       {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] lg:items-start gap-4">
         {/* Sidebar: System + Epochs + Checkpoints */}
         <div className="space-y-4">
           <SystemPanel data={systemData} />

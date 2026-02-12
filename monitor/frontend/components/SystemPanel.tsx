@@ -90,7 +90,7 @@ const utilColor = (v: number) =>
 export default function SystemPanel({ data }: Props) {
   if (!data) {
     return (
-      <div className="rounded-xl bg-gray-900 p-4 border border-gray-800 h-full">
+      <div className="rounded-xl bg-gray-900 p-4 border border-gray-800">
         <h2 className="text-sm font-semibold text-gray-200 mb-3">System</h2>
         <p className="text-gray-500 text-sm">No data</p>
       </div>
@@ -98,7 +98,7 @@ export default function SystemPanel({ data }: Props) {
   }
 
   return (
-    <div className="rounded-xl bg-gray-900 p-4 border border-gray-800 h-full">
+    <div className="rounded-xl bg-gray-900 p-4 border border-gray-800">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-gray-200">System</h2>
         {data.gpu_name && (
