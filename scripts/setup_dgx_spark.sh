@@ -42,6 +42,9 @@ fi
 
 echo "  uv: $(uv --version)"
 
+# Clear cached resolution to avoid stale PyTorch-index transitive deps
+uv cache clean markupsafe 2>/dev/null || true
+
 # uv sync creates .venv and installs all deps from pyproject.toml
 # PyTorch CUDA index is configured in pyproject.toml [tool.uv]
 uv sync
