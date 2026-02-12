@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import warnings
 from datetime import datetime
 from pathlib import Path
+
+# Suppress noisy pynvml FutureWarning from torch.cuda (repeated per DataLoader worker)
+warnings.filterwarnings("ignore", message=".*pynvml.*deprecated.*", category=FutureWarning)
 
 import pytorch_lightning as pl
 import torch
