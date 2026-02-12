@@ -88,7 +88,9 @@ class MonitorCallback(pl.Callback):
             "loss_consistency": self._to_float(logged.get("train/consistency")),
             "loss_ortho": self._to_float(logged.get("train/ortho")),
             "loss_lcs": self._to_float(logged.get("train/lcs")),
+            "loss_distillation": self._to_float(logged.get("train/distillation")),
             "lr": trainer.optimizers[0].param_groups[0]["lr"],
+            "temperature": self._to_float(logged.get("train/temperature"), None),
         })
 
         # Update step progress in dashboard header
@@ -180,6 +182,9 @@ class MonitorCallback(pl.Callback):
         )
         eval_data["val_loss_lcs"] = self._to_float(
             logged.get("val/lcs"), None
+        )
+        eval_data["val_loss_distillation"] = self._to_float(
+            logged.get("val/distillation"), None
         )
 
         self._post("/api/metrics/eval", eval_data)

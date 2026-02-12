@@ -17,7 +17,7 @@ from src.data.transforms import (
 
 
 def collate_fn(batch: list[dict]) -> dict[str, torch.Tensor]:
-    """Stack tensors and handle optional weak/aug pixel_values."""
+    """Stack tensors and handle optional weak/aug pixel_values and aux text."""
     result = {
         "pixel_values": torch.stack([b["pixel_values"] for b in batch]),
         "input_ids": torch.stack([b["input_ids"] for b in batch]),
@@ -31,6 +31,14 @@ def collate_fn(batch: list[dict]) -> dict[str, torch.Tensor]:
     if "aug_pixel_values" in batch[0]:
         result["aug_pixel_values"] = torch.stack(
             [b["aug_pixel_values"] for b in batch]
+        )
+    # Multi-caption auxiliary text (P1)
+    if "aux_input_ids" in batch[0]:
+        result["aux_input_ids"] = torch.stack(
+            [b["aux_input_ids"] for b in batch]
+        )
+        result["aux_attention_mask"] = torch.stack(
+            [b["aux_attention_mask"] for b in batch]
         )
     return result
 
@@ -49,6 +57,8 @@ class CrossModalHashDataModule(pl.LightningDataModule):
         karpathy_json: str | None = None,
         extra_datasets: list[dict] | None = None,
         subset_ratio: float = 1.0,
+        num_captions: int = 1,
+        text_dropout_prob: float = 0.0,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -79,6 +89,7 @@ class CrossModalHashDataModule(pl.LightningDataModule):
                     ),
                     max_text_length=self.hparams.max_text_length,
                     image_size=self.hparams.image_size,
+                    text_dropout_prob=self.hparams.text_dropout_prob,
                 )
             )
         return extra
@@ -118,6 +129,8 @@ class CrossModalHashDataModule(pl.LightningDataModule):
                     ),
                     max_text_length=self.hparams.max_text_length,
                     image_size=self.hparams.image_size,
+                    num_captions=self.hparams.num_captions,
+                    text_dropout_prob=self.hparams.text_dropout_prob,
                 )
                 self.train_dataset = self._maybe_subset(
                     self._concat_with_extra(base_train)

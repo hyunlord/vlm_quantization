@@ -4,6 +4,10 @@ model:
   hidden_dim: 512
   dropout: 0.1
   freeze_backbone: true
+  use_lora: false                   # P2: set true to enable LoRA (requires peft)
+  lora_rank: 8
+  lora_alpha: 16
+  lora_dropout: 0.05
 
 training:
   batch_size: auto  # auto-detect based on GPU VRAM (T4→64, A100→320+)
@@ -25,7 +29,12 @@ loss:
   balance_weight: 0.01
   consistency_weight: 0.5
   lcs_weight: 0.5
+  distillation_weight: 1.0         # P0: backbone similarity distillation
   temperature: 0.07
+  learnable_temp: true              # P4: learnable temperature
+  focal_gamma: 2.0                  # P3: focal InfoNCE (0 = disabled)
+  distillation_teacher_temp: 0.1
+  distillation_student_temp: 0.05
   ema_decay: 0.99
 
 data:
@@ -34,6 +43,8 @@ data:
   num_workers: 4  # overridden when batch_size=auto
   max_text_length: 64
   image_size: 384
+  num_captions: 2                   # P1: multi-caption contrastive
+  text_dropout_prob: 0.1            # P5: text augmentation
   extra_datasets:
     - jsonl_path: "/content/data/coco_ko/coco_ko.jsonl"
       data_root: "/content/data/coco"

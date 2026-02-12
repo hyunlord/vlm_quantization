@@ -35,6 +35,7 @@ class GenericImageTextDataset(Dataset):
         consistency_transform: A.Compose | None = None,
         max_text_length: int = 64,
         image_size: int = 384,
+        text_dropout_prob: float = 0.0,
     ):
         self.data_root = Path(data_root)
         self.processor = processor
@@ -42,6 +43,7 @@ class GenericImageTextDataset(Dataset):
         self.consistency_transform = consistency_transform
         self.max_text_length = max_text_length
         self.image_size = image_size
+        self.text_dropout_prob = text_dropout_prob
         self._orig_resize = A.Resize(image_size, image_size)
 
         # Load JSONL into memory
@@ -108,16 +110,32 @@ class GenericImageTextDataset(Dataset):
             return_tensors="pt",
         )
 
+        input_ids = text_inputs["input_ids"].squeeze(0)
+        if "attention_mask" in text_inputs:
+            attention_mask = text_inputs["attention_mask"].squeeze(0)
+        else:
+            attention_mask = torch.ones_like(input_ids)
+
+        # Text dropout (P5): randomly replace tokens with pad
+        if self.text_dropout_prob > 0:
+            pad_id = self.processor.tokenizer.pad_token_id or 0
+            actual = attention_mask.bool() & (input_ids != pad_id)
+            if actual.sum() > 2:
+                first_idx = actual.nonzero(as_tuple=True)[0][0]
+                last_idx = actual.nonzero(as_tuple=True)[0][-1]
+                drop = torch.rand(input_ids.shape) < self.text_dropout_prob
+                drop[first_idx] = False
+                drop[last_idx] = False
+                drop = drop & actual
+                input_ids = input_ids.clone()
+                input_ids[drop] = pad_id
+
         result = {
             "pixel_values": orig_inputs["pixel_values"].squeeze(0),
-            "input_ids": text_inputs["input_ids"].squeeze(0),
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
             "image_id": idx,
         }
-
-        if "attention_mask" in text_inputs:
-            result["attention_mask"] = text_inputs["attention_mask"].squeeze(0)
-        else:
-            result["attention_mask"] = torch.ones_like(result["input_ids"])
 
         # Weak augmentation
         if self.transform is not None:

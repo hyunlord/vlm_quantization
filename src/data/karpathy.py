@@ -53,6 +53,10 @@ class KarpathyCocoCaptionsDataset(Dataset):
     Reads dataset_coco.json directly (no pycocotools dependency).
     Each sample returns an image-caption pair with one caption
     randomly sampled per image per call.
+
+    Supports:
+        - Multi-caption (P1): return auxiliary caption for extra positives
+        - Text dropout (P5): randomly drop tokens for text augmentation
     """
 
     def __init__(
@@ -65,6 +69,8 @@ class KarpathyCocoCaptionsDataset(Dataset):
         consistency_transform: A.Compose | None = None,
         max_text_length: int = 64,
         image_size: int = 384,
+        num_captions: int = 1,
+        text_dropout_prob: float = 0.0,
     ):
         self.data_root = Path(data_root)
         self.processor = processor
@@ -72,6 +78,8 @@ class KarpathyCocoCaptionsDataset(Dataset):
         self.consistency_transform = consistency_transform
         self.max_text_length = max_text_length
         self.image_size = image_size
+        self.num_captions = num_captions
+        self.text_dropout_prob = text_dropout_prob
         self._orig_resize = A.Resize(image_size, image_size)
 
         # Parse Karpathy JSON
@@ -111,21 +119,8 @@ class KarpathyCocoCaptionsDataset(Dataset):
         image = Image.open(path).convert("RGB")
         return np.array(image)
 
-    def __getitem__(self, idx: int) -> dict[str, torch.Tensor | int]:
-        entry = self._entries[idx]
-        image_id = entry["cocoid"]
-        image = self._load_image(entry)
-
-        # Random caption selection
-        caption = random.choice(entry["sentences"])["raw"]
-
-        # Original view (Resize only — clean anchor for contrastive loss)
-        orig_resized = self._orig_resize(image=image)["image"]
-        orig_inputs = self.processor(
-            images=Image.fromarray(orig_resized), return_tensors="pt",
-        )
-
-        # Process text via tokenizer directly
+    def _tokenize(self, caption: str) -> dict[str, torch.Tensor]:
+        """Tokenize a caption and optionally apply text dropout (P5)."""
         text_inputs = self.processor.tokenizer(
             caption,
             padding="max_length",
@@ -133,17 +128,85 @@ class KarpathyCocoCaptionsDataset(Dataset):
             truncation=True,
             return_tensors="pt",
         )
+        input_ids = text_inputs["input_ids"].squeeze(0)
+
+        if "attention_mask" in text_inputs:
+            attention_mask = text_inputs["attention_mask"].squeeze(0)
+        else:
+            attention_mask = torch.ones_like(input_ids)
+
+        # Text dropout (P5): randomly replace tokens with pad
+        if self.text_dropout_prob > 0:
+            input_ids, attention_mask = self._apply_text_dropout(
+                input_ids, attention_mask,
+            )
+
+        return {"input_ids": input_ids, "attention_mask": attention_mask}
+
+    def _apply_text_dropout(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Randomly drop tokens for text augmentation (P5)."""
+        pad_id = self.processor.tokenizer.pad_token_id or 0
+        actual_tokens = attention_mask.bool() & (input_ids != pad_id)
+
+        # Don't drop the first token (BOS/CLS) or last actual token
+        if actual_tokens.sum() <= 2:
+            return input_ids, attention_mask
+        first_idx = actual_tokens.nonzero(as_tuple=True)[0][0]
+        last_idx = actual_tokens.nonzero(as_tuple=True)[0][-1]
+
+        drop_mask = torch.rand(input_ids.shape) < self.text_dropout_prob
+        drop_mask[first_idx] = False  # keep first token
+        drop_mask[last_idx] = False  # keep last actual token
+        drop_mask = drop_mask & actual_tokens
+
+        input_ids = input_ids.clone()
+        input_ids[drop_mask] = pad_id
+        return input_ids, attention_mask
+
+    def _pick_captions(self, entry: dict) -> list[str]:
+        """Pick num_captions distinct random captions from the entry."""
+        sentences = entry["sentences"]
+        n = min(self.num_captions, len(sentences))
+        chosen = random.sample(sentences, n)
+        captions = [s["raw"] for s in chosen]
+        # If fewer captions available than requested, pad with repeats
+        while len(captions) < self.num_captions:
+            captions.append(captions[0])
+        return captions
+
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor | int]:
+        entry = self._entries[idx]
+        image_id = entry["cocoid"]
+        image = self._load_image(entry)
+
+        # Pick captions (P1: multi-caption support)
+        captions = self._pick_captions(entry)
+
+        # Original view (Resize only — clean anchor for contrastive loss)
+        orig_resized = self._orig_resize(image=image)["image"]
+        orig_inputs = self.processor(
+            images=Image.fromarray(orig_resized), return_tensors="pt",
+        )
+
+        # Tokenize primary caption
+        primary_tokens = self._tokenize(captions[0])
 
         result = {
             "pixel_values": orig_inputs["pixel_values"].squeeze(0),
-            "input_ids": text_inputs["input_ids"].squeeze(0),
+            "input_ids": primary_tokens["input_ids"],
+            "attention_mask": primary_tokens["attention_mask"],
             "image_id": image_id,
         }
 
-        if "attention_mask" in text_inputs:
-            result["attention_mask"] = text_inputs["attention_mask"].squeeze(0)
-        else:
-            result["attention_mask"] = torch.ones_like(result["input_ids"])
+        # Auxiliary caption (P1: multi-caption, second distinct caption)
+        if self.num_captions >= 2:
+            aux_tokens = self._tokenize(captions[1])
+            result["aux_input_ids"] = aux_tokens["input_ids"]
+            result["aux_attention_mask"] = aux_tokens["attention_mask"]
 
         # Weak augmentation (RandomCrop, Flip, ColorJitter, GaussianBlur)
         if self.transform is not None:

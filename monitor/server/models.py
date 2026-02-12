@@ -14,7 +14,9 @@ class TrainingMetric(BaseModel):
     loss_consistency: float
     loss_ortho: float = 0.0
     loss_lcs: float = 0.0
+    loss_distillation: float = 0.0
     lr: float
+    temperature: float | None = None
 
 
 class EvalMetric(BaseModel):
@@ -41,6 +43,7 @@ class EvalMetric(BaseModel):
     val_loss_consistency: float | None = None
     val_loss_ortho: float | None = None
     val_loss_lcs: float | None = None
+    val_loss_distillation: float | None = None
 
 
 class SystemMetric(BaseModel):

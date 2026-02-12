@@ -6,6 +6,7 @@ import torch.nn.functional as F
 
 from src.losses.balance import BitBalanceLoss
 from src.losses.contrastive import CrossModalContrastiveLoss
+from src.losses.distillation import SimilarityDistillationLoss
 from src.losses.eaql import EAQLLoss
 from src.losses.lcs import LCSSelfDistillationLoss
 from src.losses.ortho_hash import CrossModalOrthoHashLoss
@@ -15,7 +16,7 @@ class CombinedHashLoss(nn.Module):
     """Multi-bit, multi-modal loss orchestrator.
 
     For each bit length in bit_list:
-        - InfoNCE (cross-modal contrastive)
+        - InfoNCE (cross-modal contrastive) with focal weighting (P3)
         - EAQL (adaptive quantization)
         - OrthoHash (cross-modal orthogonal)
         - BitBalance (balance + decorrelation)
@@ -23,9 +24,10 @@ class CombinedHashLoss(nn.Module):
 
     Globally across bit lengths:
         - LCS self-distillation (long -> short)
+        - Backbone similarity distillation (P0)
 
     Total = w_c * contrastive + w_o * ortho + w_q * ramp(progress) * eaql
-          + w_b * balance + w_con * consistency + w_lcs * lcs
+          + w_b * balance + w_con * consistency + w_lcs * lcs + w_d * distillation
     """
 
     def __init__(
@@ -37,7 +39,12 @@ class CombinedHashLoss(nn.Module):
         balance_weight: float = 0.01,
         consistency_weight: float = 0.5,
         lcs_weight: float = 0.5,
+        distillation_weight: float = 1.0,
         temperature: float = 0.07,
+        learnable_temp: bool = False,
+        focal_gamma: float = 0.0,
+        distillation_teacher_temp: float = 0.1,
+        distillation_student_temp: float = 0.05,
         ema_decay: float = 0.99,
     ):
         super().__init__()
@@ -48,14 +55,21 @@ class CombinedHashLoss(nn.Module):
         self.balance_weight = balance_weight
         self.consistency_weight = consistency_weight
         self.lcs_weight = lcs_weight
+        self.distillation_weight = distillation_weight
 
-        self.contrastive_loss = CrossModalContrastiveLoss(temperature)
+        self.contrastive_loss = CrossModalContrastiveLoss(
+            temperature, learnable_temp=learnable_temp, focal_gamma=focal_gamma,
+        )
         self.eaql_loss = EAQLLoss(ema_decay, bit_list=bit_list)
         self.ortho_loss = CrossModalOrthoHashLoss()
         self.balance_losses = nn.ModuleList(
             [BitBalanceLoss(bit) for bit in self.bit_list]
         )
         self.lcs_loss = LCSSelfDistillationLoss()
+        self.distillation_loss = SimilarityDistillationLoss(
+            teacher_temp=distillation_teacher_temp,
+            student_temp=distillation_student_temp,
+        )
 
     def forward(
         self,
@@ -63,6 +77,9 @@ class CombinedHashLoss(nn.Module):
         text_outputs: list[dict[str, torch.Tensor]],
         weak_image_outputs: list[dict[str, torch.Tensor]] | None = None,
         aug_image_outputs: list[dict[str, torch.Tensor]] | None = None,
+        aux_text_outputs: list[dict[str, torch.Tensor]] | None = None,
+        backbone_img: torch.Tensor | None = None,
+        backbone_txt: torch.Tensor | None = None,
         progress: float = 1.0,
     ) -> dict[str, torch.Tensor]:
         """
@@ -71,6 +88,9 @@ class CombinedHashLoss(nn.Module):
             text_outputs: same structure
             weak_image_outputs: optional weak-augmented image outputs
             aug_image_outputs: optional strong-augmented image outputs
+            aux_text_outputs: optional auxiliary caption outputs (P1)
+            backbone_img: (B, D) backbone image embeddings for distillation (P0)
+            backbone_txt: (B, D) backbone text embeddings for distillation (P0)
             progress: training progress in [0, 1] for quantization ramp-up
         """
         device = image_outputs[0]["continuous"].device
@@ -81,28 +101,45 @@ class CombinedHashLoss(nn.Module):
         ortho_total = torch.tensor(0.0, device=device)
         balance_total = torch.tensor(0.0, device=device)
         consistency_total = torch.tensor(0.0, device=device)
+        distillation_total = torch.tensor(0.0, device=device)
 
         # Number of image views: original + optional weak + optional strong
-        n_views = 1 + (weak_image_outputs is not None) + (aug_image_outputs is not None)
+        n_img_views = 1 + (weak_image_outputs is not None) + (aug_image_outputs is not None)
+        # Number of text views: primary + optional auxiliary
+        n_txt_views = 1 + (aux_text_outputs is not None)
+        n_contrastive_pairs = n_img_views * n_txt_views
 
         for k in range(n_bits):
             img_cont = image_outputs[k]["continuous"]
             txt_cont = text_outputs[k]["continuous"]
 
-            # InfoNCE (cross-modal): original + augmented views ↔ text
+            # InfoNCE (cross-modal): all image views x all text views
             contrastive_total = contrastive_total + self.contrastive_loss(
                 img_cont, txt_cont
             )
+            if aux_text_outputs is not None:
+                aux_txt_cont = aux_text_outputs[k]["continuous"]
+                contrastive_total = contrastive_total + self.contrastive_loss(
+                    img_cont, aux_txt_cont
+                )
             if weak_image_outputs is not None:
                 weak_cont = weak_image_outputs[k]["continuous"]
                 contrastive_total = contrastive_total + self.contrastive_loss(
                     weak_cont, txt_cont
                 )
+                if aux_text_outputs is not None:
+                    contrastive_total = contrastive_total + self.contrastive_loss(
+                        weak_cont, aux_txt_cont
+                    )
             if aug_image_outputs is not None:
                 aug_cont = aug_image_outputs[k]["continuous"]
                 contrastive_total = contrastive_total + self.contrastive_loss(
                     aug_cont, txt_cont
                 )
+                if aux_text_outputs is not None:
+                    contrastive_total = contrastive_total + self.contrastive_loss(
+                        aug_cont, aux_txt_cont
+                    )
 
             # EAQL (both modalities)
             eaql_total = eaql_total + (
@@ -126,12 +163,24 @@ class CombinedHashLoss(nn.Module):
                     img_cont, aug_image_outputs[k]["continuous"]
                 )
 
-        # Average over bit lengths (contrastive also averaged over views)
-        contrastive_total = contrastive_total / (n_bits * n_views)
+            # Backbone similarity distillation (P0) — per bit level
+            if (
+                self.distillation_weight > 0
+                and backbone_img is not None
+                and backbone_txt is not None
+            ):
+                distillation_total = distillation_total + self.distillation_loss(
+                    backbone_img, backbone_txt, img_cont, txt_cont,
+                )
+
+        # Average over bit lengths
+        contrastive_total = contrastive_total / (n_bits * n_contrastive_pairs)
         eaql_total = eaql_total / n_bits
         ortho_total = ortho_total / n_bits
         balance_total = balance_total / n_bits
         consistency_total = consistency_total / n_bits
+        if self.distillation_weight > 0:
+            distillation_total = distillation_total / n_bits
 
         # LCS self-distillation (across bit lengths, both modalities)
         img_continuous_list = [out["continuous"] for out in image_outputs]
@@ -150,9 +199,10 @@ class CombinedHashLoss(nn.Module):
             + self.balance_weight * balance_total
             + self.consistency_weight * consistency_total
             + self.lcs_weight * lcs_total
+            + self.distillation_weight * distillation_total
         )
 
-        return {
+        result = {
             "total": total,
             "contrastive": contrastive_total,
             "eaql": eaql_total,
@@ -161,3 +211,9 @@ class CombinedHashLoss(nn.Module):
             "consistency": consistency_total,
             "lcs": lcs_total,
         }
+
+        # Only include distillation in output if active
+        if self.distillation_weight > 0:
+            result["distillation"] = distillation_total
+
+        return result

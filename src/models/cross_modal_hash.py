@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import pytorch_lightning as pl
 import torch
 from transformers import AutoModel
@@ -16,6 +18,8 @@ from src.utils.metrics import (
     precision_at_k,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class CrossModalHashModel(pl.LightningModule):
     """Cross-modal hashing model using SigLIP2 dual encoders.
@@ -23,6 +27,14 @@ class CrossModalHashModel(pl.LightningModule):
     Produces multi-resolution binary hash codes for images and text
     via NestedHashLayer. Codes can be compared via Hamming distance
     (XOR + popcount). Supports I2T, T2I retrieval.
+
+    Performance improvements:
+        P0: Backbone similarity distillation
+        P1: Multi-caption contrastive (aux_text in training_step)
+        P2: Optional LoRA fine-tuning
+        P3: Focal InfoNCE (focal_gamma)
+        P4: Learnable temperature
+        P5: Text dropout (handled in dataset)
     """
 
     def __init__(
@@ -43,8 +55,17 @@ class CrossModalHashModel(pl.LightningModule):
         balance_weight: float = 0.01,
         consistency_weight: float = 0.5,
         lcs_weight: float = 0.5,
+        distillation_weight: float = 1.0,
         temperature: float = 0.07,
+        learnable_temp: bool = False,
+        focal_gamma: float = 0.0,
+        distillation_teacher_temp: float = 0.1,
+        distillation_student_temp: float = 0.05,
         ema_decay: float = 0.99,
+        use_lora: bool = False,
+        lora_rank: int = 8,
+        lora_alpha: int = 16,
+        lora_dropout: float = 0.05,
     ):
         super().__init__()
         if bit_list is None:
@@ -56,7 +77,11 @@ class CrossModalHashModel(pl.LightningModule):
 
         # Backbone
         self.backbone = AutoModel.from_pretrained(model_name)
-        if freeze_backbone:
+
+        # LoRA fine-tuning (P2) — optional, requires peft package
+        if use_lora:
+            self._apply_lora(lora_rank, lora_alpha, lora_dropout)
+        elif freeze_backbone:
             for param in self.backbone.parameters():
                 param.requires_grad = False
 
@@ -82,8 +107,40 @@ class CrossModalHashModel(pl.LightningModule):
             balance_weight=balance_weight,
             consistency_weight=consistency_weight,
             lcs_weight=lcs_weight,
+            distillation_weight=distillation_weight,
             temperature=temperature,
+            learnable_temp=learnable_temp,
+            focal_gamma=focal_gamma,
+            distillation_teacher_temp=distillation_teacher_temp,
+            distillation_student_temp=distillation_student_temp,
             ema_decay=ema_decay,
+        )
+
+    def _apply_lora(self, rank: int, alpha: int, dropout: float) -> None:
+        """Apply LoRA adapters to backbone attention layers (P2)."""
+        try:
+            from peft import LoraConfig, get_peft_model
+        except ImportError:
+            logger.warning(
+                "peft package not installed — falling back to frozen backbone. "
+                "Install with: pip install peft"
+            )
+            for param in self.backbone.parameters():
+                param.requires_grad = False
+            return
+
+        lora_config = LoraConfig(
+            r=rank,
+            lora_alpha=alpha,
+            target_modules=["q_proj", "v_proj"],
+            lora_dropout=dropout,
+        )
+        self.backbone = get_peft_model(self.backbone, lora_config)
+        trainable = sum(p.numel() for p in self.backbone.parameters() if p.requires_grad)
+        total = sum(p.numel() for p in self.backbone.parameters())
+        logger.info(
+            "LoRA applied: %d trainable / %d total params (%.2f%%)",
+            trainable, total, 100.0 * trainable / total,
         )
 
     def _pool(self, outputs) -> torch.Tensor:
@@ -146,19 +203,58 @@ class CrossModalHashModel(pl.LightningModule):
         }
 
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
-        outputs = self(batch)
         progress = self.global_step / max(self.hparams.max_steps, 1)
 
+        # Compute backbone embeddings once, reuse for hash and distillation
+        img_backbone = self.encode_image_backbone(batch["pixel_values"])
+        txt_backbone = self.encode_text_backbone(
+            batch["input_ids"], batch.get("attention_mask"),
+        )
+
+        # Hash from backbone embeddings (same pattern as validation_step)
+        image_out = self.image_hash(img_backbone)
+        text_out = self.text_hash(txt_backbone)
+
+        # Weak augmented image view
+        weak_image_out = None
+        if "weak_pixel_values" in batch:
+            weak_backbone = self.encode_image_backbone(batch["weak_pixel_values"])
+            weak_image_out = self.image_hash(weak_backbone)
+
+        # Strong augmented image view
+        aug_image_out = None
+        if "aug_pixel_values" in batch:
+            aug_backbone = self.encode_image_backbone(batch["aug_pixel_values"])
+            aug_image_out = self.image_hash(aug_backbone)
+
+        # Auxiliary text caption (P1: multi-caption)
+        aux_text_out = None
+        if "aux_input_ids" in batch:
+            aux_txt_backbone = self.encode_text_backbone(
+                batch["aux_input_ids"], batch.get("aux_attention_mask"),
+            )
+            aux_text_out = self.text_hash(aux_txt_backbone)
+
         losses = self.loss_fn(
-            image_outputs=outputs["image"],
-            text_outputs=outputs["text"],
-            weak_image_outputs=outputs["weak_image"],
-            aug_image_outputs=outputs["aug_image"],
+            image_outputs=image_out,
+            text_outputs=text_out,
+            weak_image_outputs=weak_image_out,
+            aug_image_outputs=aug_image_out,
+            aux_text_outputs=aux_text_out,
+            backbone_img=img_backbone.detach(),
+            backbone_txt=txt_backbone.detach(),
             progress=progress,
         )
 
         for name, value in losses.items():
             self.log(f"train/{name}", value, prog_bar=(name == "total"))
+
+        # Log learned temperature if using learnable_temp (P4)
+        if self.hparams.learnable_temp:
+            self.log(
+                "train/temperature",
+                self.loss_fn.contrastive_loss.temperature,
+            )
 
         return losses["total"]
 
@@ -297,8 +393,8 @@ class CrossModalHashModel(pl.LightningModule):
             for key, val in backbone_metrics.items():
                 self.log(key, val)
 
-            # Cache if backbone is frozen (results will be identical every epoch)
-            if self.hparams.freeze_backbone:
+            # Cache if backbone is frozen and not using LoRA (results will be identical)
+            if self.hparams.freeze_backbone and not self.hparams.use_lora:
                 self._cached_backbone_metrics = {
                     k: float(v) for k, v in backbone_metrics.items()
                 }
@@ -345,6 +441,7 @@ class CrossModalHashModel(pl.LightningModule):
         self._val_outputs.clear()
 
     def configure_optimizers(self):
+        # Separate parameter groups
         backbone_params = [
             p for p in self.backbone.parameters() if p.requires_grad
         ]
@@ -352,7 +449,14 @@ class CrossModalHashModel(pl.LightningModule):
             self.text_hash.parameters()
         )
 
-        param_groups = [{"params": hash_params, "lr": self.hparams.hash_lr}]
+        # Include learnable temperature in hash param group if applicable
+        loss_params = [
+            p for p in self.loss_fn.parameters() if p.requires_grad
+        ]
+
+        param_groups = [
+            {"params": hash_params + loss_params, "lr": self.hparams.hash_lr},
+        ]
         if backbone_params:
             param_groups.append(
                 {"params": backbone_params, "lr": self.hparams.backbone_lr}
@@ -363,11 +467,13 @@ class CrossModalHashModel(pl.LightningModule):
         )
 
         total_steps = self.trainer.estimated_stepping_batches
+        max_lrs = [self.hparams.hash_lr]
+        if backbone_params:
+            max_lrs.append(self.hparams.backbone_lr)
+
         scheduler = torch.optim.lr_scheduler.OneCycleLR(
             optimizer,
-            max_lr=[self.hparams.hash_lr, self.hparams.backbone_lr]
-            if backbone_params
-            else [self.hparams.hash_lr],
+            max_lr=max_lrs,
             total_steps=total_steps,
             pct_start=0.3,
             anneal_strategy="cos",

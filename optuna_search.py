@@ -24,6 +24,14 @@ PARAM_MAP = {
     "temperature": ("loss", "temperature"),
     "hash_lr": ("training", "hash_lr"),
     "backbone_lr": ("training", "backbone_lr"),
+    # P0: Distillation
+    "distillation_weight": ("loss", "distillation_weight"),
+    "distillation_teacher_temp": ("loss", "distillation_teacher_temp"),
+    "distillation_student_temp": ("loss", "distillation_student_temp"),
+    # P3: Focal InfoNCE
+    "focal_gamma": ("loss", "focal_gamma"),
+    # P5: Text augmentation
+    "text_dropout_prob": ("data", "text_dropout_prob"),
 }
 
 
@@ -70,6 +78,19 @@ def objective(
     hash_lr = trial.suggest_float("hash_lr", 1e-4, 5e-3, log=True)
     backbone_lr = trial.suggest_float("backbone_lr", 1e-6, 5e-5, log=True)
 
+    # P0: Distillation
+    distillation_weight = trial.suggest_float("distillation_weight", 0.1, 3.0)
+    distillation_teacher_temp = trial.suggest_float(
+        "distillation_teacher_temp", 0.05, 0.3,
+    )
+    distillation_student_temp = trial.suggest_float(
+        "distillation_student_temp", 0.01, 0.15,
+    )
+    # P3: Focal InfoNCE
+    focal_gamma = trial.suggest_float("focal_gamma", 0.0, 4.0)
+    # P5: Text augmentation
+    text_dropout_prob = trial.suggest_float("text_dropout_prob", 0.0, 0.3)
+
     # Fixed parameters
     bit_list = cfg["model"]["bit_list"]
 
@@ -97,6 +118,8 @@ def objective(
         karpathy_json=karpathy_json,
         extra_datasets=extra_datasets,
         subset_ratio=subset_ratio,
+        num_captions=cfg["data"].get("num_captions", 1),
+        text_dropout_prob=text_dropout_prob,
     )
 
     # Estimate max_steps for search
@@ -137,6 +160,19 @@ def objective(
         lcs_weight=lcs_weight,
         temperature=temperature,
         ema_decay=cfg["loss"]["ema_decay"],
+        # P0: Distillation
+        distillation_weight=distillation_weight,
+        distillation_teacher_temp=distillation_teacher_temp,
+        distillation_student_temp=distillation_student_temp,
+        # P3: Focal InfoNCE
+        focal_gamma=focal_gamma,
+        # P4: Learnable temperature (use config default for search)
+        learnable_temp=cfg["loss"].get("learnable_temp", False),
+        # P2: LoRA (use config default for search)
+        use_lora=cfg["model"].get("use_lora", False),
+        lora_rank=cfg["model"].get("lora_rank", 8),
+        lora_alpha=cfg["model"].get("lora_alpha", 16),
+        lora_dropout=cfg["model"].get("lora_dropout", 0.05),
     )
 
     # Pruning callback

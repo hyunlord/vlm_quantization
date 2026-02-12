@@ -63,7 +63,9 @@ export interface TrainingMetric {
   loss_consistency: number;
   loss_ortho: number;
   loss_lcs: number;
+  loss_distillation: number;
   lr: number;
+  temperature: number | null;
 }
 
 export interface EvalMetric {
@@ -89,6 +91,7 @@ export interface EvalMetric {
   val_loss_consistency: number | null;
   val_loss_ortho: number | null;
   val_loss_lcs: number | null;
+  val_loss_distillation: number | null;
 }
 
 export interface SystemMetric {

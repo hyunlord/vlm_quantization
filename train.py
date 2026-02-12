@@ -44,6 +44,8 @@ def main():
         image_size=cfg["data"]["image_size"],
         karpathy_json=karpathy_json,
         extra_datasets=extra_datasets,
+        num_captions=cfg["data"].get("num_captions", 1),
+        text_dropout_prob=cfg["data"].get("text_dropout_prob", 0.0),
     )
 
     # Estimate max_steps
@@ -88,6 +90,19 @@ def main():
         lcs_weight=cfg["loss"]["lcs_weight"],
         temperature=cfg["loss"]["temperature"],
         ema_decay=cfg["loss"]["ema_decay"],
+        # P0: Backbone similarity distillation
+        distillation_weight=cfg["loss"].get("distillation_weight", 1.0),
+        distillation_teacher_temp=cfg["loss"].get("distillation_teacher_temp", 0.1),
+        distillation_student_temp=cfg["loss"].get("distillation_student_temp", 0.05),
+        # P3: Focal InfoNCE
+        focal_gamma=cfg["loss"].get("focal_gamma", 0.0),
+        # P4: Learnable temperature
+        learnable_temp=cfg["loss"].get("learnable_temp", False),
+        # P2: LoRA fine-tuning
+        use_lora=cfg["model"].get("use_lora", False),
+        lora_rank=cfg["model"].get("lora_rank", 8),
+        lora_alpha=cfg["model"].get("lora_alpha", 16),
+        lora_dropout=cfg["model"].get("lora_dropout", 0.05),
     )
 
     # Timestamped checkpoint directory (avoid overwriting between runs)

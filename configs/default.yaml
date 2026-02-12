@@ -4,6 +4,10 @@ model:
   hidden_dim: 512
   dropout: 0.1
   freeze_backbone: false
+  use_lora: false                   # P2: LoRA fine-tuning (requires peft)
+  lora_rank: 8
+  lora_alpha: 16
+  lora_dropout: 0.05
 
 training:
   batch_size: 128
@@ -23,7 +27,12 @@ loss:
   balance_weight: 0.01
   consistency_weight: 0.5
   lcs_weight: 0.5
+  distillation_weight: 1.0         # P0: backbone similarity distillation
   temperature: 0.07
+  learnable_temp: true              # P4: learnable temperature
+  focal_gamma: 2.0                  # P3: focal InfoNCE (0 = disabled)
+  distillation_teacher_temp: 0.1    # P0: teacher temperature
+  distillation_student_temp: 0.05   # P0: student temperature
   ema_decay: 0.99
 
 data:
@@ -32,6 +41,8 @@ data:
   num_workers: 4
   max_text_length: 64
   image_size: 384
+  num_captions: 2                   # P1: multi-caption contrastive (1 = disabled)
+  text_dropout_prob: 0.1            # P5: text augmentation (0 = disabled)
 
 monitor:
   enabled: true
