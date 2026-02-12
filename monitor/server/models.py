@@ -23,8 +23,6 @@ class EvalMetric(BaseModel):
     step: int | None = None
     map_i2t: float | None = None
     map_t2i: float | None = None
-    map_i2i: float | None = None
-    map_t2t: float | None = None
     backbone_map_i2t: float | None = None
     backbone_map_t2i: float | None = None
     p1: float | None = None
@@ -35,15 +33,6 @@ class EvalMetric(BaseModel):
     backbone_p10: float | None = None
     bit_entropy: float | None = None
     quant_error: float | None = None
-    # Per-bit quality metrics
-    bit_entropy_16: float | None = None
-    bit_entropy_32: float | None = None
-    bit_entropy_64: float | None = None
-    bit_entropy_128: float | None = None
-    quant_error_16: float | None = None
-    quant_error_32: float | None = None
-    quant_error_64: float | None = None
-    quant_error_128: float | None = None
     # Validation losses (for train vs val comparison)
     val_loss_total: float | None = None
     val_loss_contrastive: float | None = None

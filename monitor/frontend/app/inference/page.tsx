@@ -19,44 +19,7 @@ import { useRunContext } from "@/contexts/RunContext";
 import RunSelector from "@/components/RunSelector";
 import HashComparison from "@/components/inference/HashComparison";
 import InputPanel from "@/components/inference/InputPanel";
-
-interface HashCode {
-  bits: number;
-  binary: number[];
-  continuous: number[];
-}
-
-interface Comparison {
-  bits: number;
-  hamming: number;
-  max_distance: number;
-  similarity: number;
-}
-
-interface ModelStatus {
-  loaded: boolean;
-  backbone_only?: boolean;
-  checkpoint: string;
-  model_name: string;
-  bit_list: number[];
-  hparams: Record<string, unknown>;
-}
-
-interface Checkpoint {
-  path: string;
-  name: string;
-  run_dir: string;
-  size_mb: number;
-  modified: string;
-  epoch: number | null;
-  step: number | null;
-  val_loss: number | null;
-  map_i2t?: number | null;
-  map_t2i?: number | null;
-  p1?: number | null;
-  p5?: number | null;
-  p10?: number | null;
-}
+import type { CheckpointInfo, InferenceHashCode, InferenceComparison, ModelStatus } from "@/lib/types";
 
 const DEFAULT_CKPT_DIR =
   "/content/drive/MyDrive/vlm_quantization/checkpoints";
@@ -184,7 +147,7 @@ function InferencePage() {
   // Checkpoint browser
   const [ckptDir, setCkptDir] = useState(DEFAULT_CKPT_DIR);
   const [scanning, setScanning] = useState(false);
-  const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
+  const [checkpoints, setCheckpoints] = useState<CheckpointInfo[]>([]);
   const [hasScanned, setHasScanned] = useState(false);
 
   // Expandable run details
@@ -194,9 +157,9 @@ function InferencePage() {
   >({});
   const [fetchingHparams, setFetchingHparams] = useState<string | null>(null);
 
-  const [codesA, setCodesA] = useState<HashCode[] | null>(null);
-  const [codesB, setCodesB] = useState<HashCode[] | null>(null);
-  const [comparisons, setComparisons] = useState<Comparison[] | null>(null);
+  const [codesA, setCodesA] = useState<InferenceHashCode[] | null>(null);
+  const [codesB, setCodesB] = useState<InferenceHashCode[] | null>(null);
+  const [comparisons, setComparisons] = useState<InferenceComparison[] | null>(null);
   const [comparing, setComparing] = useState(false);
 
   // Backbone embeddings
@@ -432,7 +395,7 @@ function InferencePage() {
 
   // Group checkpoints by run_dir
   const grouped = useMemo(() => {
-    const groups = checkpoints.reduce<Record<string, Checkpoint[]>>(
+    const groups = checkpoints.reduce<Record<string, CheckpointInfo[]>>(
       (acc, ckpt) => {
         (acc[ckpt.run_dir] ??= []).push(ckpt);
         return acc;

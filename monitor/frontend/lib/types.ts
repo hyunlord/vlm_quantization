@@ -72,8 +72,6 @@ export interface EvalMetric {
   step: number | null;
   map_i2t: number | null;
   map_t2i: number | null;
-  map_i2i: number | null;
-  map_t2t: number | null;
   backbone_map_i2t: number | null;
   backbone_map_t2i: number | null;
   p1: number | null;
@@ -194,6 +192,30 @@ export interface IndexStatus {
   num_items: number;
   bit_list: number[];
   index_path: string;
+}
+
+// --- Inference types ---
+
+export interface InferenceHashCode {
+  bits: number;
+  binary: number[];
+  continuous: number[];
+}
+
+export interface InferenceComparison {
+  bits: number;
+  hamming: number;
+  max_distance: number;
+  similarity: number;
+}
+
+export interface ModelStatus {
+  loaded: boolean;
+  backbone_only?: boolean;
+  checkpoint: string;
+  model_name: string;
+  bit_list: number[];
+  hparams: Record<string, unknown>;
 }
 
 export interface WSMessage {

@@ -48,8 +48,6 @@ def init_db() -> None:
             step INTEGER,
             map_i2t REAL,
             map_t2i REAL,
-            map_i2i REAL,
-            map_t2t REAL,
             backbone_map_i2t REAL,
             backbone_map_t2i REAL,
             p1 REAL,
@@ -193,16 +191,16 @@ def insert_eval_metric(m: EvalMetric) -> None:
     conn = get_connection()
     conn.execute(
         """INSERT INTO eval_metrics
-           (run_id, epoch, step, map_i2t, map_t2i, map_i2i, map_t2t,
+           (run_id, epoch, step, map_i2t, map_t2i,
             backbone_map_i2t, backbone_map_t2i,
             p1, p5, p10, backbone_p1, backbone_p5, backbone_p10,
             bit_entropy, quant_error,
             val_loss_total, val_loss_contrastive, val_loss_quantization,
             val_loss_balance, val_loss_consistency, val_loss_ortho,
             val_loss_lcs, timestamp)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            m.run_id, m.epoch, m.step, m.map_i2t, m.map_t2i, m.map_i2i, m.map_t2t,
+            m.run_id, m.epoch, m.step, m.map_i2t, m.map_t2i,
             m.backbone_map_i2t, m.backbone_map_t2i,
             m.p1, m.p5, m.p10, m.backbone_p1, m.backbone_p5, m.backbone_p10,
             m.bit_entropy, m.quant_error,

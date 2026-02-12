@@ -37,6 +37,11 @@ class LCSSelfDistillationLoss(nn.Module):
             teacher = hash_codes_list[i + 1].detach()  # longer code
             student = hash_codes_list[i]  # shorter code
 
+            # Row-normalize the (B, B) similarity matrices so that each row
+            # has unit L2 norm.  This rescales pairwise similarities to a
+            # comparable range across bit lengths, preventing the longer
+            # teacher codes (whose raw dot-products are larger) from
+            # dominating the MSE distillation objective.
             sim_teacher = F.normalize(teacher @ teacher.t())
             sim_student = F.normalize(student @ student.t())
 

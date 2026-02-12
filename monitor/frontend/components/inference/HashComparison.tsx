@@ -1,24 +1,12 @@
 "use client";
 
+import type { InferenceHashCode, InferenceComparison } from "@/lib/types";
 import HashBitmap from "./HashBitmap";
 
-interface HashCode {
-  bits: number;
-  binary: number[];
-  continuous: number[];
-}
-
-interface Comparison {
-  bits: number;
-  hamming: number;
-  max_distance: number;
-  similarity: number;
-}
-
 interface Props {
-  codesA: HashCode[];
-  codesB: HashCode[];
-  comparisons: Comparison[];
+  codesA: InferenceHashCode[];
+  codesB: InferenceHashCode[];
+  comparisons: InferenceComparison[];
 }
 
 export default function HashComparison({

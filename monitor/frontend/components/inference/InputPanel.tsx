@@ -2,18 +2,13 @@
 
 import { Globe, ImageIcon, Loader2, Type, Upload } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
+import type { InferenceHashCode } from "@/lib/types";
 
 interface Props {
   label: string;
-  onEncode: (codes: HashCode[]) => void;
+  onEncode: (codes: InferenceHashCode[]) => void;
   onBackboneEncode?: (embedding: number[]) => void;
   backboneOnly?: boolean;
-}
-
-interface HashCode {
-  bits: number;
-  binary: number[];
-  continuous: number[];
 }
 
 type InputMode = "upload" | "url" | "text";
