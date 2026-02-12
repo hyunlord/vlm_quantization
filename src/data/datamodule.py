@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import random
 from pathlib import Path
 
 import pytorch_lightning as pl
 import torch
-from torch.utils.data import ConcatDataset, DataLoader
+from torch.utils.data import ConcatDataset, DataLoader, Subset
 from transformers import AutoProcessor
 
 from src.data.coco import CocoCaptionsDataset
@@ -47,6 +48,7 @@ class CrossModalHashDataModule(pl.LightningDataModule):
         image_size: int = 384,
         karpathy_json: str | None = None,
         extra_datasets: list[dict] | None = None,
+        subset_ratio: float = 1.0,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -88,6 +90,16 @@ class CrossModalHashDataModule(pl.LightningDataModule):
             return ConcatDataset([base_train] + extra)
         return base_train
 
+    def _maybe_subset(self, dataset):
+        """Apply random subsampling if subset_ratio < 1.0."""
+        ratio = self.hparams.subset_ratio
+        if ratio >= 1.0:
+            return dataset
+        n = len(dataset)
+        k = max(1, int(n * ratio))
+        indices = random.sample(range(n), k)
+        return Subset(dataset, indices)
+
     def setup(self, stage: str | None = None) -> None:
         karpathy = self.hparams.karpathy_json
 
@@ -107,7 +119,9 @@ class CrossModalHashDataModule(pl.LightningDataModule):
                     max_text_length=self.hparams.max_text_length,
                     image_size=self.hparams.image_size,
                 )
-                self.train_dataset = self._concat_with_extra(base_train)
+                self.train_dataset = self._maybe_subset(
+                    self._concat_with_extra(base_train)
+                )
                 self.val_dataset = KarpathyCocoCaptionsDataset(
                     data_root=self.data_root,
                     karpathy_json=karpathy,
@@ -140,7 +154,9 @@ class CrossModalHashDataModule(pl.LightningDataModule):
                     max_text_length=self.hparams.max_text_length,
                     image_size=self.hparams.image_size,
                 )
-                self.train_dataset = self._concat_with_extra(base_train)
+                self.train_dataset = self._maybe_subset(
+                    self._concat_with_extra(base_train)
+                )
                 self.val_dataset = CocoCaptionsDataset(
                     image_dir=self.data_root / "val2014",
                     ann_file=self.data_root / "annotations" / "captions_val2014.json",

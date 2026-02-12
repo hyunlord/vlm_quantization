@@ -54,6 +54,7 @@ def export_best_config(
 
 def objective(
     trial: optuna.Trial, base_cfg: dict, search_epochs: int = 5,
+    subset_ratio: float = 0.1,
 ) -> float:
     """Single Optuna trial: train for a few epochs and return validation loss."""
     cfg = copy.deepcopy(base_cfg)
@@ -95,6 +96,7 @@ def objective(
         image_size=cfg["data"]["image_size"],
         karpathy_json=karpathy_json,
         extra_datasets=extra_datasets,
+        subset_ratio=subset_ratio,
     )
 
     # Estimate max_steps for search
@@ -109,6 +111,7 @@ def objective(
         except FileNotFoundError:
             pass
 
+    num_train_images = max(1, int(num_train_images * subset_ratio))
     steps_per_epoch = num_train_images // (
         cfg["training"]["batch_size"] * cfg["training"]["accumulate_grad_batches"]
     )
@@ -184,6 +187,10 @@ def main():
         help="Number of training epochs per trial (default: 5)",
     )
     parser.add_argument(
+        "--subset-ratio", type=float, default=0.1,
+        help="Fraction of training data per trial (default: 0.1 = 10%%)",
+    )
+    parser.add_argument(
         "--export-config", type=str, default=None,
         help="Output path for best config YAML (default: configs/best_<study>.yaml)",
     )
@@ -204,7 +211,11 @@ def main():
     )
 
     study.optimize(
-        lambda trial: objective(trial, cfg, search_epochs=args.search_epochs),
+        lambda trial: objective(
+            trial, cfg,
+            search_epochs=args.search_epochs,
+            subset_ratio=args.subset_ratio,
+        ),
         n_trials=args.n_trials,
     )
 

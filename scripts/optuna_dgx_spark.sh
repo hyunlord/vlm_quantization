@@ -21,6 +21,7 @@ N_TRIALS=50
 STUDY_NAME="cross_modal_hash_opt"
 STORAGE="sqlite:///optuna_results.db"
 SEARCH_EPOCHS=5
+SUBSET_RATIO=0.1
 MONITOR=true
 
 # Parse arguments
@@ -31,6 +32,7 @@ while [[ $# -gt 0 ]]; do
         --study-name) STUDY_NAME="$2"; shift 2 ;;
         --storage) STORAGE="$2"; shift 2 ;;
         --search-epochs) SEARCH_EPOCHS="$2"; shift 2 ;;
+        --subset-ratio) SUBSET_RATIO="$2"; shift 2 ;;
         --no-monitor) MONITOR=false; shift ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
@@ -51,6 +53,7 @@ echo "  Trials:        $N_TRIALS"
 echo "  Study:         $STUDY_NAME"
 echo "  Storage:       $STORAGE"
 echo "  Search epochs: $SEARCH_EPOCHS"
+echo "  Subset ratio:  $SUBSET_RATIO"
 echo "  Monitor:       $MONITOR"
 echo "=============================="
 
@@ -102,7 +105,8 @@ python optuna_search.py \
     --n-trials "$N_TRIALS" \
     --study-name "$STUDY_NAME" \
     --storage "$STORAGE" \
-    --search-epochs "$SEARCH_EPOCHS"
+    --search-epochs "$SEARCH_EPOCHS" \
+    --subset-ratio "$SUBSET_RATIO"
 
 echo ""
 echo "=============================="
