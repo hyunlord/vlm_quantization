@@ -52,6 +52,8 @@ class CrossModalHashModel(pl.LightningModule):
             bit_list = [16, 32, 64, 128]
         self.save_hyperparameters()
         self._val_outputs: list[dict] = []
+        # Cache backbone mAP when frozen (embeddings never change)
+        self._cached_backbone_metrics: dict[str, float] | None = None
 
         # Backbone
         self.backbone = AutoModel.from_pretrained(model_name)
@@ -202,9 +204,10 @@ class CrossModalHashModel(pl.LightningModule):
             result[f"image_binary_{bit}"] = img_binary.detach()
             result[f"text_binary_{bit}"] = txt_binary.detach()
 
-        # Backbone embeddings for cosine mAP baseline (already computed above)
-        result["image_backbone_emb"] = img_backbone.detach()
-        result["text_backbone_emb"] = txt_backbone.detach()
+        # Backbone embeddings for cosine mAP baseline (skip if already cached)
+        if self._cached_backbone_metrics is None:
+            result["image_backbone_emb"] = img_backbone.detach()
+            result["text_backbone_emb"] = txt_backbone.detach()
 
         self._val_outputs.append(result)
         return result
@@ -221,11 +224,12 @@ class CrossModalHashModel(pl.LightningModule):
             all_ids.extend(out["image_ids"])
         labels = torch.tensor(all_ids, device=self.device)
 
-        # Subsample for mAP efficiency (max 5000 samples)
+        # Subsample for mAP efficiency (max 5000 samples, fixed seed for determinism)
         N = len(labels)
         max_samples = min(N, 5000)
         if N > max_samples:
-            idx = torch.randperm(N, device=self.device)[:max_samples]
+            gen = torch.Generator(device=self.device).manual_seed(42)
+            idx = torch.randperm(N, device=self.device, generator=gen)[:max_samples]
         else:
             idx = torch.arange(N, device=self.device)
 
@@ -260,31 +264,45 @@ class CrossModalHashModel(pl.LightningModule):
             img_codes, txt_codes, sub_labels, sub_labels, k=10,
         ))
 
-        # Backbone cosine mAP baseline
-        img_emb = torch.cat(
-            [o["image_backbone_emb"] for o in self._val_outputs]
-        )[idx]
-        txt_emb = torch.cat(
-            [o["text_backbone_emb"] for o in self._val_outputs]
-        )[idx]
+        # Backbone cosine mAP baseline (cache when frozen — embeddings never change)
+        if self._cached_backbone_metrics is not None:
+            # Reuse cached metrics from first validation
+            for key, val in self._cached_backbone_metrics.items():
+                self.log(key, val)
+        else:
+            img_emb = torch.cat(
+                [o["image_backbone_emb"] for o in self._val_outputs]
+            )[idx]
+            txt_emb = torch.cat(
+                [o["text_backbone_emb"] for o in self._val_outputs]
+            )[idx]
 
-        self.log("val/backbone_map_i2t", cosine_mean_average_precision(
-            img_emb, txt_emb, sub_labels, sub_labels,
-        ))
-        self.log("val/backbone_map_t2i", cosine_mean_average_precision(
-            txt_emb, img_emb, sub_labels, sub_labels,
-        ))
+            backbone_metrics = {
+                "val/backbone_map_i2t": cosine_mean_average_precision(
+                    img_emb, txt_emb, sub_labels, sub_labels,
+                ),
+                "val/backbone_map_t2i": cosine_mean_average_precision(
+                    txt_emb, img_emb, sub_labels, sub_labels,
+                ),
+                "val/backbone_p1": cosine_precision_at_k(
+                    img_emb, txt_emb, sub_labels, sub_labels, k=1,
+                ),
+                "val/backbone_p5": cosine_precision_at_k(
+                    img_emb, txt_emb, sub_labels, sub_labels, k=5,
+                ),
+                "val/backbone_p10": cosine_precision_at_k(
+                    img_emb, txt_emb, sub_labels, sub_labels, k=10,
+                ),
+            }
 
-        # Backbone P@K baseline
-        self.log("val/backbone_p1", cosine_precision_at_k(
-            img_emb, txt_emb, sub_labels, sub_labels, k=1,
-        ))
-        self.log("val/backbone_p5", cosine_precision_at_k(
-            img_emb, txt_emb, sub_labels, sub_labels, k=5,
-        ))
-        self.log("val/backbone_p10", cosine_precision_at_k(
-            img_emb, txt_emb, sub_labels, sub_labels, k=10,
-        ))
+            for key, val in backbone_metrics.items():
+                self.log(key, val)
+
+            # Cache if backbone is frozen (results will be identical every epoch)
+            if self.hparams.freeze_backbone:
+                self._cached_backbone_metrics = {
+                    k: float(v) for k, v in backbone_metrics.items()
+                }
 
         # --- Hash Analysis for monitoring dashboard ---
         hash_analysis: dict = {}
