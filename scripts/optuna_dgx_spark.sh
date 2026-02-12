@@ -38,14 +38,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Activate venv
-if [ -f "$PROJECT_DIR/.venv/bin/activate" ]; then
-    source "$PROJECT_DIR/.venv/bin/activate"
-fi
-
-export PYTHONPATH="$PROJECT_DIR"
-export OPTUNA_STORAGE="$STORAGE"
-
 echo "=============================="
 echo "DGX Spark Optuna Search"
 echo "  Config:        $CONFIG"
@@ -58,7 +50,7 @@ echo "  Monitor:       $MONITOR"
 echo "=============================="
 
 # GPU info
-python -c "
+uv run python -c "
 import torch
 if torch.cuda.is_available():
     p = torch.cuda.get_device_properties(0)
@@ -73,7 +65,7 @@ if [ "$MONITOR" = true ]; then
     echo ""
     echo "Starting monitoring dashboard on http://localhost:8000 ..."
     echo "  Optuna dashboard: http://localhost:8000/optuna"
-    python -m uvicorn monitor.server.app:app \
+    uv run python -m uvicorn monitor.server.app:app \
         --host 0.0.0.0 --port 8000 --log-level warning &
     MONITOR_PID=$!
     sleep 2
@@ -100,7 +92,7 @@ trap cleanup EXIT
 echo ""
 echo "Starting Optuna hyperparameter search..."
 echo "=============================="
-python optuna_search.py \
+PYTHONPATH="$PROJECT_DIR" OPTUNA_STORAGE="$STORAGE" uv run python optuna_search.py \
     --config "$CONFIG" \
     --n-trials "$N_TRIALS" \
     --study-name "$STUDY_NAME" \

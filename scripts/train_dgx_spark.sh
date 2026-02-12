@@ -27,13 +27,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Activate venv
-if [ -f "$PROJECT_DIR/.venv/bin/activate" ]; then
-    source "$PROJECT_DIR/.venv/bin/activate"
-fi
-
-export PYTHONPATH="$PROJECT_DIR"
-
 echo "=============================="
 echo "DGX Spark Training"
 echo "  Config: $CONFIG"
@@ -41,7 +34,7 @@ echo "  Monitor: $MONITOR"
 echo "=============================="
 
 # GPU info
-python -c "
+uv run python -c "
 import torch
 if torch.cuda.is_available():
     p = torch.cuda.get_device_properties(0)
@@ -55,7 +48,7 @@ MONITOR_PID=""
 if [ "$MONITOR" = true ]; then
     echo ""
     echo "Starting monitoring dashboard on http://localhost:8000 ..."
-    python -m uvicorn monitor.server.app:app \
+    uv run python -m uvicorn monitor.server.app:app \
         --host 0.0.0.0 --port 8000 --log-level warning &
     MONITOR_PID=$!
     sleep 2
@@ -82,4 +75,4 @@ trap cleanup EXIT
 echo ""
 echo "Starting training..."
 echo "=============================="
-python train.py --config "$CONFIG"
+PYTHONPATH="$PROJECT_DIR" uv run python train.py --config "$CONFIG"

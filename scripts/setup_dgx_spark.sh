@@ -9,7 +9,7 @@
 #   bash scripts/setup_dgx_spark.sh
 #
 # What it does:
-#   1. Creates a Python virtual environment + installs deps
+#   1. Installs uv + creates venv + installs deps (PyTorch CUDA 12.4)
 #   2. Downloads COCO dataset + Karpathy split
 #   3. Syncs extra datasets from Google Drive (AIHub, CC3M) + auto-prepares JSONL
 #   4. Builds the monitoring dashboard frontend
@@ -29,28 +29,25 @@ echo "DGX Spark Setup"
 echo "Project: $PROJECT_DIR"
 echo "=============================="
 
-# ---------- 1. Python environment ----------
-VENV_DIR="$PROJECT_DIR/.venv"
-if [ ! -d "$VENV_DIR" ]; then
-    echo ""
-    echo "[1/4] Creating Python virtual environment..."
-    python3 -m venv "$VENV_DIR"
-else
-    echo ""
-    echo "[1/4] Virtual environment already exists, skipping..."
+# ---------- 1. Python environment (uv) ----------
+echo ""
+echo "[1/4] Setting up Python environment with uv..."
+
+# Install uv if not present
+if ! command -v uv &>/dev/null; then
+    echo "  Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$PATH"
 fi
 
-source "$VENV_DIR/bin/activate"
-pip install --upgrade pip setuptools wheel -q
+echo "  uv: $(uv --version)"
 
-echo "  Installing PyTorch (CUDA)..."
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124 -q
+# uv sync creates .venv and installs all deps from pyproject.toml
+# PyTorch CUDA index is configured in pyproject.toml [tool.uv]
+uv sync
 
-echo "  Installing project dependencies..."
-pip install -r requirements.txt -q
-
-echo "  Python: $(python --version)"
-python -c "import torch; print(f'  PyTorch: {torch.__version__}, CUDA: {torch.cuda.is_available()}')"
+echo "  Python: $(uv run python --version)"
+uv run python -c "import torch; print(f'  PyTorch: {torch.__version__}, CUDA: {torch.cuda.is_available()}')"
 
 # ---------- 2. Download COCO dataset ----------
 DATA_DIR="$PROJECT_DIR/data/coco"
@@ -178,7 +175,7 @@ if [ -d "$COCO_KO_DIR" ] && [ ! -f "$COCO_KO_JSONL" ]; then
     COCO_KO_JSON="$COCO_KO_DIR/MSCOCO_train_val_Korean.json"
     if [ -f "$COCO_KO_JSON" ]; then
         echo "  COCO-Ko: Preparing JSONL from Korean captions..."
-        python scripts/prepare_datasets.py coco-ko \
+        uv run python scripts/prepare_datasets.py coco-ko \
             --input "$COCO_KO_JSON" --output "$COCO_KO_DIR" || true
     fi
 fi
@@ -192,7 +189,7 @@ if [ -d "$AIHUB_DIR" ] && [ ! -f "$AIHUB_JSONL" ]; then
     # Check if there are JSON annotation files
     if ls "$AIHUB_DIR"/*.json &>/dev/null || ls "$AIHUB_DIR"/**/*.json &>/dev/null 2>&1; then
         echo "  AIHub: Preparing JSONL from raw annotations..."
-        python scripts/prepare_datasets.py aihub \
+        uv run python scripts/prepare_datasets.py aihub \
             --input "$AIHUB_DIR" --output "$AIHUB_DIR" || true
     fi
 fi
@@ -217,11 +214,11 @@ if [ -d "$CC3M_DIR" ] && [ ! -f "$CC3M_JSONL" ]; then
 
     if [ -n "$EN_TSV" ] && [ -n "$KO_TSV" ]; then
         echo "  CC3M-Ko: Preparing bilingual JSONL..."
-        python scripts/prepare_datasets.py cc3m-ko \
+        uv run python scripts/prepare_datasets.py cc3m-ko \
             --input "$EN_TSV" --ko-input "$KO_TSV" --output "$CC3M_DIR" || true
     elif [ -n "$EN_TSV" ]; then
         echo "  CC3M: Preparing English-only JSONL..."
-        python scripts/prepare_datasets.py cc3m \
+        uv run python scripts/prepare_datasets.py cc3m \
             --input "$EN_TSV" --output "$CC3M_DIR" || true
         # Rename to match config expectation
         if [ -f "$CC3M_DIR/cc3m.jsonl" ] && [ ! -f "$CC3M_JSONL" ]; then
@@ -259,6 +256,5 @@ echo "To start training:"
 echo "  bash scripts/train_dgx_spark.sh"
 echo ""
 echo "Or manually:"
-echo "  source .venv/bin/activate"
-echo "  PYTHONPATH=. python train.py --config configs/dgx_spark.yaml"
+echo "  uv run python train.py --config configs/dgx_spark.yaml"
 echo "=============================="
