@@ -12,7 +12,8 @@ class CrossModalContrastiveLoss(nn.Module):
     All other combinations in the batch are negatives.
 
     Supports:
-        - Learnable temperature (P4): temperature is a trainable parameter
+        - Learnable temperature: temperature is a trainable parameter
+          stored as log(1/temp); effective temp = exp(-log_temp)
         - Focal weighting (P3): down-weight easy negatives via (1 - p_pos)^gamma
 
     L = -(log softmax(sim(i, t+) / tau))  averaged over both directions.
@@ -28,17 +29,19 @@ class CrossModalContrastiveLoss(nn.Module):
         self.focal_gamma = focal_gamma
 
         if learnable_temp:
-            # Learnable log-temperature (P4)
-            self.log_temp = nn.Parameter(torch.log(torch.tensor(temperature)))
+            # Learnable log-inverse-temperature: log(1/temp)
+            self.log_temp = nn.Parameter(
+                torch.log(torch.tensor(1.0 / temperature))
+            )
         else:
             self.register_buffer(
-                "log_temp", torch.log(torch.tensor(temperature))
+                "log_temp", torch.log(torch.tensor(1.0 / temperature))
             )
 
     @property
     def temperature(self) -> torch.Tensor:
         """Current temperature value (clamped for stability)."""
-        return self.log_temp.exp().clamp(0.01, 1.0)
+        return torch.exp(-self.log_temp).clamp(0.01, 100.0)
 
     def forward(
         self,

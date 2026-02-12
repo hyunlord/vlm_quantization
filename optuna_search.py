@@ -32,6 +32,10 @@ PARAM_MAP = {
     "focal_gamma": ("loss", "focal_gamma"),
     # P5: Text augmentation
     "text_dropout_prob": ("data", "text_dropout_prob"),
+    # Architecture: shared bottleneck + ortho margin + adapter alignment
+    "shared_dim": ("model", "shared_dim"),
+    "adapter_align_weight": ("loss", "adapter_align_weight"),
+    "ortho_margin": ("loss", "ortho_margin"),
 }
 
 
@@ -91,6 +95,11 @@ def objective(
     # P5: Text augmentation
     text_dropout_prob = trial.suggest_float("text_dropout_prob", 0.0, 0.3)
 
+    # Architecture: shared bottleneck
+    shared_dim = trial.suggest_categorical("shared_dim", [512, 768, 1024])
+    adapter_align_weight = trial.suggest_float("adapter_align_weight", 0.0, 0.3)
+    ortho_margin = trial.suggest_float("ortho_margin", 0.0, 0.4)
+
     # Fixed parameters
     bit_list = cfg["model"]["bit_list"]
 
@@ -145,7 +154,9 @@ def objective(
         model_name=cfg["model"]["backbone"],
         bit_list=bit_list,
         hidden_dim=hidden_dim,
+        shared_dim=shared_dim,
         dropout=cfg["model"]["dropout"],
+        progressive_hash=cfg["model"].get("progressive_hash", False),
         hash_lr=hash_lr,
         backbone_lr=backbone_lr,
         weight_decay=cfg["training"]["weight_decay"],
@@ -164,6 +175,10 @@ def objective(
         distillation_weight=distillation_weight,
         distillation_teacher_temp=distillation_teacher_temp,
         distillation_student_temp=distillation_student_temp,
+        # Adapter alignment + OrthoHash margin + two-stage quantization
+        adapter_align_weight=adapter_align_weight,
+        ortho_margin=ortho_margin,
+        quantization_start_progress=cfg["loss"].get("quantization_start_progress", 0.4),
         # P3: Focal InfoNCE
         focal_gamma=focal_gamma,
         # P4: Learnable temperature (use config default for search)

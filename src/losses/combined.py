@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -18,31 +20,34 @@ class CombinedHashLoss(nn.Module):
     For each bit length in bit_list:
         - InfoNCE (cross-modal contrastive) with focal weighting (P3)
         - EAQL (adaptive quantization)
-        - OrthoHash (cross-modal orthogonal)
+        - OrthoHash (cross-modal orthogonal, with margin)
         - BitBalance (balance + decorrelation)
         - Consistency (augmented image alignment)
 
     Globally across bit lengths:
         - LCS self-distillation (long -> short)
         - Backbone similarity distillation (P0)
+        - Adapter alignment (cosine embedding loss)
 
-    Total = w_c * contrastive + w_o * ortho + w_q * ramp(progress) * eaql
-          + w_b * balance + w_con * consistency + w_lcs * lcs + w_d * distillation
+    Quantization schedule: cosine ramp-up starting at quantization_start_progress.
     """
 
     def __init__(
         self,
         bit_list: list[int],
         contrastive_weight: float = 1.0,
-        ortho_weight: float = 0.1,
+        ortho_weight: float = 0.01,
         quantization_weight: float = 0.1,
         balance_weight: float = 0.01,
         consistency_weight: float = 0.5,
         lcs_weight: float = 0.5,
         distillation_weight: float = 1.0,
+        adapter_align_weight: float = 0.1,
         temperature: float = 0.07,
         learnable_temp: bool = False,
         focal_gamma: float = 0.0,
+        ortho_margin: float = 0.0,
+        quantization_start_progress: float = 0.4,
         distillation_teacher_temp: float = 0.1,
         distillation_student_temp: float = 0.05,
         ema_decay: float = 0.99,
@@ -56,12 +61,14 @@ class CombinedHashLoss(nn.Module):
         self.consistency_weight = consistency_weight
         self.lcs_weight = lcs_weight
         self.distillation_weight = distillation_weight
+        self.adapter_align_weight = adapter_align_weight
+        self.quantization_start_progress = quantization_start_progress
 
         self.contrastive_loss = CrossModalContrastiveLoss(
             temperature, learnable_temp=learnable_temp, focal_gamma=focal_gamma,
         )
         self.eaql_loss = EAQLLoss(ema_decay, bit_list=bit_list)
-        self.ortho_loss = CrossModalOrthoHashLoss()
+        self.ortho_loss = CrossModalOrthoHashLoss(margin=ortho_margin)
         self.balance_losses = nn.ModuleList(
             [BitBalanceLoss(bit) for bit in self.bit_list]
         )
@@ -70,6 +77,15 @@ class CombinedHashLoss(nn.Module):
             teacher_temp=distillation_teacher_temp,
             student_temp=distillation_student_temp,
         )
+
+    def _quantization_scale(self, progress: float) -> float:
+        """Cosine ramp-up schedule for quantization loss."""
+        start = self.quantization_start_progress
+        if progress < start:
+            return 0.0
+        t = (progress - start) / max(1.0 - start, 1e-8)
+        t = min(t, 1.0)
+        return 0.5 * (1.0 - math.cos(math.pi * t))
 
     def forward(
         self,
@@ -80,18 +96,22 @@ class CombinedHashLoss(nn.Module):
         aux_text_outputs: list[dict[str, torch.Tensor]] | None = None,
         backbone_img: torch.Tensor | None = None,
         backbone_txt: torch.Tensor | None = None,
+        adapted_img: torch.Tensor | None = None,
+        adapted_txt: torch.Tensor | None = None,
         progress: float = 1.0,
     ) -> dict[str, torch.Tensor]:
         """
         Args:
-            image_outputs: list of {"continuous", "binary"} per bit length (original view)
+            image_outputs: list of {"continuous", "binary"} per bit length
             text_outputs: same structure
             weak_image_outputs: optional weak-augmented image outputs
             aug_image_outputs: optional strong-augmented image outputs
             aux_text_outputs: optional auxiliary caption outputs (P1)
-            backbone_img: (B, D) backbone image embeddings for distillation (P0)
-            backbone_txt: (B, D) backbone text embeddings for distillation (P0)
-            progress: training progress in [0, 1] for quantization ramp-up
+            backbone_img: (B, D) backbone embeddings for distillation (P0)
+            backbone_txt: (B, D) backbone embeddings for distillation (P0)
+            adapted_img: (B, shared_dim) adapter output for alignment loss
+            adapted_txt: (B, shared_dim) adapter output for alignment loss
+            progress: training progress in [0, 1]
         """
         device = image_outputs[0]["continuous"].device
         n_bits = len(self.bit_list)
@@ -189,8 +209,19 @@ class CombinedHashLoss(nn.Module):
             self.lcs_loss(img_continuous_list) + self.lcs_loss(txt_continuous_list)
         ) / 2.0
 
-        # Quantization ramp-up
-        quant_scale = min(1.0, progress * 2.0)
+        # Adapter alignment loss (cosine embedding)
+        adapter_align_total = torch.tensor(0.0, device=device)
+        if (
+            self.adapter_align_weight > 0
+            and adapted_img is not None
+            and adapted_txt is not None
+        ):
+            adapter_align_total = 1.0 - F.cosine_similarity(
+                adapted_img, adapted_txt, dim=-1
+            ).mean()
+
+        # Quantization cosine ramp-up schedule
+        quant_scale = self._quantization_scale(progress)
 
         total = (
             self.contrastive_weight * contrastive_total
@@ -200,6 +231,7 @@ class CombinedHashLoss(nn.Module):
             + self.consistency_weight * consistency_total
             + self.lcs_weight * lcs_total
             + self.distillation_weight * distillation_total
+            + self.adapter_align_weight * adapter_align_total
         )
 
         result = {
@@ -212,8 +244,10 @@ class CombinedHashLoss(nn.Module):
             "lcs": lcs_total,
         }
 
-        # Only include distillation in output if active
+        # Only include optional losses in output if active
         if self.distillation_weight > 0:
             result["distillation"] = distillation_total
+        if self.adapter_align_weight > 0 and adapted_img is not None:
+            result["adapter_align"] = adapter_align_total
 
         return result

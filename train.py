@@ -75,7 +75,9 @@ def main():
         model_name=cfg["model"]["backbone"],
         bit_list=cfg["model"]["bit_list"],
         hidden_dim=cfg["model"]["hidden_dim"],
+        shared_dim=cfg["model"].get("shared_dim", 768),
         dropout=cfg["model"]["dropout"],
+        progressive_hash=cfg["model"].get("progressive_hash", False),
         hash_lr=cfg["training"]["hash_lr"],
         backbone_lr=cfg["training"]["backbone_lr"],
         weight_decay=cfg["training"]["weight_decay"],
@@ -94,10 +96,15 @@ def main():
         distillation_weight=cfg["loss"].get("distillation_weight", 1.0),
         distillation_teacher_temp=cfg["loss"].get("distillation_teacher_temp", 0.1),
         distillation_student_temp=cfg["loss"].get("distillation_student_temp", 0.05),
+        # Adapter alignment loss
+        adapter_align_weight=cfg["loss"].get("adapter_align_weight", 0.1),
         # P3: Focal InfoNCE
         focal_gamma=cfg["loss"].get("focal_gamma", 0.0),
         # P4: Learnable temperature
         learnable_temp=cfg["loss"].get("learnable_temp", False),
+        # OrthoHash margin + two-stage quantization
+        ortho_margin=cfg["loss"].get("ortho_margin", 0.0),
+        quantization_start_progress=cfg["loss"].get("quantization_start_progress", 0.4),
         # P2: LoRA fine-tuning
         use_lora=cfg["model"].get("use_lora", False),
         lora_rank=cfg["model"].get("lora_rank", 8),

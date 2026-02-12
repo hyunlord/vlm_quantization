@@ -38,6 +38,7 @@ def init_db() -> None:
             loss_ortho REAL DEFAULT 0.0,
             loss_lcs REAL DEFAULT 0.0,
             loss_distillation REAL DEFAULT 0.0,
+            loss_adapter_align REAL DEFAULT 0.0,
             lr REAL,
             temperature REAL,
             timestamp REAL NOT NULL
@@ -68,6 +69,7 @@ def init_db() -> None:
             val_loss_ortho REAL,
             val_loss_lcs REAL,
             val_loss_distillation REAL,
+            val_loss_adapter_align REAL,
             timestamp REAL NOT NULL
         );
 
@@ -144,10 +146,17 @@ def init_db() -> None:
             )
         except sqlite3.OperationalError:
             pass
+    for col in ("loss_adapter_align",):
+        try:
+            conn.execute(
+                f"ALTER TABLE training_metrics ADD COLUMN {col} REAL DEFAULT 0.0"
+            )
+        except sqlite3.OperationalError:
+            pass
     for col in ("step", "val_loss_total", "val_loss_contrastive",
                 "val_loss_quantization", "val_loss_balance",
                 "val_loss_consistency", "val_loss_ortho", "val_loss_lcs",
-                "val_loss_distillation",
+                "val_loss_distillation", "val_loss_adapter_align",
                 "backbone_map_i2t", "backbone_map_t2i",
                 "backbone_p1", "backbone_p5", "backbone_p10"):
         try:
@@ -186,13 +195,13 @@ def insert_training_metric(m: TrainingMetric) -> None:
         """INSERT INTO training_metrics
            (run_id, step, epoch, loss_total, loss_contrastive, loss_quantization,
             loss_balance, loss_consistency, loss_ortho, loss_lcs,
-            loss_distillation, lr, temperature, timestamp)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            loss_distillation, loss_adapter_align, lr, temperature, timestamp)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             m.run_id, m.step, m.epoch, m.loss_total, m.loss_contrastive,
             m.loss_quantization, m.loss_balance, m.loss_consistency,
             m.loss_ortho, m.loss_lcs, m.loss_distillation,
-            m.lr, m.temperature, time.time(),
+            m.loss_adapter_align, m.lr, m.temperature, time.time(),
         ),
     )
     conn.commit()
@@ -209,8 +218,9 @@ def insert_eval_metric(m: EvalMetric) -> None:
             bit_entropy, quant_error,
             val_loss_total, val_loss_contrastive, val_loss_quantization,
             val_loss_balance, val_loss_consistency, val_loss_ortho,
-            val_loss_lcs, val_loss_distillation, timestamp)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            val_loss_lcs, val_loss_distillation, val_loss_adapter_align,
+            timestamp)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             m.run_id, m.epoch, m.step, m.map_i2t, m.map_t2i,
             m.backbone_map_i2t, m.backbone_map_t2i,
@@ -218,7 +228,8 @@ def insert_eval_metric(m: EvalMetric) -> None:
             m.bit_entropy, m.quant_error,
             m.val_loss_total, m.val_loss_contrastive, m.val_loss_quantization,
             m.val_loss_balance, m.val_loss_consistency, m.val_loss_ortho,
-            m.val_loss_lcs, m.val_loss_distillation, time.time(),
+            m.val_loss_lcs, m.val_loss_distillation, m.val_loss_adapter_align,
+            time.time(),
         ),
     )
     conn.commit()

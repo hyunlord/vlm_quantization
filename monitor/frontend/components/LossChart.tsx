@@ -28,6 +28,7 @@ const LOSS_LINES = [
   { key: "ortho", color: "#06b6d4", label: "Ortho" },
   { key: "lcs", color: "#f97316", label: "LCS" },
   { key: "distillation", color: "#a855f7", label: "Distill" },
+  { key: "adapter_align", color: "#14b8a6", label: "Adapter" },
 ] as const;
 
 function formatStep(v: number) {
@@ -67,6 +68,7 @@ export default function LossChart({ data, evalData }: Props) {
         ortho: d.loss_ortho,
         lcs: d.loss_lcs,
         distillation: d.loss_distillation,
+        adapter_align: d.loss_adapter_align,
       })),
     [data],
   );
@@ -86,6 +88,7 @@ export default function LossChart({ data, evalData }: Props) {
         ortho: e.val_loss_ortho,
         lcs: e.val_loss_lcs,
         distillation: e.val_loss_distillation,
+        adapter_align: e.val_loss_adapter_align,
       }));
   }, [evalData]);
 

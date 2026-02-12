@@ -90,8 +90,10 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Load model
-    model = CrossModalHashModel.load_from_checkpoint(args.checkpoint)
+    # Load model (strict=False for backward compat with old checkpoints)
+    model = CrossModalHashModel.load_from_checkpoint(
+        args.checkpoint, strict=False,
+    )
     model = model.to(device)
     model.eval()
 
