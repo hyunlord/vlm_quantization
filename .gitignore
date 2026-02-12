@@ -29,7 +29,7 @@ Thumbs.db
 # Monitoring frontend
 monitor/frontend/node_modules/
 monitor/frontend/.next/
-monitor/frontend/out/
+# monitor/frontend/out/ — committed for DGX (no Node.js needed)
 monitor/metrics.db
 
 # Logs
