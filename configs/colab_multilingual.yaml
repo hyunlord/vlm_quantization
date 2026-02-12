@@ -27,17 +27,17 @@ training:
 loss:
   contrastive_weight: 1.0
   ortho_weight: 0.01                # reduced: margin handles alignment
-  quantization_weight: 0.1
-  balance_weight: 0.01
-  consistency_weight: 0.5
-  lcs_weight: 0.5
-  distillation_weight: 1.0         # P0: backbone similarity distillation
-  adapter_align_weight: 0.1        # adapter cosine alignment loss
+  quantization_weight: 1.0          # raised: EAQL now meaningful without L2 norm
+  balance_weight: 0.1               # raised: ensure balanced bit usage
+  consistency_weight: 0.1           # reduced: secondary objective
+  lcs_weight: 0.1                   # reduced: secondary objective
+  distillation_weight: 0.5          # reduced: avoid dominating with contrastive
+  adapter_align_weight: 0.05        # reduced: secondary objective
   temperature: 0.07
   learnable_temp: true              # P4: learnable temperature (log-inverse param)
   focal_gamma: 2.0                  # P3: focal InfoNCE (0 = disabled)
   ortho_margin: 0.2                 # margin tolerance for off-diagonal similarity
-  quantization_start_progress: 0.4  # two-stage: quant starts at 40% training
+  quantization_start_progress: 0.1  # near-immediate: codes need quantization early
   distillation_teacher_temp: 0.1
   distillation_student_temp: 0.05
   ema_decay: 0.99
