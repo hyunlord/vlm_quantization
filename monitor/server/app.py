@@ -67,11 +67,13 @@ from monitor.server.models import (
     TrainingStatus,
 )
 from monitor.server.search_index import SearchIndex
+from monitor.server.optuna_api import router as optuna_router
 from monitor.server.system_monitor import SystemMonitorThread
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="VLM Quantization Monitor")
+app.include_router(optuna_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -694,6 +696,7 @@ if _frontend_out.is_dir():
         ("/inference", "inference.html"),
         ("/hash-analysis", "hash-analysis.html"),
         ("/search", "search.html"),
+        ("/optuna", "optuna.html"),
     ]
     for _route, _filename in _page_routes:
         _html = _frontend_out / _filename

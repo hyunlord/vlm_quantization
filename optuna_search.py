@@ -11,6 +11,7 @@ import yaml
 
 from src.data.datamodule import CrossModalHashDataModule
 from src.models.cross_modal_hash import CrossModalHashModel
+from src.utils.gpu_config import auto_configure
 
 # Mapping: Optuna param name → config YAML path
 PARAM_MAP = {
@@ -51,9 +52,11 @@ def export_best_config(
     return output_path
 
 
-def objective(trial: optuna.Trial, base_cfg: dict) -> float:
+def objective(
+    trial: optuna.Trial, base_cfg: dict, search_epochs: int = 5,
+) -> float:
     """Single Optuna trial: train for a few epochs and return validation loss."""
-    cfg = base_cfg.copy()
+    cfg = copy.deepcopy(base_cfg)
 
     # Hyperparameters to search
     hidden_dim = trial.suggest_categorical("hidden_dim", [256, 512, 768, 1024])
@@ -67,13 +70,22 @@ def objective(trial: optuna.Trial, base_cfg: dict) -> float:
     backbone_lr = trial.suggest_float("backbone_lr", 1e-6, 5e-5, log=True)
 
     # Fixed parameters
-    search_epochs = 5
     bit_list = cfg["model"]["bit_list"]
+
+    # Resolve "auto" batch_size using GPU auto-configuration
+    if cfg["training"].get("batch_size") == "auto":
+        gpu_cfg = auto_configure(
+            freeze_backbone=cfg["model"].get("freeze_backbone", True),
+        )
+        cfg["training"]["batch_size"] = gpu_cfg["batch_size"]
+        cfg["training"]["accumulate_grad_batches"] = gpu_cfg["accumulate_grad_batches"]
+        cfg["data"]["num_workers"] = gpu_cfg["num_workers"]
 
     pl.seed_everything(42, workers=True)
 
     # DataModule
     karpathy_json = cfg["data"].get("karpathy_json")
+    extra_datasets = cfg["data"].get("extra_datasets")
     datamodule = CrossModalHashDataModule(
         data_root=cfg["data"]["data_root"],
         processor_name=cfg["model"]["backbone"],
@@ -82,10 +94,21 @@ def objective(trial: optuna.Trial, base_cfg: dict) -> float:
         max_text_length=cfg["data"]["max_text_length"],
         image_size=cfg["data"]["image_size"],
         karpathy_json=karpathy_json,
+        extra_datasets=extra_datasets,
     )
 
     # Estimate max_steps for search
     num_train_images = 113000 if karpathy_json else 82000
+
+    # Add extra dataset sizes (count JSONL lines)
+    for ds_cfg in extra_datasets or []:
+        jsonl_path = ds_cfg["jsonl_path"]
+        try:
+            with open(jsonl_path) as f:
+                num_train_images += sum(1 for line in f if line.strip())
+        except FileNotFoundError:
+            pass
+
     steps_per_epoch = num_train_images // (
         cfg["training"]["batch_size"] * cfg["training"]["accumulate_grad_batches"]
     )
@@ -156,6 +179,10 @@ def main():
         "--storage", type=str, default="sqlite:///optuna_results.db"
     )
     parser.add_argument(
+        "--search-epochs", type=int, default=5,
+        help="Number of training epochs per trial (default: 5)",
+    )
+    parser.add_argument(
         "--export-config", type=str, default=None,
         help="Output path for best config YAML (default: configs/best_<study>.yaml)",
     )
@@ -176,7 +203,7 @@ def main():
     )
 
     study.optimize(
-        lambda trial: objective(trial, cfg),
+        lambda trial: objective(trial, cfg, search_epochs=args.search_epochs),
         n_trials=args.n_trials,
     )
 

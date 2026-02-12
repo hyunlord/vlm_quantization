@@ -180,3 +180,28 @@ export interface WSMessage {
     | TrainingStatus
     | HashAnalysisData;
 }
+
+// --- Optuna types ---
+
+export interface OptunaTrial {
+  number: number;
+  value: number | null;
+  state: "COMPLETE" | "PRUNED" | "FAIL" | "RUNNING" | "WAITING";
+  params: Record<string, number>;
+  user_attrs: Record<string, number>;
+  duration_seconds: number | null;
+}
+
+export interface OptunaStudySummary {
+  name: string;
+  direction: string;
+  n_trials: number;
+  n_complete: number;
+  n_pruned: number;
+  n_fail: number;
+  n_running: number;
+  best_value: number | null;
+  best_trial_number: number | null;
+  param_importances: Record<string, number>;
+  best_trial: OptunaTrial | null;
+}

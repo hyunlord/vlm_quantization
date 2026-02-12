@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, Database, Search, Wifi, WifiOff } from "lucide-react";
+import { BarChart3, Database, FlaskConical, Search, Wifi, WifiOff } from "lucide-react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useRunContext } from "@/contexts/RunContext";
 import RunSelector from "@/components/RunSelector";
@@ -57,6 +57,13 @@ export default function Dashboard() {
           >
             <Database className="w-3.5 h-3.5" />
             <span>Search</span>
+          </Link>
+          <Link
+            href="/optuna"
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-amber-400 transition-colors"
+          >
+            <FlaskConical className="w-3.5 h-3.5" />
+            <span>Optuna</span>
           </Link>
           {isConnected ? (
             <div className="flex items-center gap-1.5 text-emerald-400 text-xs">
