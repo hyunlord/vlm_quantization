@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+from datetime import datetime
 from pathlib import Path
 
 import optuna
@@ -228,7 +229,8 @@ def main():
         "--n-trials", type=int, default=50, help="Number of trials"
     )
     parser.add_argument(
-        "--study-name", type=str, default="cross_modal_hash_opt"
+        "--study-name", type=str, default=None,
+        help="Study name (default: cross_modal_hash_<timestamp>)",
     )
     parser.add_argument(
         "--storage", type=str, default="sqlite:///optuna_results.db"
@@ -250,8 +252,13 @@ def main():
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
 
+    # Auto-generate timestamped study name if not specified
+    study_name = args.study_name
+    if study_name is None:
+        study_name = f"cross_modal_hash_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
     study = optuna.create_study(
-        study_name=args.study_name,
+        study_name=study_name,
         storage=args.storage,
         direction="minimize",
         load_if_exists=True,

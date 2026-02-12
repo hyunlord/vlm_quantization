@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import datetime as _dt
 from typing import Any
 
 from fastapi import APIRouter
@@ -42,6 +43,8 @@ def _trial_to_dict(trial) -> dict[str, Any]:
         "params": trial.params,
         "user_attrs": trial.user_attrs,
         "duration_seconds": duration,
+        "datetime_start": trial.datetime_start.isoformat() if trial.datetime_start else None,
+        "datetime_complete": trial.datetime_complete.isoformat() if trial.datetime_complete else None,
     }
 
 
@@ -69,8 +72,26 @@ async def optuna_status():
 
         optuna.logging.set_verbosity(optuna.logging.WARNING)
         summaries = optuna.get_all_study_summaries(storage=_get_storage_url())
+        # Return both names (for backward compat) and detailed list with timestamps
         studies = [s.study_name for s in summaries]
-        return {"available": True, "studies": studies, "storage": _get_storage_url()}
+        studies_detail = [
+            {
+                "name": s.study_name,
+                "datetime_start": s.datetime_start.isoformat() if s.datetime_start else None,
+                "n_trials": s.n_trials,
+            }
+            for s in sorted(
+                summaries,
+                key=lambda x: x.datetime_start or _dt.min,
+                reverse=True,
+            )
+        ]
+        return {
+            "available": True,
+            "studies": studies,
+            "studies_detail": studies_detail,
+            "storage": _get_storage_url(),
+        }
     except Exception as e:
         logger.debug("Optuna status error: %s", e)
         return {"available": False, "studies": [], "error": str(e)}
@@ -149,6 +170,13 @@ async def get_study(study_name: str):
         except Exception:
             pass
 
+    # Get study start time from first trial
+    datetime_start = None
+    if trials:
+        starts = [t.datetime_start for t in trials if t.datetime_start]
+        if starts:
+            datetime_start = min(starts).isoformat()
+
     return {
         "name": study.study_name,
         "direction": study.direction.name,
@@ -159,6 +187,7 @@ async def get_study(study_name: str):
         "n_running": n_running,
         "best_trial": best,
         "param_importances": importances,
+        "datetime_start": datetime_start,
     }
 
 

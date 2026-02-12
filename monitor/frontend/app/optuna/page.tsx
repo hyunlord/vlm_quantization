@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, FlaskConical, Loader2, Trophy, Wifi, WifiOff } from "lucide-react";
+import { ArrowLeft, Calendar, FlaskConical, Loader2, Trophy, Wifi, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -16,7 +16,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { OptunaTrial, OptunaStudySummary } from "@/lib/types";
+import type { OptunaTrial, OptunaStudyListItem, OptunaStudySummary } from "@/lib/types";
 
 const STATE_COLORS: Record<string, string> = {
   COMPLETE: "#34d399",
@@ -26,10 +26,40 @@ const STATE_COLORS: Record<string, string> = {
   WAITING: "#9ca3af",
 };
 
+/** Format ISO datetime to concise local string: "2026-02-12 16:23" */
+function formatDateTime(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Format ISO datetime to short time: "16:23:05" */
+function formatTime(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+/** Relative time ago: "2h ago", "3d ago" */
+function timeAgo(iso: string | null): string {
+  if (!iso) return "";
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
 export default function OptunaPage() {
   const [status, setStatus] = useState<{
     available: boolean;
     studies: string[];
+    studies_detail?: OptunaStudyListItem[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedStudy, setSelectedStudy] = useState<string>("");
@@ -49,7 +79,10 @@ export default function OptunaPage() {
       .then((r) => r.json())
       .then((data) => {
         setStatus(data);
-        if (data.studies?.length === 1) {
+        // Auto-select the most recent study (first in studies_detail, sorted by datetime desc)
+        if (data.studies_detail?.length > 0) {
+          setSelectedStudy(data.studies_detail[0].name);
+        } else if (data.studies?.length === 1) {
           setSelectedStudy(data.studies[0]);
         }
       })
@@ -143,6 +176,11 @@ export default function OptunaPage() {
         .map(([name, value]) => ({ name, value: Math.round(value * 100) }))
     : [];
 
+  // Study list for selector (prefer detailed list with timestamps)
+  const studyList: OptunaStudyListItem[] =
+    status?.studies_detail ??
+    (status?.studies?.map((s) => ({ name: s, datetime_start: null, n_trials: 0 })) || []);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center">
@@ -164,19 +202,6 @@ export default function OptunaPage() {
             <h1 className="text-lg font-bold text-gray-200">
               Optuna Hyperparameter Search
             </h1>
-            {status?.studies && status.studies.length > 1 && (
-              <select
-                value={selectedStudy}
-                onChange={(e) => setSelectedStudy(e.target.value)}
-                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5
-                           text-xs text-gray-200 focus:outline-none focus:border-gray-500"
-              >
-                <option value="">Select study...</option>
-                {status.studies.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            )}
           </div>
           <div className="flex items-center gap-3">
             <Link
@@ -209,6 +234,48 @@ export default function OptunaPage() {
           </div>
         )}
 
+        {/* Study selector — always visible when studies exist */}
+        {status?.available && studyList.length > 0 && (
+          <div className="rounded-xl bg-gray-900 border border-gray-800 p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Calendar className="w-3.5 h-3.5 text-gray-500" />
+              <span className="text-[10px] text-gray-500 uppercase tracking-wider">Select Study</span>
+              <span className="text-[10px] text-gray-600">({studyList.length} studies)</span>
+            </div>
+            <div className="grid gap-1.5">
+              {studyList.map((s) => (
+                <button
+                  key={s.name}
+                  onClick={() => setSelectedStudy(s.name)}
+                  className={`flex items-center justify-between px-3 py-2 rounded-lg text-left transition-all ${
+                    selectedStudy === s.name
+                      ? "bg-amber-500/10 border border-amber-500/30 text-amber-200"
+                      : "bg-gray-800/50 border border-transparent hover:bg-gray-800 hover:border-gray-700 text-gray-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <FlaskConical className={`w-3.5 h-3.5 flex-shrink-0 ${
+                      selectedStudy === s.name ? "text-amber-400" : "text-gray-600"
+                    }`} />
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium truncate">{s.name}</div>
+                      {s.datetime_start && (
+                        <div className="text-[10px] text-gray-500 mt-0.5">
+                          {formatDateTime(s.datetime_start)}
+                          <span className="text-gray-600 ml-1.5">({timeAgo(s.datetime_start)})</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                    <span className="text-[10px] text-gray-500">{s.n_trials} trials</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Study content */}
         {status?.available && selectedStudy && (
           <>
@@ -219,7 +286,7 @@ export default function OptunaPage() {
             ) : studyData ? (
               <>
                 {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                   <SummaryCard label="Total Trials" value={studyData.n_trials} />
                   <SummaryCard label="Completed" value={studyData.n_complete} color="text-emerald-400" />
                   <SummaryCard label="Pruned" value={studyData.n_pruned} color="text-amber-400" />
@@ -232,6 +299,12 @@ export default function OptunaPage() {
                     label="Best Trial"
                     value={studyData.best_trial?.number != null ? `#${studyData.best_trial.number}` : "—"}
                     color="text-purple-400"
+                  />
+                  <SummaryCard
+                    label="Started"
+                    value={studyData.datetime_start ? formatDateTime(studyData.datetime_start) : "—"}
+                    color="text-gray-400"
+                    small
                   />
                 </div>
 
@@ -389,6 +462,7 @@ export default function OptunaPage() {
                           <Th label="#" col="number" sortCol={sortCol} sortAsc={sortAsc} onClick={handleSort} />
                           <Th label="Value" col="value" sortCol={sortCol} sortAsc={sortAsc} onClick={handleSort} />
                           <Th label="State" col="state" sortCol={sortCol} sortAsc={sortAsc} onClick={handleSort} />
+                          <th className="text-left py-2 px-2 font-medium whitespace-nowrap">Started</th>
                           <Th label="Duration" col="duration_seconds" sortCol={sortCol} sortAsc={sortAsc} onClick={handleSort} />
                           {/* Param columns from first trial */}
                           {trials[0] &&
@@ -423,6 +497,9 @@ export default function OptunaPage() {
                               />
                               <span className="text-gray-400">{t.state}</span>
                             </td>
+                            <td className="py-1.5 px-2 text-gray-500 whitespace-nowrap">
+                              {formatTime(t.datetime_start)}
+                            </td>
                             <td className="py-1.5 px-2 text-gray-400">
                               {t.duration_seconds != null ? `${t.duration_seconds.toFixed(0)}s` : "—"}
                             </td>
@@ -449,7 +526,7 @@ export default function OptunaPage() {
         )}
 
         {/* Study available but none selected */}
-        {status?.available && !selectedStudy && status.studies.length > 0 && (
+        {status?.available && !selectedStudy && studyList.length > 0 && (
           <div className="rounded-xl bg-gray-900 border border-gray-800 p-8 text-center">
             <p className="text-sm text-gray-500">Select a study to view results.</p>
           </div>
@@ -465,15 +542,17 @@ function SummaryCard({
   label,
   value,
   color = "text-gray-200",
+  small = false,
 }: {
   label: string;
   value: string | number;
   color?: string;
+  small?: boolean;
 }) {
   return (
     <div className="rounded-xl bg-gray-900 border border-gray-800 p-3">
       <div className="text-[10px] text-gray-500 mb-1">{label}</div>
-      <div className={`text-lg font-bold font-mono ${color}`}>{value}</div>
+      <div className={`${small ? "text-xs" : "text-lg"} font-bold font-mono ${color}`}>{value}</div>
     </div>
   );
 }

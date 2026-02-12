@@ -242,6 +242,8 @@ export interface OptunaTrial {
   params: Record<string, number>;
   user_attrs: Record<string, number>;
   duration_seconds: number | null;
+  datetime_start: string | null;
+  datetime_complete: string | null;
 }
 
 export interface OptunaStudySummary {
@@ -256,4 +258,11 @@ export interface OptunaStudySummary {
   best_trial_number: number | null;
   param_importances: Record<string, number>;
   best_trial: OptunaTrial | null;
+  datetime_start: string | null;
+}
+
+export interface OptunaStudyListItem {
+  name: string;
+  datetime_start: string | null;
+  n_trials: number;
 }
