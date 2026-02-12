@@ -28,6 +28,11 @@ dependencies = [
     "pydantic>=2.5.0",
 ]
 
-[tool.uv]
-# CUDA 12.8 PyTorch wheels for DGX Spark (GB10, CUDA driver 13.0)
-extra-index-url = ["https://download.pytorch.org/whl/cu128"]
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true  # ONLY torch/torchvision use this index; everything else from PyPI
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128" }]
+torchvision = [{ index = "pytorch-cu128" }]
