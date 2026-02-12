@@ -143,6 +143,7 @@ def objective(
 
     trainer = pl.Trainer(
         max_epochs=search_epochs,
+        val_check_interval=cfg["training"].get("val_check_interval", 0.5),
         accelerator="gpu",
         devices=1,
         precision="bf16-mixed" if torch.cuda.is_bf16_supported() else "16-mixed",

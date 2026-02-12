@@ -97,8 +97,7 @@ async def list_studies():
             # StudySummary doesn't expose per-state counts; load study for accuracy
             n_complete = 0
             try:
-                import optuna as _optuna
-                study = _optuna.load_study(study_name=s.study_name, storage=_get_storage_url())
+                study = optuna.load_study(study_name=s.study_name, storage=_get_storage_url())
                 from optuna.trial import TrialState
                 n_complete = len([t for t in study.trials if t.state == TrialState.COMPLETE])
             except Exception:

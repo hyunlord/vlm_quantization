@@ -8,11 +8,10 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Line,
-  LineChart,
   ResponsiveContainer,
   Scatter,
-  ScatterChart,
   Tooltip,
   XAxis,
   YAxis,
@@ -243,7 +242,7 @@ export default function OptunaPage() {
                     <h3 className="text-xs font-medium text-gray-400 mb-3">Trial History</h3>
                     {trialChartData.length > 0 ? (
                       <ResponsiveContainer width="100%" height={240}>
-                        <ScatterChart margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
+                        <ComposedChart data={trialChartData} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
                           <XAxis
                             dataKey="number"
@@ -252,7 +251,6 @@ export default function OptunaPage() {
                             label={{ value: "Trial", position: "insideBottom", offset: -2, fontSize: 10, fill: "#6b7280" }}
                           />
                           <YAxis
-                            dataKey="value"
                             type="number"
                             tick={{ fontSize: 10, fill: "#6b7280" }}
                             label={{ value: "val/total", angle: -90, position: "insideLeft", fontSize: 10, fill: "#6b7280" }}
@@ -262,7 +260,7 @@ export default function OptunaPage() {
                             labelFormatter={(v) => `Trial #${v}`}
                             formatter={(v) => [typeof v === "number" ? v.toFixed(4) : String(v ?? ""), "value"]}
                           />
-                          <Scatter data={trialChartData} fill="#34d399">
+                          <Scatter dataKey="value" fill="#34d399">
                             {trialChartData.map((entry, i) => (
                               <Cell key={i} fill={STATE_COLORS[entry.state] || "#9ca3af"} />
                             ))}
@@ -278,7 +276,7 @@ export default function OptunaPage() {
                               isAnimationActive={false}
                             />
                           )}
-                        </ScatterChart>
+                        </ComposedChart>
                       </ResponsiveContainer>
                     ) : (
                       <div className="flex items-center justify-center h-[240px] text-gray-600 text-xs">
