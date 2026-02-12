@@ -237,6 +237,12 @@ fi
 echo ""
 echo "[4/4] Building monitoring dashboard..."
 
+if ! command -v node &>/dev/null; then
+    echo "  Installing Node.js 20..."
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -n bash - 2>/dev/null \
+        && sudo -n apt-get install -y nodejs 2>/dev/null
+fi
+
 if command -v node &>/dev/null; then
     echo "  Node.js: $(node --version)"
     cd "$PROJECT_DIR/monitor/frontend"
@@ -245,9 +251,8 @@ if command -v node &>/dev/null; then
     echo "  Frontend built -> monitor/frontend/out/"
     cd "$PROJECT_DIR"
 else
-    echo "  WARNING: Node.js not found. Install Node.js 20+ to build the dashboard."
-    echo "    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -"
-    echo "    sudo apt-get install -y nodejs"
+    echo "  WARNING: Could not install Node.js (needs sudo). Skipping dashboard build."
+    echo "  Install manually: curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -"
 fi
 
 # ---------- Done ----------
