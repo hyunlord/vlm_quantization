@@ -56,19 +56,10 @@ class SystemMonitorThread(threading.Thread):
         self.interval = interval
         self.latest: SystemMetric = SystemMetric()
         self._stop_event = threading.Event()
-        self._callbacks: list = []
-
-    def add_callback(self, fn) -> None:
-        self._callbacks.append(fn)
 
     def run(self) -> None:
         while not self._stop_event.is_set():
             self.latest = get_system_metrics()
-            for cb in self._callbacks:
-                try:
-                    cb(self.latest)
-                except Exception:
-                    pass
             self._stop_event.wait(self.interval)
 
     def stop(self) -> None:

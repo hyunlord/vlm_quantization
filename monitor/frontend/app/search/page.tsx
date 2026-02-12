@@ -42,10 +42,6 @@ interface DiscoveredCheckpoint {
   map_t2i?: number | null;
 }
 
-function getApiBase() {
-  if (typeof window === "undefined") return "";
-  return "";
-}
 
 export default function SearchPage() {
   // Discovery state
@@ -92,21 +88,20 @@ export default function SearchPage() {
 
   // Auto-discover on mount
   useEffect(() => {
-    const base = getApiBase();
     setDiscovering(true);
 
     Promise.all([
-      fetch(`${base}/api/search/list-indices`)
+      fetch(`/api/search/list-indices`)
         .then((r) => r.json())
         .then((data) => setAvailableIndices(data.indices || []))
         .catch(() => setAvailableIndices([])),
 
-      fetch(`${base}/api/inference/checkpoints`)
+      fetch(`/api/inference/checkpoints`)
         .then((r) => r.json())
         .then((data) => setAvailableCheckpoints(data.checkpoints || []))
         .catch(() => setAvailableCheckpoints([])),
 
-      fetch(`${base}/api/search/status`)
+      fetch(`/api/search/status`)
         .then((r) => r.json())
         .then((data) => {
           if (data.loaded) {
@@ -118,7 +113,7 @@ export default function SearchPage() {
         })
         .catch(() => {}),
 
-      fetch(`${base}/api/inference/status`)
+      fetch(`/api/inference/status`)
         .then((r) => r.json())
         .then((data) => {
           setModelLoaded(data.loaded ?? false);
@@ -166,7 +161,7 @@ export default function SearchPage() {
     setSetupError(null);
 
     try {
-      const res = await fetch(`${getApiBase()}/api/search/auto-setup`, {
+      const res = await fetch(`/api/search/auto-setup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -240,7 +235,7 @@ export default function SearchPage() {
         return;
       }
 
-      const res = await fetch(`${getApiBase()}/api/search/query`, {
+      const res = await fetch(`/api/search/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

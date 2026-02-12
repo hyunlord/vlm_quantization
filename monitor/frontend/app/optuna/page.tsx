@@ -19,11 +19,6 @@ import {
 } from "recharts";
 import type { OptunaTrial, OptunaStudySummary } from "@/lib/types";
 
-function getApiBase() {
-  if (typeof window === "undefined") return "";
-  return "";
-}
-
 const STATE_COLORS: Record<string, string> = {
   COMPLETE: "#34d399",
   PRUNED: "#fbbf24",
@@ -51,7 +46,7 @@ export default function OptunaPage() {
   // Fetch Optuna status on mount
   useEffect(() => {
     setLoading(true);
-    fetch(`${getApiBase()}/api/optuna/status`)
+    fetch(`/api/optuna/status`)
       .then((r) => r.json())
       .then((data) => {
         setStatus(data);
@@ -70,8 +65,8 @@ export default function OptunaPage() {
       setLoadingStudy(true);
       try {
         const [studyRes, trialsRes] = await Promise.all([
-          fetch(`${getApiBase()}/api/optuna/studies/${name}`).then((r) => r.json()),
-          fetch(`${getApiBase()}/api/optuna/studies/${name}/trials`).then((r) => r.json()),
+          fetch(`/api/optuna/studies/${name}`).then((r) => r.json()),
+          fetch(`/api/optuna/studies/${name}/trials`).then((r) => r.json()),
         ]);
         if (!studyRes.error) setStudyData(studyRes);
         if (trialsRes.trials) {

@@ -106,6 +106,7 @@ def main():
         max_text_length=cfg["data"]["max_text_length"],
         image_size=cfg["data"]["image_size"],
         karpathy_json=cfg["data"].get("karpathy_json"),
+        extra_datasets=cfg["data"].get("extra_datasets"),
     )
     datamodule.setup(stage="test")
 

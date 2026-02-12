@@ -44,12 +44,6 @@ function simColor(sim: number): string {
   return "text-red-400";
 }
 
-function simBg(sim: number): string {
-  if (sim >= 0.85) return "bg-emerald-900/40";
-  if (sim >= 0.7) return "bg-yellow-900/40";
-  return "bg-red-900/40";
-}
-
 function pct(v: number): string {
   return (v * 100).toFixed(1);
 }

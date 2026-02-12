@@ -50,7 +50,7 @@ class CombinedHashLoss(nn.Module):
         self.lcs_weight = lcs_weight
 
         self.contrastive_loss = CrossModalContrastiveLoss(temperature)
-        self.eaql_loss = EAQLLoss(ema_decay)
+        self.eaql_loss = EAQLLoss(ema_decay, bit_list=bit_list)
         self.ortho_loss = CrossModalOrthoHashLoss()
         self.balance_losses = nn.ModuleList(
             [BitBalanceLoss(bit) for bit in self.bit_list]
@@ -82,12 +82,14 @@ class CombinedHashLoss(nn.Module):
         balance_total = torch.tensor(0.0, device=device)
         consistency_total = torch.tensor(0.0, device=device)
 
+        # Number of image views: original + optional weak + optional strong
+        n_views = 1 + (weak_image_outputs is not None) + (aug_image_outputs is not None)
+
         for k in range(n_bits):
             img_cont = image_outputs[k]["continuous"]
             txt_cont = text_outputs[k]["continuous"]
 
             # InfoNCE (cross-modal): original + augmented views ↔ text
-            n_views = 1
             contrastive_total = contrastive_total + self.contrastive_loss(
                 img_cont, txt_cont
             )
@@ -96,13 +98,11 @@ class CombinedHashLoss(nn.Module):
                 contrastive_total = contrastive_total + self.contrastive_loss(
                     weak_cont, txt_cont
                 )
-                n_views += 1
             if aug_image_outputs is not None:
                 aug_cont = aug_image_outputs[k]["continuous"]
                 contrastive_total = contrastive_total + self.contrastive_loss(
                     aug_cont, txt_cont
                 )
-                n_views += 1
 
             # EAQL (both modalities)
             eaql_total = eaql_total + (

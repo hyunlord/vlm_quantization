@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytorch_lightning as pl
 import torch
-import torch.nn as nn
 from transformers import AutoModel
 
 from src.losses.combined import CombinedHashLoss

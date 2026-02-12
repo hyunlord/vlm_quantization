@@ -1,6 +1,6 @@
 "use client";
 
-import { Cpu, HardDrive, Thermometer, Monitor } from "lucide-react";
+import { Cpu, Thermometer, Monitor } from "lucide-react";
 import type { SystemMetric } from "@/lib/types";
 
 interface Props {

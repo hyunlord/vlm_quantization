@@ -94,13 +94,22 @@ async def list_studies():
             if s.best_trial:
                 best_value = s.best_trial.value
                 best_trial_number = s.best_trial.number
+            # StudySummary doesn't expose per-state counts; load study for accuracy
+            n_complete = 0
+            try:
+                import optuna as _optuna
+                study = _optuna.load_study(study_name=s.study_name, storage=_get_storage_url())
+                from optuna.trial import TrialState
+                n_complete = len([t for t in study.trials if t.state == TrialState.COMPLETE])
+            except Exception:
+                # Fallback: at least 1 if best_trial exists
+                n_complete = 1 if s.best_trial else 0
+
             result.append({
                 "name": s.study_name,
                 "direction": s.direction.name if hasattr(s.direction, "name") else str(s.direction),
                 "n_trials": s.n_trials,
-                "n_complete": len([
-                    t for t in (s.best_trial,) if t  # count from summary
-                ]),
+                "n_complete": n_complete,
                 "best_value": best_value,
                 "best_trial_number": best_trial_number,
                 "datetime_start": s.datetime_start.isoformat() if s.datetime_start else None,
