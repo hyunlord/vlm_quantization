@@ -291,7 +291,7 @@ def main():
             print(f"    {key}: {value:.4f}")
 
     # Export best config YAML
-    export_path = args.export_config or f"configs/best_{args.study_name}.yaml"
+    export_path = args.export_config or f"configs/best_{study_name}.yaml"
     out = export_best_config(study, cfg, export_path)
     print(f"\n  Best config exported → {out}")
     print(f"  Retrain: python train.py --config {out}")

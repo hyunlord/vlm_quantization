@@ -32,14 +32,16 @@ def collate_fn(batch: list[dict]) -> dict[str, torch.Tensor]:
         result["aug_pixel_values"] = torch.stack(
             [b["aug_pixel_values"] for b in batch]
         )
-    # Multi-caption auxiliary text (P1)
-    if "aux_input_ids" in batch[0]:
-        result["aux_input_ids"] = torch.stack(
-            [b["aux_input_ids"] for b in batch]
-        )
-        result["aux_attention_mask"] = torch.stack(
-            [b["aux_attention_mask"] for b in batch]
-        )
+    # Multi-caption auxiliary text (P1) — handle mixed batches from ConcatDataset
+    # where Karpathy samples have aux_input_ids but extra dataset samples don't.
+    # Fallback: duplicate primary caption for samples without a second caption.
+    if any("aux_input_ids" in b for b in batch):
+        result["aux_input_ids"] = torch.stack([
+            b.get("aux_input_ids", b["input_ids"]) for b in batch
+        ])
+        result["aux_attention_mask"] = torch.stack([
+            b.get("aux_attention_mask", b["attention_mask"]) for b in batch
+        ])
     return result
 
 
