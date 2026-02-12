@@ -246,9 +246,13 @@ fi
 if command -v node &>/dev/null; then
     echo "  Node.js: $(node --version)"
     cd "$PROJECT_DIR/monitor/frontend"
-    npm install --silent 2>/dev/null
-    npm run build 2>/dev/null
-    echo "  Frontend built -> monitor/frontend/out/"
+    npm install --silent
+    npm run build
+    if [ -d "out" ] && [ -f "out/index.html" ]; then
+        echo "  Frontend built -> monitor/frontend/out/"
+    else
+        echo "  WARNING: Frontend build did not produce out/index.html"
+    fi
     cd "$PROJECT_DIR"
 else
     echo "  WARNING: Could not install Node.js (needs sudo). Skipping dashboard build."
