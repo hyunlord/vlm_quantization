@@ -684,7 +684,7 @@ async def search_query(req: SearchQueryRequest):
 # --- Static Frontend (Next.js export) ---
 _frontend_out = Path(__file__).resolve().parent.parent / "frontend" / "out"
 
-if _frontend_out.is_dir():
+if _frontend_out.is_dir() and (_frontend_out / "index.html").is_file():
 
     @app.get("/")
     async def serve_index():
@@ -711,3 +711,9 @@ if _frontend_out.is_dir():
             app.get(_route)(_make_handler(_html))
 
     app.mount("/", StaticFiles(directory=str(_frontend_out)), name="static")
+else:
+    from fastapi.responses import RedirectResponse
+
+    @app.get("/")
+    async def fallback_index():
+        return RedirectResponse(url="/docs")
