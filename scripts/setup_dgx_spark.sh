@@ -169,6 +169,36 @@ sync_from_drive "COCO-Ko" "${GDRIVE_DATA_PATH}/coco_ko" "$PROJECT_DIR/data/coco_
 sync_from_drive "AIHub" "${GDRIVE_DATA_PATH}/aihub" "$PROJECT_DIR/data/aihub"
 sync_from_drive "CC3M-Ko" "${GDRIVE_DATA_PATH}/cc3m_ko" "$PROJECT_DIR/data/cc3m_ko"
 
+# Sync monitor DB + checkpoints from Google Drive (shared with Colab)
+GDRIVE_PROJECT_PATH="vlm_quantization"
+
+sync_file_from_drive() {
+    local name="$1"
+    local drive_file="$2"
+    local local_file="$3"
+
+    if [ -z "$GDRIVE_REMOTE" ]; then
+        return
+    fi
+
+    if rclone ls "${GDRIVE_REMOTE}:${drive_file}" &>/dev/null; then
+        echo "  $name — syncing from Google Drive..."
+        mkdir -p "$(dirname "$local_file")"
+        rclone copy "${GDRIVE_REMOTE}:${drive_file}" "$(dirname "$local_file")/"
+        echo "  $name — done"
+    else
+        echo "  $name — not found on Drive, skipping"
+    fi
+}
+
+sync_file_from_drive "Metrics DB" \
+    "${GDRIVE_PROJECT_PATH}/monitor/metrics.db" \
+    "$PROJECT_DIR/monitor/metrics.db"
+
+sync_from_drive "Checkpoints" \
+    "${GDRIVE_PROJECT_PATH}/checkpoints" \
+    "$PROJECT_DIR/checkpoints"
+
 # Auto-prepare JSONL for any datasets that have raw data but no JSONL
 
 # COCO Korean (AIHub #261) — reuses existing COCO images
