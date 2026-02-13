@@ -61,6 +61,43 @@ if [ "$MONITOR" = true ]; then
     fi
 fi
 
+# Detect Google Drive remote for post-training sync
+GDRIVE_REMOTE=""
+if command -v rclone &>/dev/null; then
+    for remote in $(rclone listremotes 2>/dev/null); do
+        rtype=$(rclone config show "${remote%:}" 2>/dev/null | grep "^type" | awk '{print $3}')
+        if [ "$rtype" = "drive" ]; then
+            GDRIVE_REMOTE="${remote%:}"
+            break
+        fi
+    done
+fi
+
+GDRIVE_PROJECT_PATH="vlm_quantization"
+
+sync_to_drive() {
+    if [ -z "$GDRIVE_REMOTE" ]; then
+        return
+    fi
+    echo ""
+    echo "Syncing results to Google Drive..."
+
+    # Metrics DB
+    if [ -f "$PROJECT_DIR/monitor/metrics.db" ]; then
+        rclone copy "$PROJECT_DIR/monitor/metrics.db" \
+            "${GDRIVE_REMOTE}:${GDRIVE_PROJECT_PATH}/monitor/" 2>/dev/null \
+            && echo "  Metrics DB — synced" || echo "  Metrics DB — sync failed"
+    fi
+
+    # Checkpoints
+    if [ -d "$PROJECT_DIR/checkpoints" ]; then
+        rclone sync "$PROJECT_DIR/checkpoints" \
+            "${GDRIVE_REMOTE}:${GDRIVE_PROJECT_PATH}/checkpoints/" \
+            --progress --transfers=4 2>/dev/null \
+            && echo "  Checkpoints — synced" || echo "  Checkpoints — sync failed"
+    fi
+}
+
 # Cleanup on exit
 cleanup() {
     if [ -n "$MONITOR_PID" ] && kill -0 "$MONITOR_PID" 2>/dev/null; then
@@ -68,6 +105,7 @@ cleanup() {
         echo "Stopping monitoring server..."
         kill "$MONITOR_PID" 2>/dev/null || true
     fi
+    sync_to_drive
 }
 trap cleanup EXIT
 
