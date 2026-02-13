@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import warnings
+warnings.filterwarnings("ignore", message=".*pynvml.*", category=FutureWarning)
+
 import argparse
 from datetime import datetime
 from pathlib import Path
@@ -44,8 +47,6 @@ def main():
         image_size=cfg["data"]["image_size"],
         karpathy_json=karpathy_json,
         extra_datasets=extra_datasets,
-        num_captions=cfg["data"].get("num_captions", 1),
-        text_dropout_prob=cfg["data"].get("text_dropout_prob", 0.0),
     )
 
     # Estimate max_steps
@@ -75,9 +76,7 @@ def main():
         model_name=cfg["model"]["backbone"],
         bit_list=cfg["model"]["bit_list"],
         hidden_dim=cfg["model"]["hidden_dim"],
-        shared_dim=cfg["model"].get("shared_dim", 768),
         dropout=cfg["model"]["dropout"],
-        progressive_hash=cfg["model"].get("progressive_hash", False),
         hash_lr=cfg["training"]["hash_lr"],
         backbone_lr=cfg["training"]["backbone_lr"],
         weight_decay=cfg["training"]["weight_decay"],
@@ -92,24 +91,6 @@ def main():
         lcs_weight=cfg["loss"]["lcs_weight"],
         temperature=cfg["loss"]["temperature"],
         ema_decay=cfg["loss"]["ema_decay"],
-        # P0: Backbone similarity distillation
-        distillation_weight=cfg["loss"].get("distillation_weight", 1.0),
-        distillation_teacher_temp=cfg["loss"].get("distillation_teacher_temp", 0.1),
-        distillation_student_temp=cfg["loss"].get("distillation_student_temp", 0.05),
-        # Adapter alignment loss
-        adapter_align_weight=cfg["loss"].get("adapter_align_weight", 0.1),
-        # P3: Focal InfoNCE
-        focal_gamma=cfg["loss"].get("focal_gamma", 0.0),
-        # P4: Learnable temperature
-        learnable_temp=cfg["loss"].get("learnable_temp", False),
-        # OrthoHash margin + two-stage quantization
-        ortho_margin=cfg["loss"].get("ortho_margin", 0.0),
-        quantization_start_progress=cfg["loss"].get("quantization_start_progress", 0.4),
-        # P2: LoRA fine-tuning
-        use_lora=cfg["model"].get("use_lora", False),
-        lora_rank=cfg["model"].get("lora_rank", 8),
-        lora_alpha=cfg["model"].get("lora_alpha", 16),
-        lora_dropout=cfg["model"].get("lora_dropout", 0.05),
     )
 
     # Timestamped checkpoint directory (avoid overwriting between runs)

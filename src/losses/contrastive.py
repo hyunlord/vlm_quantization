@@ -11,37 +11,15 @@ class CrossModalContrastiveLoss(nn.Module):
     Paired image-text samples (diagonal) are positives.
     All other combinations in the batch are negatives.
 
-    Supports:
-        - Learnable temperature: temperature is a trainable parameter
-          stored as log(1/temp); effective temp = exp(-log_temp)
-        - Focal weighting (P3): down-weight easy negatives via (1 - p_pos)^gamma
-
     L = -(log softmax(sim(i, t+) / tau))  averaged over both directions.
+
+    Also usable for intra-modal pairs (I2I, T2T) by passing
+    the same modality for both arguments.
     """
 
-    def __init__(
-        self,
-        temperature: float = 0.07,
-        learnable_temp: bool = False,
-        focal_gamma: float = 0.0,
-    ):
+    def __init__(self, temperature: float = 0.07):
         super().__init__()
-        self.focal_gamma = focal_gamma
-
-        if learnable_temp:
-            # Learnable log-inverse-temperature: log(1/temp)
-            self.log_temp = nn.Parameter(
-                torch.log(torch.tensor(1.0 / temperature))
-            )
-        else:
-            self.register_buffer(
-                "log_temp", torch.log(torch.tensor(1.0 / temperature))
-            )
-
-    @property
-    def temperature(self) -> torch.Tensor:
-        """Current temperature value (clamped for stability)."""
-        return torch.exp(-self.log_temp).clamp(0.01, 100.0)
+        self.temperature = temperature
 
     def forward(
         self,
@@ -60,24 +38,6 @@ class CrossModalContrastiveLoss(nn.Module):
         logits = hash_a @ hash_b.t() / self.temperature
         labels = torch.arange(logits.size(0), device=logits.device)
 
-        if self.focal_gamma > 0:
-            # Focal InfoNCE (P3): focus on hard negatives
-            loss_a2b = self._focal_cross_entropy(logits, labels)
-            loss_b2a = self._focal_cross_entropy(logits.t(), labels)
-        else:
-            loss_a2b = F.cross_entropy(logits, labels)
-            loss_b2a = F.cross_entropy(logits.t(), labels)
-
+        loss_a2b = F.cross_entropy(logits, labels)
+        loss_b2a = F.cross_entropy(logits.t(), labels)
         return (loss_a2b + loss_b2a) / 2.0
-
-    def _focal_cross_entropy(
-        self, logits: torch.Tensor, labels: torch.Tensor,
-    ) -> torch.Tensor:
-        """Cross-entropy with focal weighting to down-weight easy samples."""
-        with torch.no_grad():
-            probs = F.softmax(logits, dim=-1)
-            target_probs = probs.gather(1, labels.unsqueeze(1)).squeeze(1)
-            focal_weight = (1.0 - target_probs) ** self.focal_gamma
-
-        ce_loss = F.cross_entropy(logits, labels, reduction="none")
-        return (focal_weight * ce_loss).mean()

@@ -2,14 +2,8 @@ model:
   backbone: "google/siglip2-so400m-patch14-384"
   bit_list: [8, 16, 32, 48, 64, 128]
   hidden_dim: 512
-  shared_dim: 768                    # shared bottleneck dimension
   dropout: 0.1
-  progressive_hash: true             # per-bit projection heads (vs prefix slicing)
   freeze_backbone: false          # A100: fine-tune backbone for Korean
-  use_lora: false                 # P2: set true to enable LoRA (requires peft)
-  lora_rank: 8
-  lora_alpha: 16
-  lora_dropout: 0.05
 
 training:
   batch_size: auto                # auto-detect based on GPU VRAM
@@ -20,26 +14,18 @@ training:
   warmup_steps: 500
   gradient_clip_val: 1.0
   accumulate_grad_batches: 4      # overridden when batch_size=auto
-  val_check_interval: 0.5          # validate twice per epoch (float = fraction)
+  val_check_interval: 5000        # validate every N training batches
   early_stopping_patience: 3      # tighter than default (5)
   checkpoint_dir: "/content/drive/MyDrive/vlm_quantization/checkpoints"
 
 loss:
   contrastive_weight: 1.0
-  ortho_weight: 0.01                # reduced: margin handles alignment
-  quantization_weight: 1.0          # raised: EAQL now meaningful without L2 norm
-  balance_weight: 0.1               # raised: ensure balanced bit usage
-  consistency_weight: 0.1           # reduced: secondary objective
-  lcs_weight: 0.1                   # reduced: secondary objective
-  distillation_weight: 0.5          # reduced: avoid dominating with contrastive
-  adapter_align_weight: 0.05        # reduced: secondary objective
+  ortho_weight: 0.1
+  quantization_weight: 0.1
+  balance_weight: 0.01
+  consistency_weight: 0.5
+  lcs_weight: 0.5
   temperature: 0.07
-  learnable_temp: true              # P4: learnable temperature (log-inverse param)
-  focal_gamma: 2.0                  # P3: focal InfoNCE (0 = disabled)
-  ortho_margin: 0.2                 # margin tolerance for off-diagonal similarity
-  quantization_start_progress: 0.1  # near-immediate: codes need quantization early
-  distillation_teacher_temp: 0.1
-  distillation_student_temp: 0.05
   ema_decay: 0.99
 
 data:
@@ -48,8 +34,6 @@ data:
   num_workers: 4                  # overridden when batch_size=auto
   max_text_length: 64
   image_size: 384
-  num_captions: 2                   # P1: multi-caption contrastive
-  text_dropout_prob: 0.1            # P5: text augmentation
   extra_datasets:
     - jsonl_path: "/content/data/aihub/aihub_71454.jsonl"
       data_root: "/content/data/aihub"
