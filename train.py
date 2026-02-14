@@ -38,6 +38,7 @@ def main():
     # DataModule
     karpathy_json = cfg["data"].get("karpathy_json")
     extra_datasets = cfg["data"].get("extra_datasets")
+    instances_json = cfg["data"].get("instances_json")
     datamodule = CrossModalHashDataModule(
         data_root=cfg["data"]["data_root"],
         processor_name=cfg["model"]["backbone"],
@@ -47,6 +48,7 @@ def main():
         image_size=cfg["data"]["image_size"],
         karpathy_json=karpathy_json,
         extra_datasets=extra_datasets,
+        instances_json=instances_json,
     )
 
     # Estimate max_steps
@@ -89,6 +91,7 @@ def main():
         balance_weight=cfg["loss"]["balance_weight"],
         consistency_weight=cfg["loss"]["consistency_weight"],
         lcs_weight=cfg["loss"]["lcs_weight"],
+        supervised_weight=cfg["loss"].get("supervised_weight", 0.0),
         temperature=cfg["loss"]["temperature"],
         ema_decay=cfg["loss"]["ema_decay"],
     )

@@ -9,6 +9,7 @@ from src.losses.contrastive import CrossModalContrastiveLoss
 from src.losses.eaql import EAQLLoss
 from src.losses.lcs import LCSSelfDistillationLoss
 from src.losses.ortho_hash import CrossModalOrthoHashLoss
+from src.losses.supervised import PairwiseSupervisedLoss
 
 
 class CombinedHashLoss(nn.Module):
@@ -37,6 +38,7 @@ class CombinedHashLoss(nn.Module):
         balance_weight: float = 0.01,
         consistency_weight: float = 0.5,
         lcs_weight: float = 0.5,
+        supervised_weight: float = 0.0,
         temperature: float = 0.07,
         ema_decay: float = 0.99,
     ):
@@ -48,6 +50,7 @@ class CombinedHashLoss(nn.Module):
         self.balance_weight = balance_weight
         self.consistency_weight = consistency_weight
         self.lcs_weight = lcs_weight
+        self.supervised_weight = supervised_weight
 
         self.contrastive_loss = CrossModalContrastiveLoss(temperature)
         self.eaql_loss = EAQLLoss(ema_decay)
@@ -56,6 +59,7 @@ class CombinedHashLoss(nn.Module):
             [BitBalanceLoss(bit) for bit in self.bit_list]
         )
         self.lcs_loss = LCSSelfDistillationLoss()
+        self.supervised_loss = PairwiseSupervisedLoss(temperature)
 
     def forward(
         self,
@@ -63,6 +67,7 @@ class CombinedHashLoss(nn.Module):
         text_outputs: list[dict[str, torch.Tensor]],
         weak_image_outputs: list[dict[str, torch.Tensor]] | None = None,
         aug_image_outputs: list[dict[str, torch.Tensor]] | None = None,
+        labels: torch.Tensor | None = None,
         progress: float = 1.0,
     ) -> dict[str, torch.Tensor]:
         """
@@ -71,6 +76,7 @@ class CombinedHashLoss(nn.Module):
             text_outputs: same structure
             weak_image_outputs: optional weak-augmented image outputs
             aug_image_outputs: optional strong-augmented image outputs
+            labels: (B, C) multi-hot label vectors for supervised loss (optional)
             progress: training progress in [0, 1] for quantization ramp-up
         """
         device = image_outputs[0]["continuous"].device
@@ -140,6 +146,17 @@ class CombinedHashLoss(nn.Module):
             self.lcs_loss(img_continuous_list) + self.lcs_loss(txt_continuous_list)
         ) / 2.0
 
+        # Supervised pairwise loss (when labels are provided and weight > 0)
+        supervised_total = torch.tensor(0.0, device=device)
+        if labels is not None and self.supervised_weight > 0:
+            for k in range(n_bits):
+                img_cont = image_outputs[k]["continuous"]
+                txt_cont = text_outputs[k]["continuous"]
+                supervised_total = supervised_total + self.supervised_loss(
+                    img_cont, txt_cont, labels
+                )
+            supervised_total = supervised_total / n_bits
+
         # Quantization ramp-up
         quant_scale = min(1.0, progress * 2.0)
 
@@ -150,6 +167,7 @@ class CombinedHashLoss(nn.Module):
             + self.balance_weight * balance_total
             + self.consistency_weight * consistency_total
             + self.lcs_weight * lcs_total
+            + self.supervised_weight * supervised_total
         )
 
         return {
@@ -160,4 +178,5 @@ class CombinedHashLoss(nn.Module):
             "balance": balance_total,
             "consistency": consistency_total,
             "lcs": lcs_total,
+            "supervised": supervised_total,
         }

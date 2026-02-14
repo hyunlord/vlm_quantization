@@ -6,6 +6,29 @@ import torch.nn.functional as F
 from src.utils.hamming import hamming_distance
 
 
+def _compute_relevance(
+    query_labels: torch.Tensor,
+    database_labels: torch.Tensor,
+    query_idx: int,
+    retrieved_indices: torch.Tensor,
+) -> torch.Tensor:
+    """Compute relevance vector for a single query against retrieved items.
+
+    Supports both:
+        - 1D integer labels (image_id matching): relevant if equal
+        - 2D multi-hot labels (category overlap): relevant if any shared category
+    """
+    if query_labels.dim() == 1:
+        # Scalar labels: exact match
+        retrieved = database_labels[retrieved_indices]
+        return (retrieved == query_labels[query_idx]).float()
+    else:
+        # Multi-hot labels: overlap match (S[i,j] = 1 if any shared category)
+        q = query_labels[query_idx]  # (C,)
+        db = database_labels[retrieved_indices]  # (K, C)
+        return (db @ q > 0).float()
+
+
 def cosine_mean_average_precision(
     query_emb: torch.Tensor,
     database_emb: torch.Tensor,
@@ -39,8 +62,9 @@ def cosine_mean_average_precision(
 
     ap_sum = 0.0
     for i in range(N_q):
-        retrieved = database_labels[top_k_indices[i]]
-        relevant = (retrieved == query_labels[i]).float()
+        relevant = _compute_relevance(
+            query_labels, database_labels, i, top_k_indices[i]
+        )
 
         if relevant.sum() == 0:
             continue
@@ -84,8 +108,9 @@ def mean_average_precision(
 
     ap_sum = 0.0
     for i in range(N_q):
-        retrieved = database_labels[top_k_indices[i]]
-        relevant = (retrieved == query_labels[i]).float()
+        relevant = _compute_relevance(
+            query_labels, database_labels, i, top_k_indices[i]
+        )
 
         if relevant.sum() == 0:
             continue
@@ -121,8 +146,9 @@ def precision_at_k(
     N_q = dist.size(0)
     prec_sum = 0.0
     for i in range(N_q):
-        retrieved = database_labels[top_k_indices[i]]
-        relevant = (retrieved == query_labels[i]).float()
+        relevant = _compute_relevance(
+            query_labels, database_labels, i, top_k_indices[i]
+        )
         prec_sum += relevant.mean().item()
 
     return prec_sum / N_q
@@ -142,9 +168,15 @@ def cosine_precision_at_k(
     actual_k = min(k, sim.size(1))
     _, indices = sim.topk(actual_k, dim=1)
 
-    retrieved_labels = database_labels[indices]
-    matches = (retrieved_labels == query_labels.unsqueeze(1)).float()
-    return matches.mean().item()
+    N_q = sim.size(0)
+    prec_sum = 0.0
+    for i in range(N_q):
+        relevant = _compute_relevance(
+            query_labels, database_labels, i, indices[i]
+        )
+        prec_sum += relevant.mean().item()
+
+    return prec_sum / N_q
 
 
 def compute_bit_entropy(binary_codes: torch.Tensor) -> torch.Tensor:

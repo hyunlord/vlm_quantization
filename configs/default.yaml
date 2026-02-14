@@ -23,12 +23,14 @@ loss:
   balance_weight: 0.01
   consistency_weight: 0.5
   lcs_weight: 0.5
+  supervised_weight: 0.0  # set > 0 to enable pairwise supervised loss (requires instances_json)
   temperature: 0.07
   ema_decay: 0.99
 
 data:
   data_root: "./data/coco"
   karpathy_json: "./data/coco/dataset_coco.json"
+  # instances_json: "./data/coco/annotations/instances_train2014.json"  # COCO 80-cat labels for supervised hashing
   num_workers: 4
   max_text_length: 64
   image_size: 384

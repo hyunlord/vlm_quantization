@@ -44,6 +44,7 @@ class CrossModalHashModel(pl.LightningModule):
         balance_weight: float = 0.01,
         consistency_weight: float = 0.5,
         lcs_weight: float = 0.5,
+        supervised_weight: float = 0.0,
         temperature: float = 0.07,
         ema_decay: float = 0.99,
     ):
@@ -83,6 +84,7 @@ class CrossModalHashModel(pl.LightningModule):
             balance_weight=balance_weight,
             consistency_weight=consistency_weight,
             lcs_weight=lcs_weight,
+            supervised_weight=supervised_weight,
             temperature=temperature,
             ema_decay=ema_decay,
         )
@@ -155,6 +157,7 @@ class CrossModalHashModel(pl.LightningModule):
             text_outputs=outputs["text"],
             weak_image_outputs=outputs["weak_image"],
             aug_image_outputs=outputs["aug_image"],
+            labels=batch.get("labels"),
             progress=progress,
         )
 
@@ -174,7 +177,11 @@ class CrossModalHashModel(pl.LightningModule):
         image_out = self.image_hash(img_backbone)
         text_out = self.text_hash(txt_backbone)
 
-        losses = self.loss_fn(image_outputs=image_out, text_outputs=text_out)
+        losses = self.loss_fn(
+            image_outputs=image_out,
+            text_outputs=text_out,
+            labels=batch.get("labels"),
+        )
 
         for name, value in losses.items():
             self.log(f"val/{name}", value, sync_dist=True)
@@ -182,6 +189,10 @@ class CrossModalHashModel(pl.LightningModule):
         # Per-bit hash quality metrics
         bit_list = self.hparams.bit_list
         result = {"image_ids": batch["image_ids"]}
+
+        # Collect multi-hot labels for supervised mAP evaluation
+        if "labels" in batch:
+            result["labels"] = batch["labels"].detach()
 
         for k, bit in enumerate(bit_list):
             img_binary = image_out[k]["binary"]
@@ -263,6 +274,27 @@ class CrossModalHashModel(pl.LightningModule):
         self.log("val/p10", precision_at_k(
             img_codes, txt_codes, sub_labels, sub_labels, k=10,
         ))
+
+        # Supervised mAP using multi-hot labels (when available)
+        if "labels" in self._val_outputs[0]:
+            multi_hot = torch.cat(
+                [o["labels"] for o in self._val_outputs]
+            )[idx]
+            self.log("val/sup_map_i2t", mean_average_precision(
+                img_codes, txt_codes, multi_hot, multi_hot,
+            ))
+            self.log("val/sup_map_t2i", mean_average_precision(
+                txt_codes, img_codes, multi_hot, multi_hot,
+            ))
+            self.log("val/sup_p1", precision_at_k(
+                img_codes, txt_codes, multi_hot, multi_hot, k=1,
+            ))
+            self.log("val/sup_p5", precision_at_k(
+                img_codes, txt_codes, multi_hot, multi_hot, k=5,
+            ))
+            self.log("val/sup_p10", precision_at_k(
+                img_codes, txt_codes, multi_hot, multi_hot, k=10,
+            ))
 
         # Backbone cosine mAP baseline (cache when frozen — embeddings never change)
         if self._cached_backbone_metrics is not None:

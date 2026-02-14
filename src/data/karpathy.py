@@ -57,7 +57,10 @@ class KarpathyCocoCaptionsDataset(Dataset):
     Supports:
         - Multi-caption (P1): return auxiliary caption for extra positives
         - Text dropout (P5): randomly drop tokens for text augmentation
+        - Multi-label (supervised): load COCO 80-category annotations
     """
+
+    NUM_CATEGORIES = 80  # COCO has 80 object categories
 
     def __init__(
         self,
@@ -71,6 +74,7 @@ class KarpathyCocoCaptionsDataset(Dataset):
         image_size: int = 384,
         num_captions: int = 1,
         text_dropout_prob: float = 0.0,
+        instances_json: str | Path | None = None,
     ):
         self.data_root = Path(data_root)
         self.processor = processor
@@ -110,6 +114,59 @@ class KarpathyCocoCaptionsDataset(Dataset):
         # Callback compatibility (MonitorCallback accesses .coco and .image_dir)
         self.image_dir = self.data_root
         self.coco = _KarpathyCompat(self._id_to_entry)
+
+        # Multi-label annotations (optional, for supervised hashing)
+        self._labels: dict[int, torch.Tensor] | None = None
+        if instances_json is not None:
+            self._labels = self._load_instance_labels(instances_json)
+
+    def _load_instance_labels(
+        self, instances_json: str | Path,
+    ) -> dict[int, torch.Tensor]:
+        """Load COCO instance annotations and build multi-hot label vectors.
+
+        COCO has 80 categories with non-contiguous IDs (1-90 with gaps).
+        We map them to contiguous indices 0-79.
+
+        Karpathy split spans both train2014/ and val2014/ images, so we
+        auto-discover and load both instances_train2014.json and
+        instances_val2014.json from the same annotations directory.
+        """
+        instances_path = Path(instances_json)
+        if not instances_path.exists():
+            raise FileNotFoundError(
+                f"COCO instances JSON not found: {instances_path}\n"
+                "Download from: https://cocodataset.org/#download"
+            )
+
+        # Auto-discover both train and val instance files
+        ann_dir = instances_path.parent
+        json_files = [instances_path]
+        for sibling in ["instances_train2014.json", "instances_val2014.json"]:
+            other = ann_dir / sibling
+            if other.exists() and other.resolve() != instances_path.resolve():
+                json_files.append(other)
+
+        labels: dict[int, torch.Tensor] = {}
+        cat_to_idx: dict[int, int] | None = None
+
+        for jf in json_files:
+            with open(jf) as f:
+                instances = json.load(f)
+
+            # Build category ID -> contiguous index mapping (same across files)
+            if cat_to_idx is None:
+                cat_ids = sorted(c["id"] for c in instances["categories"])
+                cat_to_idx = {cat_id: idx for idx, cat_id in enumerate(cat_ids)}
+
+            for ann in instances["annotations"]:
+                img_id = ann["image_id"]
+                cat_idx = cat_to_idx[ann["category_id"]]
+                if img_id not in labels:
+                    labels[img_id] = torch.zeros(self.NUM_CATEGORIES)
+                labels[img_id][cat_idx] = 1.0
+
+        return labels
 
     def __len__(self) -> int:
         return len(self._entries)
@@ -201,6 +258,12 @@ class KarpathyCocoCaptionsDataset(Dataset):
             "attention_mask": primary_tokens["attention_mask"],
             "image_id": image_id,
         }
+
+        # Multi-hot labels for supervised hashing (zero vector if image has no annotations)
+        if self._labels is not None:
+            result["labels"] = self._labels.get(
+                image_id, torch.zeros(self.NUM_CATEGORIES)
+            )
 
         # Auxiliary caption (P1: multi-caption, second distinct caption)
         if self.num_captions >= 2:

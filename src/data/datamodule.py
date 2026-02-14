@@ -42,6 +42,9 @@ def collate_fn(batch: list[dict]) -> dict[str, torch.Tensor]:
         result["aux_attention_mask"] = torch.stack([
             b.get("aux_attention_mask", b["attention_mask"]) for b in batch
         ])
+    # Multi-hot labels for supervised hashing
+    if "labels" in batch[0]:
+        result["labels"] = torch.stack([b["labels"] for b in batch])
     return result
 
 
@@ -61,6 +64,7 @@ class CrossModalHashDataModule(pl.LightningDataModule):
         subset_ratio: float = 1.0,
         num_captions: int = 1,
         text_dropout_prob: float = 0.0,
+        instances_json: str | None = None,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -142,6 +146,7 @@ class CrossModalHashDataModule(pl.LightningDataModule):
                     image_size=self.hparams.image_size,
                     num_captions=self.hparams.num_captions,
                     text_dropout_prob=self.hparams.text_dropout_prob,
+                    instances_json=self.hparams.instances_json,
                 )
                 self.train_dataset = self._maybe_subset(
                     self._concat_with_extra(base_train)
@@ -153,6 +158,7 @@ class CrossModalHashDataModule(pl.LightningDataModule):
                     processor=self.processor,
                     transform=get_val_transforms(self.hparams.image_size),
                     max_text_length=self.hparams.max_text_length,
+                    instances_json=self.hparams.instances_json,
                 )
 
             if stage == "test":
@@ -163,6 +169,7 @@ class CrossModalHashDataModule(pl.LightningDataModule):
                     processor=self.processor,
                     transform=get_val_transforms(self.hparams.image_size),
                     max_text_length=self.hparams.max_text_length,
+                    instances_json=self.hparams.instances_json,
                 )
         else:
             # Fallback: standard COCO 2014 splits
