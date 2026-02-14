@@ -20,7 +20,7 @@ interface SnapshotEntry {
 }
 
 function getWsUrl() {
-  if (typeof window === "undefined") return "ws://localhost:8000/ws";
+  if (typeof window === "undefined") return "ws://localhost:8001/ws";
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${proto}//${window.location.host}/ws`;
 }

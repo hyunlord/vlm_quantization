@@ -47,5 +47,5 @@ data:
 
 monitor:
   enabled: true
-  server_url: "http://localhost:8000"
+  server_url: "http://localhost:8001"
   log_every_n_steps: 10

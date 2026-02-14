@@ -63,15 +63,15 @@ else:
 MONITOR_PID=""
 if [ "$MONITOR" = true ]; then
     echo ""
-    echo "Starting monitoring dashboard on http://localhost:8000 ..."
-    echo "  Optuna dashboard: http://localhost:8000/optuna"
+    echo "Starting monitoring dashboard on http://localhost:8001 ..."
+    echo "  Optuna dashboard: http://localhost:8001/optuna"
     uv run python -m uvicorn monitor.server.app:app \
-        --host 0.0.0.0 --port 8000 --log-level warning &
+        --host 0.0.0.0 --port 8001 --log-level warning &
     MONITOR_PID=$!
     sleep 2
 
     if kill -0 "$MONITOR_PID" 2>/dev/null; then
-        echo "  Dashboard: http://localhost:8000"
+        echo "  Dashboard: http://localhost:8001"
     else
         echo "  WARNING: Monitor server failed to start"
         MONITOR_PID=""
@@ -104,5 +104,5 @@ echo ""
 echo "=============================="
 echo "Search complete!"
 echo "  Results: $STORAGE"
-echo "  Dashboard: http://localhost:8000/optuna"
+echo "  Dashboard: http://localhost:8001/optuna"
 echo "=============================="

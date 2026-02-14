@@ -17,7 +17,7 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
 
 HOST="${MONITOR_HOST:-0.0.0.0}"
-PORT="${MONITOR_PORT:-8000}"
+PORT="${MONITOR_PORT:-8001}"
 PID_FILE="$PROJECT_DIR/.monitor.pid"
 
 start_server() {

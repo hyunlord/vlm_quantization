@@ -16,7 +16,7 @@ class MonitorCallback(pl.Callback):
 
     def __init__(
         self,
-        server_url: str = "http://localhost:8000",
+        server_url: str = "http://localhost:8001",
         log_every_n_steps: int = 10,
         run_id: str = "",
     ):
