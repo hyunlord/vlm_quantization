@@ -43,21 +43,18 @@ else:
     print('  WARNING: No CUDA GPU detected')
 "
 
-# Start monitoring server in background
+# Start monitoring server in background (skip if already running)
 MONITOR_PID=""
+MONITOR_MANAGED=false
 if [ "$MONITOR" = true ]; then
-    echo ""
-    echo "Starting monitoring dashboard on http://localhost:8000 ..."
-    uv run python -m uvicorn monitor.server.app:app \
-        --host 0.0.0.0 --port 8000 --log-level warning &
-    MONITOR_PID=$!
-    sleep 2
-
-    if kill -0 "$MONITOR_PID" 2>/dev/null; then
-        echo "  Dashboard: http://localhost:8000"
+    if bash "$PROJECT_DIR/scripts/monitor.sh" --is-running 2>/dev/null; then
+        echo ""
+        echo "Monitor already running, reusing existing server."
     else
-        echo "  WARNING: Monitor server failed to start"
-        MONITOR_PID=""
+        echo ""
+        bash "$PROJECT_DIR/scripts/monitor.sh" --background
+        MONITOR_MANAGED=true
+        MONITOR_PID=$(cat "$PROJECT_DIR/.monitor.pid" 2>/dev/null || true)
     fi
 fi
 
@@ -98,12 +95,12 @@ sync_to_drive() {
     fi
 }
 
-# Cleanup on exit
+# Cleanup on exit (only stop monitor if we started it)
 cleanup() {
-    if [ -n "$MONITOR_PID" ] && kill -0 "$MONITOR_PID" 2>/dev/null; then
+    if [ "$MONITOR_MANAGED" = true ] && [ -n "$MONITOR_PID" ] && kill -0 "$MONITOR_PID" 2>/dev/null; then
         echo ""
         echo "Stopping monitoring server..."
-        kill "$MONITOR_PID" 2>/dev/null || true
+        bash "$PROJECT_DIR/scripts/monitor.sh" --stop
     fi
     sync_to_drive
 }

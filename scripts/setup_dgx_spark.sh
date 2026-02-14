@@ -289,13 +289,21 @@ else
     echo "  Install manually: curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -"
 fi
 
+# ---------- 5. Start monitoring server ----------
+echo ""
+echo "[5/5] Starting monitoring dashboard..."
+bash "$PROJECT_DIR/scripts/monitor.sh" --background || true
+
 # ---------- Done ----------
 echo ""
 echo "=============================="
 echo "Setup complete!"
 echo ""
+echo "  Dashboard: http://localhost:8000"
+echo "  Stop monitor: bash scripts/monitor.sh --stop"
+echo ""
 echo "To start training:"
-echo "  bash scripts/train_dgx_spark.sh"
+echo "  bash scripts/train_dgx_spark.sh --no-monitor"
 echo ""
 echo "Or manually:"
 echo "  uv run python train.py --config configs/dgx_spark.yaml"

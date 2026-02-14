@@ -26,6 +26,9 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Monitor PID
+.monitor.pid
+
 # Monitoring frontend
 monitor/frontend/node_modules/
 monitor/frontend/.next/
