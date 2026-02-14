@@ -1,6 +1,6 @@
 "use client";
 
-import { Cpu, Thermometer, Monitor } from "lucide-react";
+import { Cpu, Thermometer, Monitor, Zap, Fan, Gauge } from "lucide-react";
 import type { SystemMetric } from "@/lib/types";
 
 interface Props {
@@ -84,8 +84,43 @@ function MemoryBar({
   );
 }
 
+function PowerBar({
+  draw,
+  limit,
+}: {
+  draw: number;
+  limit: number;
+}) {
+  const pct = limit > 0 ? (draw / limit) * 100 : 0;
+  const color =
+    pct > 90 ? "bg-red-500" : pct > 75 ? "bg-orange-500" : pct > 50 ? "bg-yellow-500" : "bg-blue-500";
+
+  return (
+    <div>
+      <div className="flex justify-between text-xs mb-1">
+        <span className="text-gray-500 flex items-center gap-1">
+          <Zap className="w-3 h-3" />
+          Power
+        </span>
+        <span className="text-gray-400 font-mono">
+          {draw.toFixed(0)} / {limit.toFixed(0)} W
+        </span>
+      </div>
+      <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${color}`}
+          style={{ width: `${Math.min(pct, 100)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 const utilColor = (v: number) =>
   v > 95 ? "#ef4444" : v > 80 ? "#eab308" : "#10b981";
+
+const tempColor = (v: number) =>
+  v > 85 ? "#ef4444" : v > 70 ? "#eab308" : v > 50 ? "#f97316" : "#10b981";
 
 export default function SystemPanel({ data }: Props) {
   if (!data) {
@@ -96,6 +131,9 @@ export default function SystemPanel({ data }: Props) {
       </div>
     );
   }
+
+  const hasPower = data.gpu_power_limit > 0;
+  const hasFan = data.gpu_fan_speed >= 0;
 
   return (
     <div className="rounded-xl bg-gray-900 p-4 border border-gray-800">
@@ -108,8 +146,8 @@ export default function SystemPanel({ data }: Props) {
         )}
       </div>
 
-      {/* Gauges */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
+      {/* Gauges: GPU, CPU, Temp */}
+      <div className={`grid gap-3 mb-4 ${data.gpu_temp > 0 ? "grid-cols-3" : "grid-cols-2"}`}>
         <GaugeRing
           value={data.gpu_util}
           label="GPU"
@@ -124,9 +162,18 @@ export default function SystemPanel({ data }: Props) {
           icon={<Cpu className="w-3.5 h-3.5 text-gray-500" />}
           colorFn={utilColor}
         />
+        {data.gpu_temp > 0 && (
+          <GaugeRing
+            value={data.gpu_temp}
+            label="Temp"
+            unit="°"
+            icon={<Thermometer className="w-3.5 h-3.5 text-gray-500" />}
+            colorFn={tempColor}
+          />
+        )}
       </div>
 
-      {/* Memory bars */}
+      {/* Memory + Power bars */}
       <div className="space-y-3">
         <MemoryBar
           used={data.gpu_mem_used}
@@ -134,24 +181,47 @@ export default function SystemPanel({ data }: Props) {
           label="GPU Memory"
         />
         <MemoryBar used={data.ram_used} total={data.ram_total} label="RAM" />
+        {hasPower && (
+          <PowerBar draw={data.gpu_power_draw} limit={data.gpu_power_limit} />
+        )}
       </div>
 
-      {/* Temperature */}
-      {data.gpu_temp > 0 && (
-        <div className="mt-3 flex items-center gap-2 text-xs">
-          <Thermometer className="w-3.5 h-3.5 text-gray-500" />
-          <span className="text-gray-500">GPU Temp:</span>
-          <span
-            className={`font-mono font-bold ${
-              data.gpu_temp > 85
-                ? "text-red-400"
-                : data.gpu_temp > 70
-                  ? "text-yellow-400"
-                  : "text-emerald-400"
-            }`}
-          >
-            {data.gpu_temp}°C
-          </span>
+      {/* Bottom info row: Fan + Clocks */}
+      {(hasFan || data.gpu_clock_sm > 0) && (
+        <div className="mt-3 pt-3 border-t border-gray-800 grid grid-cols-2 gap-2">
+          {hasFan && (
+            <div className="flex items-center gap-1.5 text-xs">
+              <Fan className="w-3 h-3 text-gray-500" />
+              <span className="text-gray-500">Fan</span>
+              <span className={`font-mono font-bold ${
+                data.gpu_fan_speed > 80
+                  ? "text-red-400"
+                  : data.gpu_fan_speed > 50
+                    ? "text-yellow-400"
+                    : "text-emerald-400"
+              }`}>
+                {data.gpu_fan_speed.toFixed(0)}%
+              </span>
+            </div>
+          )}
+          {data.gpu_clock_sm > 0 && (
+            <div className="flex items-center gap-1.5 text-xs">
+              <Gauge className="w-3 h-3 text-gray-500" />
+              <span className="text-gray-500">Clock</span>
+              <span className="font-mono text-gray-300">
+                {data.gpu_clock_sm.toFixed(0)} MHz
+              </span>
+            </div>
+          )}
+          {data.gpu_clock_mem > 0 && (
+            <div className="flex items-center gap-1.5 text-xs">
+              <Gauge className="w-3 h-3 text-gray-500" />
+              <span className="text-gray-500">Mem Clk</span>
+              <span className="font-mono text-gray-300">
+                {data.gpu_clock_mem.toFixed(0)} MHz
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>

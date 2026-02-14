@@ -42,6 +42,30 @@ def get_system_metrics() -> SystemMetric:
             metric.gpu_mem_total = mem_info.total / (1024**3)
             metric.gpu_temp = temp
             metric.gpu_name = name if isinstance(name, str) else name.decode()
+
+            # Power draw (milliwatts → watts)
+            try:
+                metric.gpu_power_draw = pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0
+                metric.gpu_power_limit = pynvml.nvmlDeviceGetEnforcedPowerLimit(handle) / 1000.0
+            except Exception:
+                pass
+
+            # Fan speed (not available on passively-cooled GPUs like DGX Spark)
+            try:
+                metric.gpu_fan_speed = pynvml.nvmlDeviceGetFanSpeed(handle)
+            except Exception:
+                metric.gpu_fan_speed = -1.0
+
+            # Clock speeds (MHz)
+            try:
+                metric.gpu_clock_sm = pynvml.nvmlDeviceGetClockInfo(
+                    handle, pynvml.NVML_CLOCK_SM
+                )
+                metric.gpu_clock_mem = pynvml.nvmlDeviceGetClockInfo(
+                    handle, pynvml.NVML_CLOCK_MEM
+                )
+            except Exception:
+                pass
         except Exception:
             pass
 

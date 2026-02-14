@@ -102,6 +102,11 @@ export interface SystemMetric {
   gpu_mem_total: number;
   gpu_temp: number;
   gpu_name: string;
+  gpu_power_draw: number;
+  gpu_power_limit: number;
+  gpu_fan_speed: number; // -1 = not available
+  gpu_clock_sm: number;
+  gpu_clock_mem: number;
   cpu_util: number;
   ram_used: number;
   ram_total: number;

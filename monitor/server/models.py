@@ -54,6 +54,11 @@ class SystemMetric(BaseModel):
     gpu_mem_total: float = 0.0
     gpu_temp: float = 0.0
     gpu_name: str = ""
+    gpu_power_draw: float = 0.0  # Watts
+    gpu_power_limit: float = 0.0  # Watts
+    gpu_fan_speed: float = -1.0  # %, -1 = not available
+    gpu_clock_sm: float = 0.0  # MHz
+    gpu_clock_mem: float = 0.0  # MHz
     cpu_util: float = 0.0
     ram_used: float = 0.0
     ram_total: float = 0.0
