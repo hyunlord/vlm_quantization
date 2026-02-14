@@ -29,13 +29,13 @@ dependencies = [
     "markupsafe>=3.0.2",
 ]
 
-# NOTE: PyTorch CUDA index removed — PyPI default wheels support both
-# x86_64 and aarch64 (DGX Spark ARM) with CUDA out of the box.
-# If you need a specific CUDA version on x86_64, re-add:
-#   [[tool.uv.index]]
-#   name = "pytorch-cu128"
-#   url = "https://download.pytorch.org/whl/cu128"
-#   explicit = true
-#   [tool.uv.sources]
-#   torch = [{ index = "pytorch-cu128" }]
-#   torchvision = [{ index = "pytorch-cu128" }]
+# PyTorch CUDA index — cu126 supports both x86_64 and aarch64 (DGX Spark ARM).
+# CUDA 13.0 is backward-compatible with cu126 wheels.
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu126" }]
+torchvision = [{ index = "pytorch-cu126" }]
