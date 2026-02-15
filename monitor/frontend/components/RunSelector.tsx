@@ -3,24 +3,15 @@
 import { useRunContext } from "@/contexts/RunContext";
 
 function formatRunId(runId: string): string {
-  // Parse YYYYMMDD_HHMMSS format (server time, assumed UTC)
-  // Convert to KST (UTC+9) for display
+  // Parse YYYYMMDD_HHMMSS format (server local time from datetime.now())
   const m = runId.match(/^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})$/);
   if (!m) return runId;
-  // Create date assuming UTC, then format in KST
-  const utcDate = new Date(Date.UTC(
-    parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]),
-    parseInt(m[4]), parseInt(m[5]), parseInt(m[6])
-  ));
-  return utcDate.toLocaleString("ko-KR", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Seoul",
-  });
+  const year = m[1];
+  const month = parseInt(m[2]);
+  const day = parseInt(m[3]);
+  const hour = m[4];
+  const minute = m[5];
+  return `${year}년 ${month}월 ${day}일 ${hour}:${minute}`;
 }
 
 export default function RunSelector() {
