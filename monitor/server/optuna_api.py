@@ -51,7 +51,7 @@ def _trial_to_dict(trial) -> dict[str, Any]:
 def _db_exists() -> bool:
     """Check if the SQLite DB file exists (for sqlite:/// URLs)."""
     url = _get_storage_url()
-    if url.startswith("sqlite:///"):
+    if url and url.startswith("sqlite:///"):
         path = url.replace("sqlite:///", "")
         return os.path.isfile(path)
     # For non-sqlite URLs, assume reachable

@@ -29,9 +29,11 @@ function balanceColor(rate: number): string {
 export default function BitBalanceChart({ bitActivations }: Props) {
   const bitLevels = useMemo(
     () =>
-      Object.keys(bitActivations)
-        .map((k) => parseInt(k.replace("activation_", ""), 10))
-        .sort((a, b) => a - b),
+      bitActivations
+        ? Object.keys(bitActivations)
+            .map((k) => parseInt(k.replace("activation_", ""), 10))
+            .sort((a, b) => a - b)
+        : [],
     [bitActivations],
   );
 
