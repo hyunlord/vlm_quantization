@@ -46,7 +46,7 @@ class InferenceEngine:
 
         logger.info("Loading checkpoint: %s", checkpoint_path)
         self.model = CrossModalHashModel.load_from_checkpoint(
-            str(path), map_location="cpu",
+            str(path), map_location="cpu", strict=False,
         )
         self.model.eval()
         self.model_name = self.model.hparams.get("model_name", "")
