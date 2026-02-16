@@ -79,7 +79,7 @@ class InferenceEngine:
         hparams: dict = {}
         if self.model is not None:
             hparams = {k: v for k, v in self.model.hparams.items()}
-            if "model_name" in hparams:
+            if "model_name" in hparams and hparams["model_name"]:
                 hparams["model_name"] = hparams["model_name"].split("/")[-1]
         return {
             "loaded": self.is_loaded,
