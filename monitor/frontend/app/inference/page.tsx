@@ -22,7 +22,7 @@ import InputPanel from "@/components/inference/InputPanel";
 import type { CheckpointInfo, InferenceHashCode, InferenceComparison, ModelStatus } from "@/lib/types";
 
 const DEFAULT_CKPT_DIR =
-  "/content/drive/MyDrive/vlm_quantization/checkpoints";
+  "/home/hyunlord/github/vlm_quantization/checkpoints";
 
 // --- Helpers ---
 
