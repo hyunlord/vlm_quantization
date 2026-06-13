@@ -11,9 +11,9 @@ from src.data.datamodule import CrossModalHashDataModule
 from src.models.cross_modal_hash import CrossModalHashModel
 from src.utils.metrics import (
     compute_bit_entropy,
-    compute_quantization_error,
     mean_average_precision,
     precision_at_k,
+    recall_at_k,
 )
 
 
@@ -73,6 +73,10 @@ def evaluate_retrieval(
         )
         for k in k_values:
             results[name][f"P@{k}"] = precision_at_k(
+                query, database, q_labels, db_labels, k=k
+            )
+        for k in k_values:
+            results[name][f"R@{k}"] = recall_at_k(
                 query, database, q_labels, db_labels, k=k
             )
 
@@ -136,13 +140,17 @@ def main():
         print(f"\n{'Direction':<8} {'mAP':>8}", end="")
         for k in k_values:
             print(f" {'P@'+str(k):>8}", end="")
+        for k in k_values:
+            print(f" {'R@'+str(k):>8}", end="")
         print()
-        print("-" * (8 + 9 + 9 * len(k_values)))
+        print("-" * (8 + 9 + 9 * 2 * len(k_values)))
 
         for direction, metrics in results.items():
             print(f"{direction:<8} {metrics['mAP']:>8.4f}", end="")
             for k in k_values:
                 print(f" {metrics[f'P@{k}']:>8.4f}", end="")
+            for k in k_values:
+                print(f" {metrics[f'R@{k}']:>8.4f}", end="")
             print()
 
 

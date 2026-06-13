@@ -15,6 +15,7 @@ from src.models.cross_modal_hash import CrossModalHashModel
 from src.utils.gpu_config import auto_configure
 
 # Mapping: Optuna param name → config YAML path
+# Only parameters that the model / datamodule actually accept are searched.
 PARAM_MAP = {
     "hidden_dim": ("model", "hidden_dim"),
     "ortho_weight": ("loss", "ortho_weight"),
@@ -25,18 +26,10 @@ PARAM_MAP = {
     "temperature": ("loss", "temperature"),
     "hash_lr": ("training", "hash_lr"),
     "backbone_lr": ("training", "backbone_lr"),
-    # P0: Distillation
-    "distillation_weight": ("loss", "distillation_weight"),
-    "distillation_teacher_temp": ("loss", "distillation_teacher_temp"),
-    "distillation_student_temp": ("loss", "distillation_student_temp"),
-    # P3: Focal InfoNCE
+    # Focal InfoNCE (0 = plain InfoNCE)
     "focal_gamma": ("loss", "focal_gamma"),
-    # P5: Text augmentation
+    # Text augmentation (datamodule)
     "text_dropout_prob": ("data", "text_dropout_prob"),
-    # Architecture: shared bottleneck + ortho margin + adapter alignment
-    "shared_dim": ("model", "shared_dim"),
-    "adapter_align_weight": ("loss", "adapter_align_weight"),
-    "ortho_margin": ("loss", "ortho_margin"),
 }
 
 
@@ -83,23 +76,10 @@ def objective(
     hash_lr = trial.suggest_float("hash_lr", 1e-4, 5e-3, log=True)
     backbone_lr = trial.suggest_float("backbone_lr", 1e-6, 5e-5, log=True)
 
-    # P0: Distillation
-    distillation_weight = trial.suggest_float("distillation_weight", 0.1, 3.0)
-    distillation_teacher_temp = trial.suggest_float(
-        "distillation_teacher_temp", 0.05, 0.3,
-    )
-    distillation_student_temp = trial.suggest_float(
-        "distillation_student_temp", 0.01, 0.15,
-    )
-    # P3: Focal InfoNCE
+    # Focal InfoNCE (0 = plain InfoNCE)
     focal_gamma = trial.suggest_float("focal_gamma", 0.0, 4.0)
-    # P5: Text augmentation
+    # Text augmentation (datamodule)
     text_dropout_prob = trial.suggest_float("text_dropout_prob", 0.0, 0.3)
-
-    # Architecture: shared bottleneck
-    shared_dim = trial.suggest_categorical("shared_dim", [512, 768, 1024])
-    adapter_align_weight = trial.suggest_float("adapter_align_weight", 0.0, 0.3)
-    ortho_margin = trial.suggest_float("ortho_margin", 0.0, 0.4)
 
     # Fixed parameters
     bit_list = cfg["model"]["bit_list"]
@@ -155,9 +135,7 @@ def objective(
         model_name=cfg["model"]["backbone"],
         bit_list=bit_list,
         hidden_dim=hidden_dim,
-        shared_dim=shared_dim,
         dropout=cfg["model"]["dropout"],
-        progressive_hash=cfg["model"].get("progressive_hash", False),
         hash_lr=hash_lr,
         backbone_lr=backbone_lr,
         weight_decay=cfg["training"]["weight_decay"],
@@ -170,25 +148,10 @@ def objective(
         balance_weight=balance_weight,
         consistency_weight=consistency_weight,
         lcs_weight=lcs_weight,
+        supervised_weight=cfg["loss"].get("supervised_weight", 0.0),
         temperature=temperature,
         ema_decay=cfg["loss"]["ema_decay"],
-        # P0: Distillation
-        distillation_weight=distillation_weight,
-        distillation_teacher_temp=distillation_teacher_temp,
-        distillation_student_temp=distillation_student_temp,
-        # Adapter alignment + OrthoHash margin + two-stage quantization
-        adapter_align_weight=adapter_align_weight,
-        ortho_margin=ortho_margin,
-        quantization_start_progress=cfg["loss"].get("quantization_start_progress", 0.4),
-        # P3: Focal InfoNCE
         focal_gamma=focal_gamma,
-        # P4: Learnable temperature (use config default for search)
-        learnable_temp=cfg["loss"].get("learnable_temp", False),
-        # P2: LoRA (use config default for search)
-        use_lora=cfg["model"].get("use_lora", False),
-        lora_rank=cfg["model"].get("lora_rank", 8),
-        lora_alpha=cfg["model"].get("lora_alpha", 16),
-        lora_dropout=cfg["model"].get("lora_dropout", 0.05),
     )
 
     # Pruning callback

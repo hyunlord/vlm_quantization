@@ -154,6 +154,45 @@ def precision_at_k(
     return prec_sum / N_q
 
 
+def recall_at_k(
+    query_codes: torch.Tensor,
+    database_codes: torch.Tensor,
+    query_labels: torch.Tensor,
+    database_labels: torch.Tensor,
+    k: int = 10,
+) -> float:
+    """Recall@k using Hamming distance ranking.
+
+    Recall@k = fraction of queries for which at least one relevant item
+    appears within the top-k retrieved results. Monotonically non-decreasing
+    in k. Queries with no relevant item in the database contribute 0.
+
+    Args:
+        query_codes: (N_q, D) in {-1, +1}
+        database_codes: (N_db, D) in {-1, +1}
+        query_labels: (N_q,) integer or (N_q, C) multi-hot labels
+        database_labels: (N_db,) integer or (N_db, C) multi-hot labels
+        k: cutoff rank.
+
+    Returns:
+        Average recall@k across all queries.
+    """
+    dist = hamming_distance(query_codes, database_codes)
+    _, indices = dist.sort(dim=1)
+    actual_k = min(k, dist.size(1))
+    top_k_indices = indices[:, :actual_k]
+
+    N_q = dist.size(0)
+    hit_sum = 0.0
+    for i in range(N_q):
+        relevant = _compute_relevance(
+            query_labels, database_labels, i, top_k_indices[i]
+        )
+        hit_sum += 1.0 if relevant.sum() > 0 else 0.0
+
+    return hit_sum / N_q
+
+
 def cosine_precision_at_k(
     query_emb: torch.Tensor,
     database_emb: torch.Tensor,
