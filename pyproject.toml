@@ -34,6 +34,11 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.6",
 ]
+# Accelerated binary search backend for the serving index / benchmark.
+# Optional: the index falls back to a numpy popcount implementation without it.
+serve = [
+    "faiss-cpu>=1.7",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

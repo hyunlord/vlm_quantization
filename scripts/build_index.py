@@ -212,20 +212,18 @@ def main():
         with torch.no_grad():
             # Run backbone once, reuse for both embedding and hash codes
             # (same pattern as CrossModalHashModel.validation_step)
-            img_emb = model._encode_image_backbone(pixel_values)
-            txt_emb = model._encode_text_backbone(input_ids, attention_mask)
+            img_emb = model.encode_image_backbone(pixel_values)
+            txt_emb = model.encode_text_backbone(input_ids, attention_mask)
 
             all_backbone_img.append(img_emb.cpu())
             all_backbone_txt.append(txt_emb.cpu())
 
-            # Hash codes: adapter -> shared hash (shared bottleneck arch)
-            img_adapted = model.image_adapter(img_emb)
-            img_hash = model.shared_hash(img_adapted)
+            # Hash codes via the per-modality NestedHashLayer
+            img_hash = model.image_hash(img_emb)
             for k, bit in enumerate(bit_list):
                 all_hash_img[bit].append(img_hash[k]["binary"].cpu())
 
-            txt_adapted = model.text_adapter(txt_emb)
-            txt_hash = model.shared_hash(txt_adapted)
+            txt_hash = model.text_hash(txt_emb)
             for k, bit in enumerate(bit_list):
                 all_hash_txt[bit].append(txt_hash[k]["binary"].cpu())
 

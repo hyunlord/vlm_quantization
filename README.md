@@ -123,3 +123,24 @@ download the backbone. CI runs both on every push and pull request.
 
 Training is seeded (`seed: 42`, overridable per config) via
 `pl.seed_everything(..., workers=True)` for reproducible runs.
+
+## Serving & benchmark
+
+Compact binary codes make retrieval tiny and fast. Build a serving index, then
+search by Hamming distance (numpy popcount, or FAISS binary with `pip install -e ".[serve]"`):
+
+```bash
+# build a packed serving index (.npz) — or --from-pt to convert a dashboard index
+python scripts/build_serving_index.py --checkpoint <ckpt> --jsonl corpus.jsonl \
+    --data-root data/coco --bits 16,64 --save-emb --out indexes/serving.npz
+
+# benchmark hash search vs float ("normal") image search — runs on CPU synthetically
+python scripts/bench_search.py --synthetic --n 100000 --bit 64
+
+# serve a retrieval API (text->image / image->image)
+RETRIEVAL_CHECKPOINT=<ckpt> RETRIEVAL_INDEX=indexes/serving.npz \
+    uvicorn src.serve.api:app --port 8100
+```
+
+See [docs/PRODUCTION.md](docs/PRODUCTION.md) for the DGX Spark workflow and the
+phased path to a production image-retrieval service.
