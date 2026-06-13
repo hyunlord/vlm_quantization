@@ -106,7 +106,8 @@ def main() -> None:
         rng = np.random.default_rng(args.seed)
         q_idx = rng.choice(len(emb), size=min(args.queries, len(emb)), replace=False)
         hidx = HammingIndex(packed, n_bits=bit)
-        q_codes = np.unpackbits(packed[q_idx], axis=1)[:, :bit] * 2 - 1
+        # uint8 unpack → cast before *2-1, else 0*2-1 underflows to 255 (not -1)
+        q_codes = np.unpackbits(packed[q_idx], axis=1)[:, :bit].astype(np.int8) * 2 - 1
         n = len(emb)
     else:
         args.synthetic = True

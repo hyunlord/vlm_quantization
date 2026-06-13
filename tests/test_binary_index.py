@@ -88,6 +88,17 @@ def test_matryoshka_matches_exact_long_with_enough_candidates():
     assert np.array_equal(ids_m[:, 0], ids_e[:, 0])
 
 
+def test_unpacked_query_roundtrips_to_self():
+    # Reconstruct a query the way bench_search does (unpack a stored packed code).
+    # np.unpackbits returns uint8, so `*2-1` must cast first or 0 underflows to 255.
+    db = _rand_codes(100, 64, seed=11)
+    idx = HammingIndex.from_codes(db)
+    q = np.unpackbits(idx.packed[:5], axis=1)[:, :64].astype(np.int8) * 2 - 1
+    ids, dist = idx.search(q, k=1)
+    assert np.array_equal(ids[:, 0], np.arange(5))  # each query finds itself
+    assert int(dist[:, 0].max()) == 0
+
+
 @pytest.mark.skipif(not has_faiss(), reason="faiss-cpu not installed")
 def test_faiss_backend_matches_numpy():
     if "torch" in sys.modules:
