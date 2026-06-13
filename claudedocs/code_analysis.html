@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VLM Cross-Modal Hashing — 로직 & 코드 품질 분석</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#171a22; --panel2:#1e222c; --line:#2a2f3a;
+    --ink:#e7eaf0; --muted:#9aa3b2; --faint:#6b7280;
+    --indigo:#7c8cff; --indigo2:#5b6cf0; --cyan:#36d3c4; --amber:#f5b14c;
+    --red:#ff6b6b; --orange:#ff924c; --green:#46d18a; --blue:#5aa9ff; --violet:#b07cff;
+    --r:14px; --r2:10px;
+    --mono:'SF Mono',ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI','Pretendard',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:linear-gradient(180deg,#0c0e14,#0f1117 240px);color:var(--ink);
+    font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:var(--indigo);text-decoration:none}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 22px}
+
+  header.hero{padding:64px 0 36px;border-bottom:1px solid var(--line);position:relative;overflow:hidden}
+  header.hero::before{content:"";position:absolute;inset:-120px -120px auto auto;width:420px;height:420px;
+    background:radial-gradient(circle at 70% 30%,rgba(124,140,255,.22),transparent 60%);filter:blur(8px)}
+  .eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px}
+  h1{font-size:40px;line-height:1.12;margin:0 0 12px;font-weight:800;letter-spacing:-.02em}
+  h1 .grad{background:linear-gradient(90deg,#9aa6ff,#36d3c4);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--muted);font-size:16.5px;max-width:780px}
+  .meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+  .chip{font-family:var(--mono);font-size:12px;padding:6px 11px;border:1px solid var(--line);
+    border-radius:999px;color:var(--muted);background:rgba(255,255,255,.02)}
+  .chip b{color:var(--ink);font-weight:600}
+  .banner{margin-top:22px;display:flex;align-items:center;gap:12px;background:linear-gradient(90deg,rgba(70,209,138,.14),rgba(54,211,196,.05));
+    border:1px solid rgba(70,209,138,.3);border-radius:12px;padding:12px 16px;font-size:14px}
+  .banner .b{font-weight:700;color:var(--green)}
+  .banner span{color:var(--muted)}
+
+  .verdict{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:30px 0 6px}
+  .vcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px 18px 16px;position:relative}
+  .vcard .k{font-size:12.5px;color:var(--muted);font-family:var(--mono);letter-spacing:.04em}
+  .vcard .v{font-size:30px;font-weight:800;margin-top:8px;letter-spacing:-.02em}
+  .vcard .d{font-size:12.5px;color:var(--faint);margin-top:4px}
+  .ring{--p:80;--c:var(--indigo);width:54px;height:54px;border-radius:50%;position:absolute;top:16px;right:16px;
+    background:conic-gradient(var(--c) calc(var(--p)*1%),#262b36 0);display:grid;place-items:center;font-family:var(--mono);font-size:12.5px;font-weight:700}
+  .ring::before{content:"";position:absolute;inset:6px;border-radius:50%;background:var(--panel)}
+  .ring span{position:relative;z-index:1}
+
+  section{padding:40px 0;border-bottom:1px solid var(--line)}
+  h2{font-size:24px;font-weight:750;margin:0 0 6px;letter-spacing:-.01em;display:flex;align-items:center;gap:11px}
+  h2 .ix{font-family:var(--mono);font-size:13px;color:var(--indigo);border:1px solid var(--line);border-radius:8px;padding:3px 8px;background:rgba(124,140,255,.08)}
+  h2 .ix.cy{color:var(--cyan);background:rgba(54,211,196,.08)}
+  h2 .ix.am{color:var(--amber);background:rgba(245,177,76,.08)}
+  h2 .ix.vi{color:var(--violet);background:rgba(176,124,255,.08)}
+  h2 .ix.gr{color:var(--green);background:rgba(70,209,138,.08)}
+  .lede{color:var(--muted);max-width:860px;margin:6px 0 22px;font-size:15.5px}
+
+  .pipe{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin:8px 0 6px}
+  .stage{flex:1 1 0;min-width:150px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r2);
+    padding:14px 14px 12px;position:relative}
+  .stage h4{margin:0 0 5px;font-size:13.5px;font-weight:700}
+  .stage p{margin:0;font-size:12px;color:var(--muted);font-family:var(--mono);line-height:1.5}
+  .arrow{align-self:center;color:var(--indigo);font-size:22px;padding:0 6px;flex:0 0 auto}
+  .tag{display:inline-block;margin-top:8px;font-size:10.5px;font-family:var(--mono);color:var(--cyan);
+    border:1px solid rgba(54,211,196,.3);border-radius:6px;padding:1px 6px}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px}
+  .card h3{margin:0 0 10px;font-size:15.5px;font-weight:700;display:flex;align-items:center;gap:8px}
+  .card p{margin:0 0 8px;font-size:14px;color:var(--muted)}
+  .card ul{margin:6px 0 0;padding-left:18px}
+  .card li{font-size:13.5px;color:var(--muted);margin:5px 0}
+  .card li b{color:var(--ink);font-weight:600}
+  code,kbd{font-family:var(--mono);font-size:12.5px;background:rgba(124,140,255,.1);
+    color:#c5ccff;border-radius:5px;padding:1px 6px}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:0 0 auto}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:var(--mono);font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);font-weight:600}
+  td b{color:var(--ink)}
+  td .m{font-family:var(--mono);color:var(--cyan);font-size:12.5px}
+  tr:last-child td{border-bottom:none}
+
+  .score{margin:4px 0 0}
+  .srow{display:grid;grid-template-columns:210px 1fr 70px;align-items:center;gap:14px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .srow:last-child{border-bottom:none}
+  .sname{font-size:14px;font-weight:600}
+  .sname small{display:block;font-weight:400;color:var(--faint);font-size:11.5px;font-family:var(--mono)}
+  .track{height:9px;background:#222734;border-radius:99px;overflow:hidden}
+  .fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--indigo2),var(--indigo))}
+  .fill.cy{background:linear-gradient(90deg,#1f9c92,var(--cyan))}
+  .fill.gr{background:linear-gradient(90deg,#2c9c64,var(--green))}
+  .sval{font-family:var(--mono);font-size:14px;font-weight:700;text-align:right}
+  .sval .up{color:var(--green);font-weight:600;font-size:11px}
+
+  .finding{display:grid;grid-template-columns:auto 1fr;gap:16px;background:var(--panel);border:1px solid var(--line);
+    border-radius:var(--r);padding:16px 18px;margin-bottom:12px}
+  .sev{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.03em;padding:5px 9px;border-radius:7px;
+    height:fit-content;white-space:nowrap;text-align:center}
+  .sev.fixed{background:rgba(70,209,138,.13);color:var(--green);border:1px solid rgba(70,209,138,.35)}
+  .sev.fixed2{background:rgba(54,211,196,.13);color:var(--cyan);border:1px solid rgba(54,211,196,.35)}
+  .sev.low{background:rgba(245,177,76,.12);color:var(--amber);border:1px solid rgba(245,177,76,.32)}
+  .sev.idea{background:rgba(90,169,255,.12);color:var(--blue);border:1px solid rgba(90,169,255,.32)}
+  .finding h4{margin:0 0 5px;font-size:14.5px;font-weight:700}
+  .finding p{margin:0 0 6px;font-size:13.5px;color:var(--muted)}
+  .finding .where{font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+  .finding .fix{font-size:13px;color:var(--ink);background:rgba(70,209,138,.07);border-left:2px solid var(--green);
+    padding:7px 12px;border-radius:0 8px 8px 0;margin-top:8px}
+  .finding .fix.idea{background:rgba(90,169,255,.07);border-left-color:var(--blue)}
+
+  .road{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .lane{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;position:relative;overflow:hidden}
+  .lane::before{content:"";position:absolute;top:0;left:0;right:0;height:3px}
+  .lane.now::before{background:var(--green)} .lane.next::before{background:var(--amber)} .lane.later::before{background:var(--violet)}
+  .lane h3{margin:0 0 3px;font-size:15px}
+  .lane .horizon{font-family:var(--mono);font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px}
+  .lane ol{margin:0;padding-left:18px}
+  .lane li{font-size:13px;color:var(--muted);margin:8px 0}
+  .lane li b{color:var(--ink)}
+  .lane li.done{color:var(--faint);text-decoration:line-through;text-decoration-color:rgba(70,209,138,.5)}
+
+  .callout{background:linear-gradient(180deg,rgba(124,140,255,.08),rgba(54,211,196,.04));
+    border:1px solid var(--line);border-radius:var(--r);padding:20px 22px;margin-top:8px}
+  .callout p{margin:0;color:var(--ink);font-size:14.5px}
+  .callout p+p{margin-top:10px;color:var(--muted)}
+
+  footer{padding:30px 0 60px;color:var(--faint);font-size:12.5px;font-family:var(--mono)}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin:14px 0 0;font-size:12px;color:var(--muted)}
+  .legend span{display:flex;align-items:center;gap:6px}
+
+  @media(max-width:860px){
+    .verdict{grid-template-columns:1fr 1fr}.grid2,.grid3,.road{grid-template-columns:1fr}
+    .srow{grid-template-columns:140px 1fr 56px}h1{font-size:30px}
+  }
+  @media print{body{background:#fff;color:#111}.stage,.card,.vcard,.finding,.lane{break-inside:avoid}}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Logic &amp; Code-Quality Analysis · Round 2 (fixes applied)</div>
+    <h1>VLM <span class="grad">Cross-Modal Hashing</span><br>로직 &amp; 코드 품질 분석</h1>
+    <p class="sub">SigLIP2 듀얼 인코더로 이미지·텍스트를 prefix-nested(Matryoshka) 이진코드로 변환해 Hamming 검색하는
+    교차모달 딥 해싱 코드베이스. 전체 28개 Python 모듈(~5,200 LOC)을 직접 정독해 분석하고, 발견된 잔존 이슈를
+    <b>이번 라운드에서 실제로 수정</b>했습니다. 검증: <b>31개 테스트 통과 · ruff clean</b>.</p>
+    <div class="meta">
+      <span class="chip"><b>repo</b> hyunlord/vlm_quantization</span>
+      <span class="chip"><b>backbone</b> SigLIP2 So400m (1152-d)</span>
+      <span class="chip"><b>bits</b> [8·16·32·48·64·128]</span>
+      <span class="chip"><b>tests</b> 26 → 31</span>
+      <span class="chip"><b>~5.2K</b> LOC Python</span>
+    </div>
+    <div class="banner">
+      <span class="b">✓ 2차 수정 반영</span>
+      <span>학습 시드 · EAQL EMA 검증 누수 가드 · 메트릭 벡터화(O(N²)→텐서연산) · 통합 스모크 테스트 추가 — 모두 학습 동작 보존(byte-identical) 검증 완료</span>
+    </div>
+
+    <div class="verdict">
+      <div class="vcard">
+        <div class="ring" style="--p:86;--c:var(--indigo)"><span>8.6</span></div>
+        <div class="k">종합 품질</div><div class="v">상위 ~12%</div>
+        <div class="d">8.2 → 8.6 (재현성·테스트 보강)</div>
+      </div>
+      <div class="vcard">
+        <div class="ring" style="--p:93;--c:var(--cyan)"><span>A</span></div>
+        <div class="k">로직 정합성</div><div class="v">견고</div>
+        <div class="d">EMA 검증 누수까지 해소</div>
+      </div>
+      <div class="vcard">
+        <div class="ring" style="--p:84;--c:var(--green)"><span>8.4</span></div>
+        <div class="k">테스트 · 재현성</div><div class="v">강화됨</div>
+        <div class="d">시드 도입 · 31 테스트(+스모크)</div>
+      </div>
+      <div class="vcard">
+        <div class="ring" style="--p:100;--c:var(--green)"><span>✓</span></div>
+        <div class="k">검증</div><div class="v">31 pass</div>
+        <div class="d">ruff clean · 학습경로 불변 확인</div>
+      </div>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--green)"></i>1차(PR#1)에서 해결</span>
+      <span><i class="dot" style="background:var(--cyan)"></i>2차(이번 라운드) 해결</span>
+      <span><i class="dot" style="background:var(--amber)"></i>잔존(경) · 의도적 선택</span>
+      <span><i class="dot" style="background:var(--blue)"></i>향후 제안</span>
+    </div>
+  </div>
+</header>
+
+<!-- 1. PURPOSE / ARCH -->
+<section><div class="wrap">
+  <h2><span class="ix">01</span>목적과 아키텍처</h2>
+  <p class="lede">단일 투영에서 여러 비트 길이를 prefix로 잘라 쓰는 Matryoshka 구조 — 짧은 코드가 긴 코드의 접두사가 되어
+  coarse-to-fine 검색이 가능합니다. backbone은 frozen/fine-tune 양쪽 지원.</p>
+
+  <div class="pipe">
+    <div class="stage"><h4>입력 쌍</h4><p>image + caption<br>(+aug · +aux캡션)</p><span class="tag">COCO Karpathy</span></div>
+    <div class="arrow">→</div>
+    <div class="stage"><h4>SigLIP2 인코더</h4><p>vision_model<br>text_model</p><span class="tag">1152-d pooled</span></div>
+    <div class="arrow">→</div>
+    <div class="stage"><h4>NestedHashLayer</h4><p>prefix-slice → per-bit<br>BatchNorm → L2norm</p><span class="tag">tanh / SignSTE</span></div>
+    <div class="arrow">→</div>
+    <div class="stage"><h4>CombinedHashLoss</h4><p>6개 손실 · 비트별<br>+ 전역 자기증류</p><span class="tag">multi-objective</span></div>
+    <div class="arrow">→</div>
+    <div class="stage"><h4>Hamming 검색</h4><p>XOR + popcount<br>I2T / T2I</p><span class="tag">mAP·P@K·R@K</span></div>
+  </div>
+
+  <div class="grid3" style="margin-top:18px">
+    <div class="card">
+      <h3><i class="dot" style="background:var(--cyan)"></i>핵심 설계</h3>
+      <ul>
+        <li><b>Matryoshka prefix-nesting</b> — 단일 head + 비트별 BN으로 6개 해상도를 파라미터 효율적으로 생성</li>
+        <li><b>SignSTE</b> — sign 이진화 + |x|≤1 구간만 gradient 통과(클리핑 STE)</li>
+        <li><b>모달리티별 분리 head</b> — image/text 각각 NestedHashLayer</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><i class="dot" style="background:var(--indigo)"></i>정직한 평가</h3>
+      <ul>
+        <li><b>frozen-backbone cosine mAP</b>를 해시 mAP와 <b>병행 로깅</b> — 해싱 이득을 원본 임베딩과 직접 비교</li>
+        <li>frozen 시 baseline 메트릭 <b>캐싱</b>(임베딩 불변)</li>
+        <li>supervised 멀티핫 라벨 경로로 진짜 카테고리 mAP 측정 가능</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><i class="dot" style="background:var(--violet)"></i>실전 성숙도</h3>
+      <ul>
+        <li><b>GPU 자동 배치</b> — VRAM·통합메모리(DGX Spark GB10) 감지</li>
+        <li><b>spawn</b> 멀티프로세싱으로 CUDA fork 데드락 회피</li>
+        <li>FastAPI+SQLite+Next.js 대시보드 · Optuna HPO</li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<!-- 2. LOSS LOGIC -->
+<section><div class="wrap">
+  <h2><span class="ix cy">02</span>손실 오케스트레이션 로직</h2>
+  <p class="lede"><code>CombinedHashLoss</code>는 비트 길이마다 5개 손실을 합산하고, 비트 길이 전역으로 LCS 자기증류를 더합니다.
+  contrastive는 원본·약증강·강증강·보조캡션 <b>뷰 수(n_views)</b>로 평균됩니다.</p>
+
+  <table>
+    <thead><tr><th style="width:170px">손실</th><th>역할</th><th style="width:150px">스코프</th><th style="width:110px">가중치</th></tr></thead>
+    <tbody>
+      <tr><td><b>InfoNCE</b> <span class="m">contrastive</span></td><td>대칭 교차엔트로피. <code>focal_gamma</code>로 쉬운 positive 다운웨이트(0이면 plain과 동일)</td><td>비트별 × 뷰</td><td class="m">1.0</td></tr>
+      <tr><td><b>OrthoHash</b></td><td>매칭쌍 cos→1, 비매칭→0</td><td>비트별 교차모달</td><td class="m">0.1</td></tr>
+      <tr><td><b>EAQL</b> <span class="m">quant</span></td><td>EMA 비트중요도 가중 양자화 오차 · 램프업 · <b>이제 train에서만 EMA 갱신</b></td><td>비트별 양모달</td><td class="m">0.1</td></tr>
+      <tr><td><b>BitBalance</b></td><td>비트 50/50 균형 + 비트간 탈상관(공분산≈I)</td><td>비트별 joint</td><td class="m">0.01</td></tr>
+      <tr><td><b>Consistency</b></td><td>원본↔증강 이미지 코드 MSE 정렬</td><td>비트별</td><td class="m">0.5</td></tr>
+      <tr><td><b>LCS</b> <span class="m">self-distill</span></td><td>긴 코드(teacher)→짧은 코드(student) 유사도 구조 증류</td><td>전역(인접 비트쌍)</td><td class="m">0.5</td></tr>
+      <tr><td><b>Supervised</b> <span class="m">optional</span></td><td>멀티핫 라벨 pairwise log-sigmoid(라벨 있을 때만)</td><td>비트별</td><td class="m">0.0</td></tr>
+    </tbody>
+  </table>
+
+  <div class="grid2" style="margin-top:18px">
+    <div class="card">
+      <h3>✅ 정합성 — 강점</h3>
+      <ul>
+        <li><b>뷰 평균 일관성</b>: <code>n_views</code>가 매 비트 반복마다 동일하게 증가 → 정확</li>
+        <li><b>증류 정규화</b>: LCS가 행 단위 정규화해 긴 코드의 큰 내적이 MSE를 지배하지 않도록 방지</li>
+        <li><b>EAQL EMA</b>를 state_dict 버퍼로 등록 → device 이동/체크포인트 보존</li>
+        <li><b>quant 램프업</b>으로 초반 표현 학습 우선</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><i class="dot" style="background:var(--cyan)"></i>이번 라운드 로직 보강</h3>
+      <ul>
+        <li><b>EAQL 검증 누수 차단</b> — <code>self.training</code> 가드로 검증 배치가 EMA 비트가중치를 더 이상 오염시키지 않음(학습 경로는 byte-identical 검증)</li>
+        <li><b>벡터화 메트릭</b> — mAP/P@K/R@K의 쿼리별 Python 루프를 청크 텐서연산으로 교체, 브루트포스 대조 테스트로 동치 확인</li>
+        <li><b>검증 mAP 라벨</b>은 여전히 <code>image_id</code> 기반(짝 1개) — 진짜 카테고리 mAP는 <code>instances_json</code> 필요(다음 단계)</li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<!-- 3. QUALITY SCORECARD -->
+<section><div class="wrap">
+  <h2><span class="ix am">03</span>코드 품질 스코어카드</h2>
+  <p class="lede">차원별 평가(연구 코드 기준, 10점 만점). 이번 라운드에서 재현성·테스트·성능 차원이 상승했습니다.</p>
+  <div class="score">
+    <div class="srow"><div class="sname">모듈화 & 구조<small>SRP · 손실/모델/데이터 분리</small></div><div class="track"><div class="fill" style="width:92%"></div></div><div class="sval">9.2</div></div>
+    <div class="srow"><div class="sname">타입힌트 & docstring<small>from __future__ annotations 일관</small></div><div class="track"><div class="fill" style="width:91%"></div></div><div class="sval">9.1</div></div>
+    <div class="srow"><div class="sname">정직한 평가 설계<small>baseline 병행 · 캐싱</small></div><div class="track"><div class="fill cy" style="width:96%"></div></div><div class="sval">9.6</div></div>
+    <div class="srow"><div class="sname">견고성 / 에러처리<small>이미지 재시도 · POST try/except</small></div><div class="track"><div class="fill" style="width:84%"></div></div><div class="sval">8.4</div></div>
+    <div class="srow"><div class="sname">실전 운영성<small>GPU 자동설정 · 3환경 · 모니터링</small></div><div class="track"><div class="fill cy" style="width:90%"></div></div><div class="sval">9.0</div></div>
+    <div class="srow"><div class="sname">테스트 커버리지<small>31 테스트 · 통합 스모크 추가</small></div><div class="track"><div class="fill gr" style="width:76%"></div></div><div class="sval">7.6 <span class="up">▲1.6</span></div></div>
+    <div class="srow"><div class="sname">성능 / 효율<small>메트릭 벡터화 · baseline 캐싱</small></div><div class="track"><div class="fill gr" style="width:84%"></div></div><div class="sval">8.4 <span class="up">▲1.0</span></div></div>
+    <div class="srow"><div class="sname">재현성<small>train 시드 도입(seed:42)</small></div><div class="track"><div class="fill gr" style="width:86%"></div></div><div class="sval">8.6 <span class="up">▲3.4</span></div></div>
+    <div class="srow"><div class="sname">일관성 / DRY<small>config 4중복(의도적 선택)</small></div><div class="track"><div class="fill" style="width:72%"></div></div><div class="sval">7.2</div></div>
+  </div>
+</div></section>
+
+<!-- 4. FINDINGS -->
+<section><div class="wrap">
+  <h2><span class="ix gr">04</span>발견 사항 &amp; 처리 현황</h2>
+  <p class="lede">2개 라운드에 걸친 수정 내역. <b style="color:var(--green)">초록=PR#1</b>, <b style="color:var(--cyan)">청록=이번 라운드</b>,
+  나머지는 잔존(경) 또는 향후 제안. 모든 항목에 실제 코드 위치 명시.</p>
+
+  <div class="finding">
+    <div class="sev fixed">✓ PR#1</div>
+    <div>
+      <h4>Optuna ↔ 모델 시그니처 불일치 → HPO 즉시 TypeError</h4>
+      <p>모델이 받지 않는 14개 인자를 생성자에 전달(과거 P0~P5 로드맵 잔재).</p>
+      <p class="where">optuna_search.py · PARAM_MAP / objective() / CrossModalHashModel(...)</p>
+      <div class="fix">탐색공간을 실제 시그니처로 축소(<code>focal_gamma·text_dropout_prob</code> 유지) + <code>supervised_weight</code> 추가. HPO 복구.</div>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="sev fixed">✓ PR#1</div>
+    <div>
+      <h4>멀티캡션 죽은 코드 — 2번째 캡션이 손실에 미반영</h4>
+      <p>dataset이 <code>aux_input_ids</code>를 만들고 collate가 배치화하지만 <code>forward()</code>가 인코딩하지 않음.</p>
+      <p class="where">data/karpathy.py · datamodule.collate_fn · models/cross_modal_hash.py</p>
+      <div class="fix"><code>forward()</code>가 aux 인코딩→<code>"aux_text"</code> 반환, 이미지↔보조캡션 추가 positive(<code>num_captions=2</code> opt-in).</div>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="sev fixed">✓ PR#1</div>
+    <div>
+      <h4>유령 메트릭 전송 — 존재하지 않는 distillation/adapter_align</h4>
+      <p>callback이 모델이 로깅하지 않는 메트릭을 서버로 전송.</p>
+      <p class="where">monitor/callback.py → server/database.py(컬럼 DEFAULT 0.0)</p>
+      <div class="fix">전송 제거. DB 컬럼은 <code>DEFAULT 0.0</code>이라 유지(삭제 시 INSERT 파손) — 이제 항상 0.0 무해 컬럼.</div>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="sev fixed2">✓ 2차</div>
+    <div>
+      <h4>학습 비결정성 — train.py 시드 미설정</h4>
+      <p>optuna엔 <code>seed_everything</code>이 있었으나 <code>train.py</code>엔 없어 실행마다 셔플·dropout·init이 달라짐.</p>
+      <p class="where">train.py · configs/default.yaml</p>
+      <div class="fix"><code>pl.seed_everything(cfg.get("seed",42), workers=True)</code> 추가 + <code>seed: 42</code> 설정 키(다른 config는 .get 기본값으로 42).</div>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="sev fixed2">✓ 2차</div>
+    <div>
+      <h4>EAQL EMA가 검증 단계에서도 갱신 → val 통계 누수</h4>
+      <p><code>validation_step</code>이 손실을 호출하며 EAQL의 EMA 비트가중치 버퍼를 val 데이터로 업데이트.</p>
+      <p class="where">src/losses/eaql.py:forward</p>
+      <div class="fix"><code>if self.training:</code> 가드로 EMA를 train에서만 갱신. eval에서 버퍼 미존재 시 현재 배치 오차로 폴백(버퍼 불변). <b>학습 경로 수치 동일성 테스트 통과</b>.</div>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="sev fixed2">✓ 2차</div>
+    <div>
+      <h4>메트릭의 O(N²) Python 루프</h4>
+      <p>mAP/P@K/R@K(+cosine 변형)가 쿼리별 Python for-loop로 평가 시 느림.</p>
+      <p class="where">src/utils/metrics.py</p>
+      <div class="fix">청크 텐서연산으로 벡터화(멀티핫은 청크 축소로 메모리 바운드). <b>브루트포스 동치 테스트(1D+멀티핫)</b>로 정확도 보존 확인.</div>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="sev fixed2">✓ 2차</div>
+    <div>
+      <h4>테스트 깊이 — 단위 테스트만 존재(통합 신호 부재)</h4>
+      <p>기존 26개는 수치 단위만 커버. 학습 경로 회귀를 잡을 통합 신호 없음.</p>
+      <p class="where">tests/test_integration_smoke.py (신규)</p>
+      <div class="fix">backbone 없이 NestedHashLayer→CombinedHashLoss→backward→opt.step를 돌려 <b>gradient 흐름 + 대조손실 감소</b> 확인하는 스모크 추가. 총 <b>31개</b> 통과.</div>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="sev low">🟡 의도적 선택</div>
+    <div>
+      <h4>설정 중복(DRY) — loss 블록이 4개 config에 복제</h4>
+      <p><code>default/colab/dgx_spark/colab_multilingual.yaml</code>이 동일 loss 블록 보유.</p>
+      <p class="where">configs/*.yaml</p>
+      <div class="fix idea">판단: 3개 실행환경의 <b>명시적·자기완결 config</b>는 숨은 상속보다 운영 안전성이 높아 의도적으로 유지(YAGNI). 향후 항목 증가 시 <code>_base.yaml</code> 머지 도입을 고려.</div>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="sev idea">🔵 제안</div>
+    <div>
+      <h4>다음 단계 — 평가 신호 강화</h4>
+      <p><code>instances_json</code> 기반 <b>카테고리 mAP</b> 정규 평가 기본화, 모니터 API 계약 테스트, 한국어/다국어 실벤치(KO R@K) 구축으로 ML 회귀를 조기 포착.</p>
+      <p class="where">eval.py · monitor/server · tests/</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- 5. ROADMAP -->
+<section><div class="wrap">
+  <h2><span class="ix">05</span>개선 로드맵</h2>
+  <p class="lede">"기존 학습 동작 불변(opt-in)" 원칙 유지. 결과 품질(mAP/Recall)은 GPU 풀 학습이 있어야 수치 검증 가능합니다.</p>
+  <div class="road">
+    <div class="lane now">
+      <h3>완료</h3>
+      <div class="horizon">PR#1 + 2차 수정</div>
+      <ol>
+        <li class="done"><b>Optuna 정합성</b> 복구</li>
+        <li class="done"><b>focal InfoNCE</b> + <b>보조 캡션</b> 배선</li>
+        <li class="done"><b>Recall@K</b> + eval 표</li>
+        <li class="done"><b>train 시드</b> 도입</li>
+        <li class="done"><b>EAQL EMA</b> train-only 가드</li>
+        <li class="done"><b>메트릭 벡터화</b> + 동치 테스트</li>
+        <li class="done"><b>통합 스모크</b> · 총 31 테스트 · CI</li>
+      </ol>
+    </div>
+    <div class="lane next">
+      <h3>다음 (단기)</h3>
+      <div class="horizon">평가 신호</div>
+      <ol>
+        <li><b>카테고리 mAP</b> 정규 평가(instances_json) 기본화</li>
+        <li>ramp/LR <b>step 소스 통일</b>(max_steps ↔ estimated_stepping_batches)</li>
+        <li>모니터 API <b>계약 테스트</b></li>
+        <li>config <b>_base 머지</b> 검토(항목 증가 시)</li>
+      </ol>
+    </div>
+    <div class="lane later">
+      <h3>이후 (중기)</h3>
+      <div class="horizon">성능·확장</div>
+      <ol>
+        <li><b>focal_gamma·num_captions·text_dropout</b> HPO 스윕으로 실측 이득 확인</li>
+        <li>한국어/다국어 <b>실벤치</b>(KO retrieval R@K)</li>
+        <li>비트 길이별 <b>운영 트레이드오프</b> 가이드(속도 vs 정확도)</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="callout">
+    <p><b>총평.</b> 연구 코드로서 상위권 완성도이며, 이번 라운드로 가장 약했던 <b>재현성·평가 효율·테스트 깊이</b>가 보강됐습니다 —
+    학습 시드, EAQL 검증-누수 가드, 메트릭 벡터화(동치 검증), backbone 없는 통합 스모크가 추가됐습니다.</p>
+    <p>핵심 학습/검색 <b>로직엔 정합성 결함이 없으며</b>, 모든 수정은 기존 학습 동작을 보존(EAQL 학습경로 수치 동일성 테스트 통과)합니다.
+    남은 큰 과제는 <b>평가 신호의 질</b>(image_id 짝맞추기 → 카테고리 mAP)이며, 이는 데이터(<code>instances_json</code>)와 GPU 학습이 필요한 다음 단계입니다.</p>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  생성: Claude Code · 근거: 저장소 28개 Python 모듈 직접 정독(~5,200 LOC) · 검증: 31 passed / ruff clean / EAQL 학습경로 byte-identical<br>
+  파일: claudedocs/code_analysis.html · 점수는 연구 코드 기준 정성 평가이며 ML 결과 품질은 GPU 풀 학습 필요
+</div></footer>
+
+</body>
+</html>

@@ -109,11 +109,17 @@ trials with a median pruner, and exports the best config as YAML.
 ## Tests
 
 ```bash
-pytest tests/ -q       # 26 CPU-only unit tests
+pytest tests/ -q       # 31 CPU-only tests
 ruff check src/ tests/ eval.py train.py optuna_search.py monitor/callback.py
 ```
 
-Tests cover Hamming distance, retrieval metrics (mAP / P@k / R@k / bit entropy),
-loss components, the SignSTE straight-through estimator, the NestedHashLayer
-prefix property, and focal-InfoNCE / aux-caption wiring. They run on CPU and do
-not download the backbone. CI runs both on every push and pull request.
+Tests cover Hamming distance, retrieval metrics (mAP / P@k / R@k / bit entropy)
+including a brute-force equivalence check for the vectorized implementations,
+loss components, the SignSTE straight-through estimator, the EAQL eval-mode
+buffer guard, the NestedHashLayer prefix property, focal-InfoNCE / aux-caption
+wiring, and a backbone-free integration smoke test (NestedHashLayer →
+CombinedHashLoss → backward → optimizer step). They run on CPU and do not
+download the backbone. CI runs both on every push and pull request.
+
+Training is seeded (`seed: 42`, overridable per config) via
+`pl.seed_everything(..., workers=True)` for reproducible runs.

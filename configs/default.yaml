@@ -1,3 +1,5 @@
+seed: 42  # global RNG seed for reproducible runs (other configs default to 42)
+
 model:
   backbone: "google/siglip2-so400m-patch14-384"
   bit_list: [8, 16, 32, 48, 64, 128]

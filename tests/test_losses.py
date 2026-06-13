@@ -46,6 +46,22 @@ def test_eaql_registers_ema_buffer():
     assert torch.isfinite(loss(cont))
 
 
+def test_eaql_ema_frozen_in_eval():
+    loss = EAQLLoss(ema_decay=0.9)
+    cont = torch.randn(8, 16)
+    loss.train()
+    _ = loss(cont)  # populate EMA in training mode
+    before = loss._get_ema(16).clone()
+    # In eval mode the persistent EMA buffer must not change
+    loss.eval()
+    _ = loss(torch.randn(8, 16))
+    assert torch.equal(loss._get_ema(16), before)
+    # Back in training mode it updates again
+    loss.train()
+    _ = loss(torch.randn(8, 16))
+    assert not torch.equal(loss._get_ema(16), before)
+
+
 def test_lcs_zero_for_single_and_finite_for_many():
     single = [torch.randn(8, 4)]
     assert LCSSelfDistillationLoss()(single).item() == 0.0

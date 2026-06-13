@@ -26,6 +26,9 @@ def main():
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
 
+    # Seed everything for reproducible runs (data shuffling, dropout, init).
+    pl.seed_everything(cfg.get("seed", 42), workers=True)
+
     # Auto-configure GPU-dependent parameters
     if cfg["training"].get("batch_size") == "auto":
         gpu_cfg = auto_configure(
