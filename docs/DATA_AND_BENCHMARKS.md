@@ -36,23 +36,34 @@ This document records the validation, the datasets we use, and how to reproduce 
 Protocol: zero-shot, 5 captions/image (COCO = 25,010 captions, Flickr = 5,000),
 L2-normalized cosine, **MAP-head `pooler_output`** as the embedding.
 
-### Measured (our pipeline, bf16)
+### Measured (our pipeline)
 
-| Benchmark | Dir | R@1 | R@5 | R@10 | Δ R@1 vs pub |
-|---|---|---|---|---|---|
-| COCO-5K | T→I | 52.1 | 75.2 | 83.1 | −3.7 |
-| COCO-5K | I→T | 68.0 | 87.9 | 92.9 | −3.7 |
-| Flickr30K-1K | T→I | 79.1 | 94.1 | 97.0 | −6.6 |
-| Flickr30K-1K | I→T | 92.7 | 99.2 | 99.9 | −2.2 |
+**fp32 + official `AutoProcessor` (bicubic)** — `scripts/zeroshot_benchmark.py`:
 
-**Conclusion:** the pipeline is correct — pooling, L2-norm, and the 5-caption
-protocol all match. The residual gap is precision/preprocessing, not a logic error:
+| Benchmark | Dir | R@1 | R@5 | R@10 | Published R@1 | Δ |
+|---|---|---|---|---|---|---|
+| COCO-5K | T→I | 52.1 | 75.3 | 83.1 | 55.8 | −3.7 |
+| COCO-5K | I→T | 67.3 | 87.9 | 92.9 | 71.7 | −4.4 |
+| Flickr30K-1K | T→I | 79.0 | 94.2 | 97.0 | 85.7 | −6.7 |
+| Flickr30K-1K | I→T | 92.9 | 99.3 | 99.9 | 94.9 | −2.0 |
 
-- **bf16** vs the paper's full precision, and
-- **albumentations bilinear resize** (used when the embedding cache was built) vs the
-  official **bicubic** `AutoProcessor` resize.
+For reference, the **bf16 cached-embedding** path (albumentations bilinear resize) gives
+COCO T→I/I→T = 52.1 / 68.0 and Flickr 79.1 / 92.7 — **almost identical to fp32**.
 
-A clean **fp32 + official-processor** pass closes most of the gap (queued, see §6).
+**Conclusion:** the pipeline is correct — pooling (MAP-head `pooler_output`), L2-norm,
+and the 5-caption protocol all match, reproducing **~93% of the published R@1** stably.
+**But it is NOT a 1:1 reproduction** — a consistent ~3.7-pt gap remains.
+
+> ⚠️ **Correction (verified 2026-06-14):** an earlier hypothesis blamed the gap on
+> **bf16 + bilinear resize**. That was **wrong** — fp32 + the official bicubic processor
+> gives essentially the same numbers as the bf16/bilinear cache (Δ < 0.8 pt). dtype and
+> resize are **not** the cause. The residual gap is most likely a subtle **evaluation
+> protocol / preprocessing difference** vs. Google's `big_vision` reference eval (e.g.
+> exact text handling or image preprocessing details). Closing it 1:1 would require
+> diffing against the original `big_vision` SigLIP2 eval code — a separate task.
+
+The hashing results below are measured **relative to this validated float baseline**, so
+the float-vs-hash comparisons are sound regardless of the absolute gap to the paper.
 
 ### Implementation notes / gotchas
 
@@ -189,18 +200,36 @@ multilingual); **ShareGPT4V** for dense-caption training at COCO scale.
 
 ---
 
-## 7. Status / in-flight (2026-06-14)
+## 7. Hashing results — full 113K + augmentation (2026-06-14)
 
-Running unattended on the GB10 box (`ssh dgx-spark`):
+Trained 4 nested-code options (frozen SigLIP2, 40 epochs each, on the full 113K
+train+restval with 3-view augmentation). Evaluated on COCO Karpathy test 5K.
+Speed/size measured on a 50K corpus, 1K queries (numpy popcount vs float cosine).
 
-- **Augmentation pipeline:** caches frozen-SigLIP2 embeddings of 113K train+restval
-  with 3 views (clean/weak/strong) → trains 4 bit_list options (128/256/512/1024) with
-  the full consistency/multi-view loss → `result_opt-{128,256,512,1024}.json`.
-- **Benchmark watcher:** once the GPU frees, runs the **fp32** COCO + Flickr validation
-  from §2 → `bench_{coco,flickr}.json` (the run that should land on the published R@1).
+**opt-1024 (codes [8…1024]) — quality + size + speed by code length:**
 
-When complete, build the comparison HTML (per-bit retrieval quality + speed galleries +
-the benchmark-validation panel).
+| Code | I2T R@10 | T2I R@10 | mAP | vs float | Index size | Search QPS | ms |
+|---|---|---|---|---|---|---|---|
+| 64-bit | 0.641 | 0.633 | 0.371 | 79% | 0.38 MB | 25,355 | 0.04 |
+| 128-bit | 0.729 | 0.718 | 0.448 | 90% | 0.76 MB | 27,667 | 0.04 |
+| 256-bit | 0.759 | 0.764 | 0.491 | 94% | 1.53 MB | 13,346 | 0.07 |
+| 512-bit | 0.787 | 0.787 | 0.517 | 97% | 3.05 MB | 6,357 | 0.16 |
+| **1024-bit** | **0.798** | **0.800** | 0.531 | **98%** | 6.10 MB | 3,388 | 0.30 |
+| float | 0.811 | 0.816 | 0.589 | 100% | 219.73 MB | 618 | 1.62 |
+
+**Headline:** 1024-bit binary keeps **98% of float R@10** at **1/36 the index size** and
+**5.5× the search speed**. 256-bit is the balanced sweet spot (94% quality, 1.53 MB).
+
+Nested structure works: short-code quality is stable across options (64-bit ≈ 0.63–0.64
+in every option), so adding longer codes does not hurt shorter ones. Full-data + aug
+improved over the earlier 40K-clean run (1024-bit R@10 0.752 → 0.798).
+
+> Note on speed: per-code ms is not perfectly monotonic (measurement noise on a small
+> 1K-query numpy-popcount benchmark). The robust takeaway is the float-vs-hash gap
+> (all hash options ≪ float in size and ≫ float in speed), not bit-to-bit ms deltas.
+
+Visualized in `claudedocs/retrieval_compare.html` (per-option tabs, quality/speed/size
+matrix, the §2 benchmark-validation panel, and real text→image search galleries).
 
 ---
 
