@@ -23,14 +23,35 @@ from __future__ import annotations
 
 import os
 import time
+from pathlib import Path
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from src.serve.binary_index import ServingIndex
 
 app = FastAPI(title="VLM Hash Retrieval", version="1.0")
+
+# Optional demo UI: serve the photo-search frontend at "/" and the corpus images
+# at "/images" when RETRIEVAL_IMAGE_ROOT is set (so result paths render in-browser).
+_IMAGE_ROOT = os.environ.get("RETRIEVAL_IMAGE_ROOT")
+if _IMAGE_ROOT:
+    from fastapi.staticfiles import StaticFiles
+
+    app.mount("/images", StaticFiles(directory=_IMAGE_ROOT), name="images")
+
+_DEMO_HTML = Path(__file__).resolve().parents[2] / "demo" / "index.html"
+
+
+@app.get("/", response_class=HTMLResponse)
+def demo_page() -> str:
+    """Self-contained photo-search demo UI (vanilla JS -> /stats + /search/text)."""
+    if _DEMO_HTML.exists():
+        return _DEMO_HTML.read_text(encoding="utf-8")
+    return "<h1>VLM Hash Retrieval API</h1><p>Demo UI not found; use POST /search/text.</p>"
+
 
 _engine = None  # lazily-loaded monitor.server.inference.InferenceEngine
 _index: ServingIndex | None = None
