@@ -6,6 +6,31 @@ The pitch is **efficiency** — each photo is stored as a tiny binary code
 (32–128 bytes) and search is a bitwise XOR/Hamming scan, so it stays fast and
 offline even over large libraries. See `../docs/ROADMAP.md` for the full vision.
 
+## Two demos
+
+- **`compare.html` + `server.py`** — the **side-by-side speed demo**: one query, float
+  cosine on the left vs binary Hamming (selectable bit length) on the right, fired in
+  parallel so the faster (binary) result visibly lands first, with per-search latency.
+  Best for *showing off* the efficiency story. (See "Side-by-side demo" below.)
+- **`index.html`** (via `src/serve/api.py`) — the **single-panel search** over your own
+  photo folder. Best for *using* it on a real library.
+
+## Side-by-side demo (float vs binary, parallel latency)
+
+```bash
+# needs: /tmp/demo_index.npz + /tmp/demo_hashheads.pt (built by build_demo_index.py
+# from cached embeddings — trains opt-1024 hash heads, applies to the test corpus)
+export DEMO_INDEX=/tmp/demo_index.npz DEMO_HEADS=/tmp/demo_hashheads.pt
+export DEMO_IMAGE_ROOT=data/coco       # so result images render
+export CORPUS_MULT=20                   # tile the corpus to make the search step non-trivial
+uvicorn demo.server:app --host 0.0.0.0 --port 8100
+# from your laptop:  ssh -N -L 8100:localhost:8100 dgx-spark   then open http://localhost:8100
+```
+
+Flow: the page calls `POST /encode` once (shared SigLIP2 text encode), then fires
+`GET /search/float` and `GET /search/bit?bit=` in parallel and renders whichever returns
+first. Encode cost is shown separately so the panels compare **pure search latency**.
+
 ## How it works
 
 ```

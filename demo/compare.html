@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Float vs 바이너리 해시 — 검색 속도 체감 데모</title>
+<style>
+:root{--bg:#0b0e14;--panel:#141925;--panel2:#1b2230;--line:#243044;--text:#e6edf6;
+--muted:#8b98ad;--accent:#6ea8fe;--good:#7ef0c5;--warn:#ffd479;--gold:#ffd479}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo",sans-serif}
+.wrap{max-width:1240px;margin:0 auto;padding:24px 18px 70px}
+h1{font-size:23px;letter-spacing:-.4px;margin:0 0 4px}
+.sub{color:var(--muted);margin:0;font-size:13px}
+.bar{display:flex;gap:10px;margin:18px 0 6px}
+.bar input{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--text);
+border-radius:12px;padding:14px 16px;font-size:16px;outline:none}
+.bar input:focus{border-color:var(--accent)}
+.bar button{background:var(--accent);color:#06101f;border:0;border-radius:12px;padding:0 22px;font-weight:700;cursor:pointer;font-size:15px}
+.bar button:disabled{opacity:.5}
+.ctrls{display:flex;gap:16px;align-items:center;color:var(--muted);font-size:13px;flex-wrap:wrap;margin-bottom:6px}
+.ctrls select{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:5px 9px}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}
+.chip{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer}
+.chip:hover{border-color:var(--accent)}
+.encbar{min-height:20px;color:var(--muted);font-size:12.5px;margin:8px 0}
+.encbar b{color:var(--text);font-variant-numeric:tabular-nums}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px}
+@media(max-width:820px){.cols{grid-template-columns:1fr}}
+.col{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;position:relative;transition:border-color .2s}
+.col.winner{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}
+.col h2{font-size:15px;margin:0 0 2px;display:flex;align-items:center;gap:8px}
+.col .tag{font-size:11px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:2px 8px;color:var(--muted)}
+.col .lat{font-size:12.5px;color:var(--muted);margin:2px 0 10px;font-variant-numeric:tabular-nums;min-height:18px}
+.col .lat .ms{color:var(--good);font-weight:700;font-size:15px}
+.col .lat.run .ms{color:var(--warn)}
+.win-badge{position:absolute;top:12px;right:12px;background:var(--gold);color:#06101f;
+font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;opacity:0;transition:opacity .2s}
+.win-badge.show{opacity:1}
+.gal{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.cell{aspect-ratio:1/1;border-radius:8px;overflow:hidden;background:#000;position:relative}
+.cell img{width:100%;height:100%;object-fit:cover;display:block}
+.cell .rk{position:absolute;top:2px;left:3px;font-size:10px;background:rgba(0,0,0,.6);padding:0 4px;border-radius:4px}
+.spin{display:flex;align-items:center;justify-content:center;height:160px;color:var(--muted);font-size:13px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--warn);margin-right:8px;animation:p 1s infinite}
+@keyframes p{0%,100%{opacity:.3}50%{opacity:1}}
+.foot{margin-top:22px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:12px}
+.statline{color:var(--muted);font-size:12.5px;margin:4px 0}
+.statline b{color:var(--text)}
+</style></head><body><div class="wrap">
+
+<h1>같은 검색, 다른 속도 — Float vs 바이너리 해시</h1>
+<p class="sub">동일 쿼리를 양쪽에 동시에 보냅니다. <b style="color:var(--good)">먼저 화면에 뜨는 쪽이 더 빠른 검색</b>입니다.</p>
+<div class="statline" id="stat"></div>
+
+<div class="bar">
+  <input id="q" type="text" placeholder="예: 졸려하는 강아지, 해변의 노을, 빨간 우산을 든 사람…" autocomplete="off"/>
+  <button id="go">검색</button>
+</div>
+<div class="ctrls">
+  오른쪽 코드 길이 <select id="bit"></select>
+  · 결과 수 <select id="k"><option>8</option><option selected>12</option><option>20</option></select>
+  <span id="corpusnote"></span>
+</div>
+<div class="chips" id="chips"></div>
+<div class="encbar" id="encbar"></div>
+
+<div class="cols">
+  <div class="col" id="col-float">
+    <div class="win-badge" id="win-float">🏆 먼저 도착</div>
+    <h2>왼쪽 · Float <span class="tag" id="tag-float">cosine · 4608 B/img</span></h2>
+    <div class="lat" id="lat-float"></div>
+    <div id="gal-float"></div>
+  </div>
+  <div class="col" id="col-bit">
+    <div class="win-badge" id="win-bit">🏆 먼저 도착</div>
+    <h2>오른쪽 · 바이너리 해시 <span class="tag" id="tag-bit"></span></h2>
+    <div class="lat" id="lat-bit"></div>
+    <div id="gal-bit"></div>
+  </div>
+</div>
+
+<div class="foot">검색 단계만 측정 (쿼리 인코딩은 양쪽 공통, 위에 별도 표시). corpus는 실제 이미지를 타일링해 검색 부하를 키운 값입니다(정직하게 표기). 결과는 실제 이미지로 중복 제거.</div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+let STATS=null, K=12;
+
+async function loadStats(){
+  STATS=await (await fetch("/stats")).json();
+  const sel=$("bit"); sel.innerHTML="";
+  STATS.bits.forEach(b=>{const o=document.createElement("option");o.value=b;o.textContent=b+"-bit";
+    if(b==256)o.selected=true;sel.appendChild(o);});
+  $("stat").innerHTML=`코퍼스 <b>${STATS.corpus.toLocaleString()}</b>장 (실제 ${STATS.real.toLocaleString()} × ${STATS.mult} 타일) · `+
+    `Float <b>${STATS.float_bytes_per_item.toLocaleString()} B/img</b> vs 바이너리 <b>${STATS.bit_bytes_per_item[256]} B/img</b>(256-bit)`;
+  $("corpusnote").textContent=`· 코퍼스 ${STATS.corpus.toLocaleString()}장`;
+  syncTag();
+}
+function syncTag(){const b=+$("bit").value;$("tag-bit").textContent=`Hamming · ${b/8} B/img`;}
+
+const EX=["졸려하는 강아지","해변의 노을","눈 덮인 산","생일 케이크와 촛불","빨간 우산을 든 사람","피자 한 조각","a cat sleeping on a couch","people riding bikes"];
+function chips(){const c=$("chips");EX.forEach(t=>{const e=document.createElement("span");e.className="chip";e.textContent=t;
+  e.onclick=()=>{$("q").value=t;run();};c.appendChild(e);});}
+
+function gallery(el,results){
+  el.innerHTML=`<div class="gal">`+results.map((r,i)=>
+    `<div class="cell"><img loading="lazy" src="/images/${encodeURI(r.path)}" alt=""><span class="rk">${i+1}</span></div>`
+  ).join("")+`</div>`;
+}
+function spinner(el,label){el.innerHTML=`<div class="spin"><span class="dot"></span>${label}</div>`;}
+
+let runId=0;
+async function run(){
+  const q=$("q").value.trim(); if(!q) return;
+  const myRun=++runId;
+  const bit=+$("bit").value; K=+$("k").value;
+  $("go").disabled=true;
+  // reset panels
+  ["float","bit"].forEach(s=>{$("win-"+s).classList.remove("show");$("col-"+s).classList.remove("winner");
+    $("lat-"+s).className="lat run";$("lat-"+s).innerHTML="검색 중…";spinner($("gal-"+s),"검색 중…");});
+  $("tag-bit").textContent=`Hamming · ${bit/8} B/img`;
+  $("encbar").innerHTML="쿼리 인코딩 중…";
+
+  // 1) shared encode
+  let enc;
+  try{ enc=await (await fetch("/encode",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({q})})).json(); }
+  catch(e){ $("encbar").innerHTML="인코딩 오류: "+e; $("go").disabled=false; return; }
+  if(myRun!==runId) return;
+  $("encbar").innerHTML=`쿼리 인코딩(SigLIP2, 양쪽 공통): <b>${enc.encode_ms} ms</b> — 이제 두 검색을 동시에 시작합니다 ⏱`;
+
+  // 2) fire both searches in parallel; render whichever lands first
+  const t0=performance.now();
+  let firstDone=null;
+  const arrival={};
+  const fire=(side,url)=>{
+    const tStart=performance.now();
+    return fetch(url).then(r=>r.json()).then(d=>{
+      if(myRun!==runId) return;
+      const wall=performance.now()-t0;
+      arrival[side]=wall;
+      $("lat-"+side).className="lat";
+      $("lat-"+side).innerHTML=`검색 <span class="ms">${d.search_ms} ms</span> · 화면 도착 +${wall.toFixed(0)}ms · ${d.corpus.toLocaleString()}장`;
+      gallery($("gal-"+side),d.results.slice(0,K));
+      if(firstDone===null){firstDone=side;$("win-"+side).classList.add("show");$("col-"+side).classList.add("winner");}
+    }).catch(e=>{ if(myRun!==runId)return; $("lat-"+side).className="lat";$("lat-"+side).textContent="오류: "+e;});
+  };
+  await Promise.all([
+    fire("float",`/search/float?qid=${enc.qid}&k=${K}`),
+    fire("bit",`/search/bit?qid=${enc.qid}&bit=${bit}&k=${K}`),
+  ]);
+  if(myRun!==runId) return;
+  // summary on the encbar
+  if(arrival.float!=null && arrival.bit!=null){
+    const fast=arrival.bit<arrival.float?"바이너리":"Float";
+    const ratio=(Math.max(arrival.float,arrival.bit)/Math.max(Math.min(arrival.float,arrival.bit),0.01));
+    $("encbar").innerHTML+=` &nbsp;→ <b style="color:var(--good)">${fast}가 먼저 도착</b>`;
+  }
+  $("go").disabled=false;
+}
+
+$("go").onclick=run;
+$("q").addEventListener("keydown",e=>{if(e.key==="Enter")run();});
+$("bit").addEventListener("change",syncTag);
+loadStats(); chips();
+</script></body></html>
