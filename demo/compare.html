@@ -91,8 +91,12 @@ async function loadStats(){
   const sel=$("bit"); sel.innerHTML="";
   STATS.bits.forEach(b=>{const o=document.createElement("option");o.value=b;o.textContent=b+"-bit";
     if(b==256)o.selected=true;sel.appendChild(o);});
-  $("stat").innerHTML=`코퍼스 <b>${STATS.corpus.toLocaleString()}</b>장 (실제 ${STATS.real.toLocaleString()} × ${STATS.mult} 타일) · `+
-    `Float <b>${STATS.float_bytes_per_item.toLocaleString()} B/img</b> vs 바이너리 <b>${STATS.bit_bytes_per_item[256]} B/img</b>(256-bit)`;
+  const ratio=Math.round(STATS.float_bytes_per_item/STATS.bit_bytes_per_item[256]);
+  const corpDesc=STATS.mult>1?`실제 ${STATS.real.toLocaleString()} × ${STATS.mult} 타일`:`진짜 고유 ${STATS.real.toLocaleString()}장`;
+  const fGB=(STATS.float_bytes_per_item*1e6/1e9).toFixed(1), bMB=(STATS.bit_bytes_per_item[256]*1e6/1e6).toFixed(0);
+  $("stat").innerHTML=`코퍼스 <b>${STATS.corpus.toLocaleString()}</b>장 (${corpDesc})<br>`+
+    `💾 저장 <b style="color:var(--good);font-size:17px">${ratio}배 작음</b> — 사진당 Float ${STATS.float_bytes_per_item.toLocaleString()} B vs 바이너리 <b>${STATS.bit_bytes_per_item[256]} B</b> (256-bit) · `+
+    `<b>100만장이면 ${fGB} GB → ${bMB} MB</b> (코드 길이·corpus 크기와 무관하게 항상)`;
   $("corpusnote").textContent=`· 코퍼스 ${STATS.corpus.toLocaleString()}장`;
   syncTag();
 }
