@@ -32,7 +32,7 @@ breaking code/cache references; classified here in docs instead of moving them.)
 
 | Dataset | # imgs | Download | License | GB10 embed |
 |---|---|---|---|---|
-| **Unsplash Lite** `jamescalam/unsplash-25k-photos` | 25K | parquet (images embedded) — `load_dataset(...).save_to_disk` | Unsplash License | ~2 h ✅ |
+| **Unsplash Lite** | 25K | ⚠️ `jamescalam/unsplash-25k-photos` is **script-based → fails on datasets≥4**. Use the original TSV `wget https://unsplash.com/data/lite/latest` (photo CDN URLs) + `img2dataset` | Unsplash License | ~2 h ✅ (after img2dataset fetch) |
 | Open Images V7 val | 42K | `aws s3 --no-sign-request sync s3://open-images-dataset/validation` | CC BY 2.0 (per-image) | ~4 h |
 | Open Images V7 train subset | N | FiftyOne `max_samples=N` or CVDF downloader | CC BY 2.0 | 100K = overnight |
 | Unsplash Full | 6.5M | request form, TSV of CDN URLs | Unsplash (non-commercial) | impractical here |
@@ -44,7 +44,7 @@ breaking code/cache references; classified here in docs instead of moving them.)
 | COCO (have) | 113K | `data/coco` | CC BY 4.0 | primary train+eval |
 | Flickr30K (have) | 31K | `data/flickr30k` | research | benchmark + aug |
 | DOCCI (have) | 15K | `data/docci` | CC BY 4.0 | dense captions |
-| **nocaps** `HuggingFaceM4/NoCaps` | 15K | parquet (works on datasets≥4) | CC BY 4.0 | eval/val |
+| **nocaps** | 15K | ⚠️ `HuggingFaceM4/NoCaps` is **script-based → fails on datasets≥4**. Need Open Images V4 val/test images (`aws s3 ... open-images-dataset/validation`) + nocaps JSON (nocaps.org/download) | CC BY 4.0 | eval/val |
 | CC3M `pixparse/cc3m-wds` | 2.9M | WebDataset tars / img2dataset | CC (Google) | stream a 100–200K subset for GB10 |
 | Recap-DataComp-1B `UCSC-VLAA/Recap-DataComp-1B` | 941M | parquet (URL-only) + img2dataset | CC BY 4.0 | GPT4V recaptions; filter `re_gpt4v_score≥3` |
 | COYO-700M `kakaobrain/coyo-700m` | 747M | parquet (URL-only) + img2dataset | CC BY 4.0 | scored; filter by CLIP/aesthetic |
@@ -54,14 +54,17 @@ breaking code/cache references; classified here in docs instead of moving them.)
 > were fetched script-free (see [[siglip2-benchmark-validation]] / `scripts/fetch_extra_datasets.py`).
 > CC3M/Recap/COYO/DataComp are parquet (URL-only) → use `img2dataset` to fetch images.
 
-## Starter set (being downloaded)
+## Starter set — status
 
-```bash
-# image-only demo corpus
-load_dataset("jamescalam/unsplash-25k-photos")  -> data/image_only/unsplash25k
-# image-text eval
-load_dataset("HuggingFaceM4/NoCaps")            -> data/image_text/nocaps
-```
+⚠️ Attempted `load_dataset` for Unsplash Lite and nocaps **both failed**: their HF repos
+are still **script-based**, which `datasets≥4` rejects (`Dataset scripts are no longer
+supported`). The earlier guide was wrong about these being parquet. To actually fetch them:
+- **Unsplash**: `wget https://unsplash.com/data/lite/latest` → TSV of CDN URLs → `img2dataset`.
+- **nocaps**: Open Images V4 val/test images (S3) + nocaps JSON annotations.
+
+Both also need GB10 embedding time. **Not blocking** — the demo corpus uses COCO train
+113K (already embedded) below, so extra image sets are deferred until there's a faster
+GPU or an overnight window.
 
 ## Demo corpus plan
 
