@@ -65,4 +65,4 @@ HEAD_PATH=/tmp/ft_ko_113.pt .venv/bin/python web/paper_multiling_run.py --bench 
 
 ## 채우는 표/섹션 + 커밋
 - **기여 ① / §6 Experiments — 멀티링구얼 평가**: EN+KO → **36개 언어**(28개 R@10≥50)로 확장; **언어별 offline 배포 프로파일**(MiniLM 30/36 최고). so400m-float ceiling 행은 **양자화 갭(해시가 float의 92.9% 유지)** 도 언어 전반에서 입증.
-- 브랜치 **`paper-multiling`**(`web-v3-hybrid`에서 분기). 커밋 SHA: _커밋 후 기재_ → push.
+- 브랜치 **`paper-multiling`**(`web-v3-hybrid`에서 분기). 평가 커밋 **`971185b`** → `origin/paper-multiling` push 완료.
