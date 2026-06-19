@@ -65,6 +65,8 @@ def main() -> None:
     p.add_argument("--static", default="web/static")
     p.add_argument("--k", type=int, default=10)
     p.add_argument("--server", default=None, help="optional running query_server URL")
+    p.add_argument("--dump-js-queries", default=None,
+                   help="write [{text, code_b64, faiss_pairs}] JSON for the Node JS parity test")
     args = p.parse_args()
 
     packed, meta = load_index(Path(args.static))
@@ -84,12 +86,15 @@ def main() -> None:
     matched = 0
     mirror_ms = []
     mismatches = []
+    dump = []
     for q in QUERIES:
         code = enc.text_code_packed(q)  # (CODE_BYTES,) uint8 — offline/server code path
 
         # (a) faiss top-k
         fd, fi = fidx.search(code[None, :], args.k)
         faiss_pairs = sorted(zip(fd[0].tolist(), fi[0].tolist()))  # (dist, id) asc
+        dump.append({"text": q, "code_b64": base64.b64encode(code.tobytes()).decode("ascii"),
+                     "faiss_pairs": faiss_pairs})
 
         # (b) JS-mirror top-k (timed)
         t0 = time.perf_counter()
@@ -127,6 +132,12 @@ def main() -> None:
               f"byte-exact", flush=True)
     for q, fp, mp in mismatches[:5]:
         print(f"  MISMATCH {q!r}\n    faiss : {fp}\n    mirror: {mp}", flush=True)
+
+    if args.dump_js_queries:
+        with open(args.dump_js_queries, "w", encoding="utf-8") as f:
+            json.dump(dump, f, ensure_ascii=False)
+        print(f"[verify] dumped {len(dump)} queries -> {args.dump_js_queries} "
+              f"(for web/verify_js.mjs)", flush=True)
 
     ok = (matched == len(QUERIES)) and (not args.server or server_ok == server_total)
     print("\n[verify] PARITY OK" if ok else "\n[verify] PARITY FAILED", flush=True)

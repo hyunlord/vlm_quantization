@@ -4,67 +4,13 @@
  * query asks the server only to ENCODE the text into a 1024-bit code (POST /encode_query)
  * and runs Hamming Top-K search locally. The server never searches.
  *
- * The search (hammingTopK) is a pure function kept free of DOM/network so it can be
- * moved into a Web Worker later without changes. It mirrors web/verify_parity.py
- * byte-for-byte: 256-entry uint8 popcount LUT, dist = sum(LUT[a^b]), and ties are
- * broken by ascending index — identical to the faiss-parity reference.
+ * The search core (hammingTopK) lives in search.js — DOM/network-free, so the exact
+ * same code is exercised by the Node parity test (verify_js.mjs) and is trivially
+ * movable into a Web Worker. It mirrors web/verify_parity.py byte-for-byte.
  */
-"use strict";
-
-// 256-entry popcount lookup table (popcount of each byte value).
-const LUT = (() => {
-  const t = new Uint8Array(256);
-  for (let i = 0; i < 256; i++) t[i] = (i & 1) + t[i >> 1];
-  return t;
-})();
+import { hammingTopK } from "./search.js";
 
 const State = { index: null, n: 0, codeBytes: 128, meta: null, info: null };
-
-/* ---- pure search core (Worker-ready) ----------------------------------- */
-// index: Uint8Array of n*cb bytes; q: Uint8Array(cb). Returns [{idx,dist}] sorted
-// by (dist asc, idx asc), length <= K. Uses a bounded max-heap of capacity K.
-function hammingTopK(index, n, cb, q, K) {
-  const hd = new Uint16Array(K);   // heap distances (root = current worst kept)
-  const hi = new Int32Array(K);    // heap indices
-  let hs = 0;                      // heap size
-  // a "worse" than b iff larger dist, or equal dist & larger index
-  const worse = (aD, aI, bD, bI) => aD > bD || (aD === bD && aI > bI);
-
-  for (let i = 0; i < n; i++) {
-    const off = i * cb;
-    let d = 0;
-    for (let k = 0; k < cb; k++) d += LUT[index[off + k] ^ q[k]];
-
-    if (hs < K) {                                  // grow heap
-      let c = hs++;
-      hd[c] = d; hi[c] = i;
-      while (c > 0) {                              // sift up (max-heap)
-        const p = (c - 1) >> 1;
-        if (worse(hd[c], hi[c], hd[p], hi[p])) {
-          const td = hd[c]; hd[c] = hd[p]; hd[p] = td;
-          const ti = hi[c]; hi[c] = hi[p]; hi[p] = ti;
-          c = p;
-        } else break;
-      }
-    } else if (d < hd[0] || (d === hd[0] && i < hi[0])) {  // better than worst -> replace root
-      hd[0] = d; hi[0] = i;
-      let c = 0;                                   // sift down
-      for (;;) {
-        const l = 2 * c + 1, r = l + 1; let m = c;
-        if (l < hs && worse(hd[l], hi[l], hd[m], hi[m])) m = l;
-        if (r < hs && worse(hd[r], hi[r], hd[m], hi[m])) m = r;
-        if (m === c) break;
-        const td = hd[c]; hd[c] = hd[m]; hd[m] = td;
-        const ti = hi[c]; hi[c] = hi[m]; hi[m] = ti;
-        c = m;
-      }
-    }
-  }
-  const out = [];
-  for (let i = 0; i < hs; i++) out.push({ idx: hi[i], dist: hd[i] });
-  out.sort((a, b) => a.dist - b.dist || a.idx - b.idx);
-  return out;
-}
 
 /* ---- loading ------------------------------------------------------------ */
 const $ = (id) => document.getElementById(id);

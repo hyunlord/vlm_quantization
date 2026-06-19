@@ -82,6 +82,12 @@ def app_js():
     return FileResponse(STATIC / "app.js", media_type="application/javascript")
 
 
+@app.get("/search.js")
+def search_js():
+    # ES module imported by app.js (and reused by verify_js.mjs / a future Web Worker)
+    return FileResponse(STATIC / "search.js", media_type="application/javascript")
+
+
 # Static artifacts (index.bin / meta.json / index_info.json and thumbnails).
 app.mount("/data", StaticFiles(directory=str(STATIC / "data")), name="data")
 app.mount("/thumbs", StaticFiles(directory=str(STATIC / "thumbs")), name="thumbs")

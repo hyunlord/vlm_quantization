@@ -9,7 +9,8 @@
 - `web/build_index.py` — 5만 subset → `index.bin` + `meta.json` + `index_info.json` + 썸네일
 - `web/query_server.py` — FastAPI: `POST /encode_query` + 정적 서빙(검색 라우트 없음)
 - `web/verify_parity.py` — §6.4/§6.5 패리티 자동검증 (faiss vs JS-미러, 서버코드 vs 오프라인코드)
-- `web/static/index.html`, `web/static/app.js` — 프론트엔드(스트리밍 로드 + 클라이언트 검색)
+- `web/static/index.html`, `web/static/app.js`, `web/static/search.js` — 프론트엔드. 검색코어(LUT+`hammingTopK`)는 **`search.js`로 분리** = 브라우저/Web Worker/Node 공용(§4.3 "분리해 둘 것" 충족)
+- `web/verify_js.mjs` — **실제** `search.js`를 Node로 구동해 faiss와 대조(진짜 JS 패리티)
 - `web/__init__.py`, `web/.gitignore`
 - 생성물(=gitignore, 재생성 가능): `web/static/data/{index.bin,meta.json,index_info.json}`, `web/static/thumbs/*.jpg`
 
@@ -24,9 +25,10 @@ HEAD_PATH=/tmp/ft_ko_113.pt .venv/bin/python -m uvicorn web.query_server:app \
   --host 0.0.0.0 --port 8300
 # 현재 tmux 세션 'webv1' 로 :8300 에 떠 있음:  tmux attach -t webv1 / 로그 /tmp/web_server.log
 
-# 3) 패리티 검증
+# 3) 패리티 검증 — Python(미러+서버) + 실제 JS(Node)
 HEAD_PATH=/tmp/ft_ko_113.pt .venv/bin/python web/verify_parity.py \
-  --static web/static --server http://127.0.0.1:8300 --k 10
+  --static web/static --server http://127.0.0.1:8300 --dump-js-queries /tmp/js_queries.json --k 10
+node web/verify_js.mjs --static web/static --queries /tmp/js_queries.json --k 10
 ```
 - **포트 8300** (8200은 기존 `demo/live_server.py` 사용 중).
 - 접속 URL: 로컬 `http://127.0.0.1:8300/` · DGX 외부 `http://100.70.109.50:8300/`(tailscale) 또는 ngrok(.env 토큰).
@@ -46,9 +48,11 @@ HEAD_PATH=/tmp/ft_ko_113.pt .venv/bin/python web/verify_parity.py \
 1024-bit **±1 코드 → `np.packbits(code > 0, bitorder='big')` → row당 128바이트**; 쿼리 코드도 **동일 함수**(`web/common.py:pack_bits`)로 패킹 — 인덱스와 쿼리가 같은 패킹을 쓰는 것이 패리티의 유일 불변식. (faiss `IndexBinaryFlat` 호환.)
 
 ## 검증 결과
-- **§6.4 패리티(최중요)**: KO+EN **24개 쿼리 전부**, 클라이언트(JS-미러: 256-LUT popcount, dist=Σ LUT[a^b], 동률은 index 오름차순) Top-10 == faiss `IndexBinaryFlat` Top-10 → **24/24 정확 일치**(동률-무관 비교). 비트 패킹 정확함 증명.
+- **§6.4 패리티(최중요)**: KO+EN **24개 쿼리 전부** (256-LUT popcount, dist=Σ LUT[a^b], 동률은 index 오름차순; 동률-무관 비교):
+  - Python 미러 Top-10 == faiss `IndexBinaryFlat` Top-10 → **24/24 정확 일치**.
+  - **실제 브라우저 코드 `search.js`를 Node로 구동** → faiss와 **24/24 정확 일치**. 비트 패킹이 맞음을 *실제 JS*로 증명(미러 재구현이 아님).
 - **§6.5 쿼리 인코딩 일치**: `/encode_query` 반환 코드 == 오프라인 `Encoder` 코드 → **24/24 바이트 단위 일치**.
-- **§6.3 검색 속도**: JS-미러(numpy) 5만 장 **평균 50.3ms / 최대 53.4ms**(목표 <100ms 충족). *주의: numpy 프록시 수치이며 실제 브라우저는 자체 `performance.now()`로 측정·콘솔/화면 로그.*
+- **§6.3 검색 속도**: 실제 JS(`search.js`, Node V8) 5만 장 **평균 16.7ms / 최대 41ms**; numpy 미러 ~51ms. 둘 다 목표 <100ms 충족. 실제 브라우저는 자체 `performance.now()`로 측정해 콘솔/화면에 로그.
 - **§6.2 검색 품질**: "바닷가 강아지"→해변의 개, "눈 덮인 산"→설산/스키, "피자 한 조각"→피자, "a giraffe"→기린, "사람들이 자전거를 타고 있다"→자전거 탄 사람들. KO/EN 모두 합리적.
 - **§6.1 로딩 / §6.6 서버검색 제거**: 정적 엔드포인트 전부 HTTP 200(`/`, `/app.js`, `/data/index.bin`, `/data/meta.json`, `/data/index_info.json`, `/thumbs/*.jpg`), `index.bin`에 `Content-Length`(진행바용). 서버 라우트는 `/encode_query`+정적뿐 — **검색 라우트 없음**.
 - **파일 크기**: `index.bin` **6,400,000 B(6.10 MB = 50,000×128)**, `meta.json` **6.74 MB**, 썸네일 5만 장(≤200px, JPEG q85). meta.json은 index.bin row와 1:1 정렬(검증에서 OK).
@@ -65,7 +69,7 @@ HEAD_PATH=/tmp/ft_ko_113.pt .venv/bin/python web/verify_parity.py \
 - **블로커 없음.** 데모 동작·검증 완료.
 - 참고:
   - GB10 cuda capability(12.1>12.0) **경고는 무해**(PyTorch fallback). 빌드(img_h)·쿼리(txt_h)가 같은 경로라 패리티 영향 없음.
-  - **브라우저 자체를 headless로 구동하진 못함**(DGX에 브라우저 자동화 도구 없음). 대신 브라우저가 의존하는 모든 자산(HTTP 200+헤더)과 JS 검색 알고리즘의 등가성(바이트 단위 미러=faiss)을 검증함 → 실제 브라우저에서 동작 보장. *다음 사이클에서 실제 브라우저 1회 육안 확인 권장.*
+  - **실제 브라우저 DOM 렌더만 headless로 구동 못함**(DGX에 브라우저 자동화 없음). 단 브라우저가 쓰는 *실제 검색코드* `search.js`를 Node로 돌려 faiss와 24/24 일치 확인했고, 모든 자산이 HTTP 200(+Content-Length)으로 서빙됨. 다음 사이클에서 실제 브라우저 1회 육안 확인만 남음.
   - 생성물은 gitignore(레포에 6MB+썸네일 미커밋); 다른 호스트에선 `build_index.py` 재실행 또는 `web/static/{data,thumbs}` rsync.
   - 서버는 현재 DGX tmux `webv1`(:8300)로 상주 중.
 - 다음(범위 밖이었던 것): **v2** 클라이언트 사이드 텍스트 인코더 · **v1.5** Matryoshka coarse-to-fine(64bit 프리필터→1024 리랭크) · Web Worker 분리 · 스케일 모드(전체 1.09M).
