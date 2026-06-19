@@ -53,4 +53,4 @@
 ## 산출물 / 커밋
 - 스크립트: `web/eval_paper.py`(A/B/C), `web/eval_paper_fix.py`(E/F 정정), `web/eval_scaling.py`+`eval_scaling.mjs`(D). 데이터: `paper/{upper_bound,bits_sweep,precision,scaling}.csv`. (합성 코드는 in-memory, 미저장.)
 - 재현: `web/eval_paper.py --txt-head /tmp/txt_h_e5.pt` → `web/eval_paper_fix.py`(상한·bf16 정정) → `web/eval_scaling.py`. (모두 `HEAD_PATH=/tmp/ft_ko_113.pt .venv/bin/python …`.)
-- 브랜치 **`paper-evals`**(`web-v3-hybrid`에서 분기). **커밋 `1bf470e`**(scripts+CSV+보고서) → `origin/paper-evals` 푸시 완료. (이 SHA 기록 커밋이 뒤따름.)
+- 브랜치 **`paper-evals`**(`web-v3-hybrid`에서 분기). A/B/C/D = `1bf470e`+`ece4e1e`; **정정 E/F = `21122b3`** → `origin/paper-evals` 푸시 완료.
