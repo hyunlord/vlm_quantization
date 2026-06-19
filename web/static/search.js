@@ -59,3 +59,21 @@ export function hammingTopK(index, n, cb, q, K) {
   out.sort((a, b) => a.dist - b.dist || a.idx - b.idx);
   return out;
 }
+
+// Pack a length-D (D multiple of 8) array of ±1/continuous values into D/8 bytes.
+// bit = (value > 0); big-endian within each byte (first value -> MSB). Byte-identical to
+// web/common.py:pack_bits (np.packbits(code > 0, bitorder='big')). Used by the offline
+// query path (browser packs its own code) and the Node parity test.
+export function packBits(values) {
+  const nb = values.length >> 3;
+  const out = new Uint8Array(nb);
+  for (let b = 0; b < nb; b++) {
+    let byte = 0;
+    const off = b << 3;
+    for (let k = 0; k < 8; k++) {
+      if (values[off + k] > 0) byte |= 1 << (7 - k);
+    }
+    out[b] = byte;
+  }
+  return out;
+}

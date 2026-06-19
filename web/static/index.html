@@ -4,6 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>1-bit 브라우저 검색 데모</title>
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="theme-color" content="#0b0d12" />
 <style>
   :root {
     --bg: #0b0d12; --panel: #141821; --line: #232938; --txt: #e7ebf3;
@@ -26,6 +28,10 @@
     border: 1px solid var(--line); background: var(--panel); color: var(--txt);
   }
   #q:focus { outline: none; border-color: var(--accent); }
+  #mode {
+    padding: 0 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--txt); font-size: 13.5px; cursor: pointer;
+  }
   button.go {
     padding: 0 22px; border: none; border-radius: 10px; cursor: pointer;
     background: var(--accent); color: #06101f; font-weight: 650; font-size: 15px;
@@ -65,6 +71,10 @@
   <div class="wrap">
     <div class="searchbar">
       <input id="q" type="text" placeholder="예: 바닷가 강아지 / a snowy mountain" autocomplete="off" />
+      <select id="mode" title="쿼리 인코딩 모드">
+        <option value="server">정확(서버)</option>
+        <option value="offline">오프라인(브라우저)</option>
+      </select>
       <button id="go" class="go" disabled>검색</button>
     </div>
     <div class="chips" id="chips"></div>

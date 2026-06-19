@@ -41,6 +41,7 @@ from web.common import CODE_BITS, CODE_BYTES, HEAD_PATH, Encoder
 STATIC = Path(__file__).resolve().parent / "static"
 (STATIC / "data").mkdir(parents=True, exist_ok=True)
 (STATIC / "thumbs").mkdir(parents=True, exist_ok=True)
+(STATIC / "onnx").mkdir(parents=True, exist_ok=True)
 
 print(f"[web] loading encoder head: {HEAD_PATH}", flush=True)
 enc = Encoder()
@@ -88,6 +89,23 @@ def search_js():
     return FileResponse(STATIC / "search.js", media_type="application/javascript")
 
 
-# Static artifacts (index.bin / meta.json / index_info.json and thumbnails).
+# ---- PWA assets (offline mode): service worker (root scope), manifest, icon ----
+@app.get("/sw.js")
+def sw_js():
+    return FileResponse(STATIC / "sw.js", media_type="application/javascript")
+
+
+@app.get("/manifest.webmanifest")
+def manifest():
+    return FileResponse(STATIC / "manifest.webmanifest", media_type="application/manifest+json")
+
+
+@app.get("/icon.svg")
+def icon():
+    return FileResponse(STATIC / "icon.svg", media_type="image/svg+xml")
+
+
+# Static artifacts: index.bin / meta.json / thumbnails, and the offline head txt_h.onnx.
 app.mount("/data", StaticFiles(directory=str(STATIC / "data")), name="data")
 app.mount("/thumbs", StaticFiles(directory=str(STATIC / "thumbs")), name="thumbs")
+app.mount("/onnx", StaticFiles(directory=str(STATIC / "onnx")), name="onnx")

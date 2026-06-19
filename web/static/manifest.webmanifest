@@ -1,0 +1,13 @@
+{
+  "name": "1-bit 브라우저 검색 (hybrid)",
+  "short_name": "1bit search",
+  "description": "Cross-modal 1024-bit hash image search — in-browser Hamming over index.bin, with an exact (server) and a fully-offline (in-browser e5+txt_h') query mode.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b0d12",
+  "theme_color": "#0b0d12",
+  "icons": [
+    { "src": "/icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any maskable" }
+  ]
+}
