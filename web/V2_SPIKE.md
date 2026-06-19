@@ -50,5 +50,5 @@
 - ONNX/모델 산출물: **미생성/미커밋**(애초에 export 안 함). transformers.js는 DGX `/tmp/v2spike_js`에 설치(미커밋).
 
 ## 커밋·푸시
-- 브랜치 **`web-v2-spike`**(`web-v1`에서 분기). 스크립트 + 이 보고서만 커밋.
-- **커밋 SHA**: (아래 후속 기록 커밋 참조) · **origin/web-v2-spike 푸시 완료**.
+- 브랜치 **`web-v2-spike`**(`web-v1`에서 분기). 스크립트 + 이 보고서만 커밋(ONNX/모델 미생성·미커밋).
+- **커밋 `af951ef`**(spike scripts + V2_SPIKE) → `origin/web-v2-spike` **푸시 완료**. (이 SHA 기록 커밋이 뒤따름.)
