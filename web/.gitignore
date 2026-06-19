@@ -1,0 +1,5 @@
+# Generated build artifacts — rebuild with build_index.py (see HANDOFF_v1.md).
+static/data/
+static/thumbs/
+__pycache__/
+*.pyc
