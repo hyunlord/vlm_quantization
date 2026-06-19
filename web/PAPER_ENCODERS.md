@@ -29,4 +29,4 @@ C1(head-adapt) 레시피를 **인코더만 바꿔** 다른 소형 멀티링구�
 - **기여 ④ / §4.3 일반화**(head-adapt는 인코더-불문 일반 레시피; 배포 후보 비교).
 - 산출물: `web/paper_encoder_run.py`(인코더 파라미터화 train+eval) + `paper/encoders.csv`. 학습 헤드(`/tmp/txt_h_*.pt`) 미커밋(재생성 스크립트만). img_h/index.bin/common.py/C1 산출물 무변경.
 - 재현: `HEAD_PATH=/tmp/ft_ko_113.pt .venv/bin/python web/paper_encoder_run.py`.
-- 브랜치 **`paper-encoders`**(`web-v3-hybrid`에서 분기). **커밋 SHA**: (아래 후속 기록 커밋) · push.
+- 브랜치 **`paper-encoders`**(`web-v3-hybrid`에서 분기). **커밋 `323795c`** → `origin/paper-encoders` push 완료.
