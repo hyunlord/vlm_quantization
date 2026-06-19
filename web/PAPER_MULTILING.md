@@ -51,8 +51,40 @@ C1/확장① 파이프라인을 **재학습 없이** 멀티링구얼 벤치마�
 - **(ii) 언어별 offline−server gap = 언어 의존적**. 커버 언어에서 **최고 offline이 server R@10의 ~86.7%를 회복**. 단, 갭은 언어마다 크게 다름:
   - **고자원(server 강세)**: fr/ru/vi/id/ar/ko/zh/ja/es/it … server ≫ offline(offline이 60–85% 회복). so400m 텍스트 타워가 강한 언어.
   - **offline ≥ server (8개 언어, so400m 텍스트가 병목)**: **de(server 30.1 → MiniLM 66.6, 2.2×)**, **te(6.2 → e5-base 28.4)**, **th(57.5 → MiniLM 69.5)**, **hi(43.4 → MiniLM 52.4)** + 한계적 fi·hr·mi·sw. 이 언어들은 so400m **텍스트** 임베딩이 약해(이미지·해시 문제 아님 — 동일 갤러리, float ceiling도 동반 저하), 전용 멀티링구얼 텍스트 인코더 + head-adapt가 server를 **추월**.
-  - **독일어(de)는 두드러진 outlier**: float ceiling 37.6 — 다른 주요 유럽어(fr/es/it/pt ~83–93)보다 현저히 낮음 = **so400m 텍스트 타워의 독일어 약점**(배포 contract max_len=64 하). offline MiniLM이 2.2× 회복.
+  - **독일어(de)는 두드러진 outlier**: float ceiling 37.6 — 다른 주요 유럽어(fr/es/it/pt ~83–93)보다 현저히 낮음 = **so400m 텍스트 타워의 독일어 약점**. 아래 **진단 §B에서 절단·토크나이저·버그가 아닌 *진짜* so400m 약점으로 확정**(독일어 캡션 99.9%가 ≤64토큰인데 그 ≤64 버킷도 30.0). offline MiniLM이 2.2× 회복.
 - **(iii) 인코더별 언어 프로파일(배포 권고)**: **MiniLM-L12-v2가 36개 중 30개 언어에서 최고 offline**(주요 Latin/Cyrillic/CJK + Thai; 평균 R@10 53.9 ≫ e5-base 43.3 ≫ e5-small 34.1). 확장①의 EN 결론(MiniLM이 EN 최고)이 **멀티링구얼 전반으로 일반화**. e5-base는 **특정 저자원/스크립트(fil·mi·quz·sw·te)에서만** 최고, e5-small은 bn 1개. → **단일 오프라인 인코더로는 MiniLM이 광범위 멀티링구얼 최적**(현 배포 e5-small 대비 평균 R@10 +19.8pt); 위 특정 저자원어 타깃 시에만 e5-base 고려.
+
+## 진단 (확장 ②-A/B) — maxlen 민감도 + 독일어 이상치
+Ext② 미해결 2건을 eval-only(1024-bit, frozen 갤러리·헤드, 캡션 재인코딩만)로 규명. 산출 `web/paper_multiling_maxlen.py` + `paper/multiling_{toklen,lenstrat,maxlen}.csv`.
+
+**토큰 길이 분포** (XM3600 캡션은 *짧다* — 64토큰 절단은 거의 없음). 발췌(전체 36개 = `multiling_toklen.csv`):
+
+| lang | n | Gemma avg / %>64tok | XLM-R avg / %>64tok |
+|---|---|---|---|
+| en | 7200 | 11.6 / 0.0% | 14.7 / 0.0% |
+| de | 8643 | 18.1 / **0.1%** | 20.6 / 0.1% |
+| th | 7200 | 20.5 / 0.0% | 15.9 / 0.0% |
+| hi | 8503 | 25.9 / 0.1% | 21.5 / 0.0% |
+| te | 7200 | 27.7 / 0.1% | 16.5 / 0.0% |
+| **he** | 7200 | 28.9 / **5.4%** | 24.7 / 2.7% |
+| **ro** | 7123 | 27.7 / **3.3%** | 27.0 / 2.4% |
+
+→ 36개 언어 **모두 >99%가 64토큰 이내**(평균 12–29); 64 초과는 he 5.4%·ro 3.3%만 유의, 나머지 <1%.
+
+**A. 오프라인 maxlen = no-op → OOD 저하는 절단 아티팩트가 *아님*.**
+- **학습=평가 maxlen 일치**: Ext① head 학습(`paper_encoder_run.py:embed`)·multiling 평가 둘 다 **maxlen=64** (불일치 버그 없음).
+- **maxlen 스윕**(dynamic-pad; mean-pool은 max_length pad와 수치 동일이나 단문에서 훨씬 빠름): 3개 오프라인 인코더 × 36개 언어 전부 **64 ≈ 128 ≈ 256, 최대 차 <0.1pt**(he/ro/tr/uk만 미세). offline@64는 Ext② 표를 정확 재현(검증).
+- ∴ 오프라인 **OOD 저하(COCO −5pt → XM3600 −9~24pt)는 절단이 아니라 *진짜 일반화 갭***(소형 인코더+head-adapt가 학습 도메인 COCO에 server보다 더 의존). **maxlen=64로 충분**(e5/MiniLM의 512 여유는 XM3600 단문에선 무의미) — 평가·배포 변경 불요.
+
+**B. 독일어(+te/th/hi) = 진짜 so400m 텍스트 약점 (절단·토크나이저·버그 아님) → "offline>server" *실재*.**
+- **so400m 텍스트 = 64 포지션 구조적 고정**(`text_config.max_position_embeddings=64`) → server는 >64 불가(회복 실험 원천 불가).
+- 그러나 **이상치 언어 캡션은 ≤64**(de·hi·te 0.1%, th 0%가 >64) → **절단되지 않음**. 길이층화 R@10(`multiling_lenstrat.csv`): de **≤64 server=30.0**(n8638, 전체 30.05와 동일)·th ≤64=57.5(>64 0개)·te ≤64=6.2 → 저점수가 *절단 안 된 단문에서* 발생.
+- **토크나이저 무죄**: 독일어 Gemma≈XLM-R 토큰수(18.1 vs 20.6) — Gemma 비효율 아님.
+- **인코딩 정상**: 동일 캡션을 오프라인 인코더는 46~66으로 처리 → 데이터·인코딩 버그 아님.
+- ∴ float·server 독일어 저하(37.6/30.1)는 **so400m 텍스트 타워의 언어별(de/te/th/hi) 불균등 커버리지** = 진짜 약점. **"offline이 server를 de/te/th/hi에서 이긴다"는 *실재 발견*** → 논문 유지.
+- *정직한 caveat*: **he(5.4% >64)·ro(3.3%)만** 64-cap이 소수 장문을 실제 절단 — 그 >64 버킷은 ≤64보다 낮음(he float ≤64 **82.3** vs >64 **47.9**; ro 75.4 vs 62.5). 단 소수(≤5.4%)라 전체값(he 74.1·ro 67.3)엔 경미.
+
+**수정된 프레이밍(정직)**: offline-vs-server는 **maxlen=64 사과-대-사과**(캡션이 64에 들어맞음). XM3600 offline 저하는 *in-domain(COCO) 경쟁력 ↔ OOD(XM3600) 일반화 갭*으로, de/th/hi 역전은 *so400m 텍스트 약점이 드러난 곳*으로 보고하는 것이 정직. 절단 보정은 불필요(no-op). he/ro만 64-cap 장문 절단이 경미하게 존재.
 
 ## 재현
 ```bash
@@ -60,9 +92,12 @@ C1/확장① 파이프라인을 **재학습 없이** 멀티링구얼 벤치마�
 bash web/paper_multiling_fetch.sh data
 # 전체 평가(36개 언어, 재학습 없음):
 HEAD_PATH=/tmp/ft_ko_113.pt .venv/bin/python web/paper_multiling_run.py --bench xm3600 --data data/xm3600 --out paper/multiling.csv
+# 진단(maxlen 스윕 + 토큰길이 + 길이층화):
+HEAD_PATH=/tmp/ft_ko_113.pt .venv/bin/python web/paper_multiling_maxlen.py --data data/xm3600
 ```
 산출물: `web/paper_multiling_run.py`(평가) + `web/paper_multiling_fetch.sh`(데이터) + `paper/multiling.csv`(language×encoder, R@1/5/10) + `paper/multiling.json`(그림용). 다운로드 데이터·헤드(`/tmp/txt_h_*.pt`, 확장①에서 생성) 미커밋. 앵커: COCO 서버(79.92/71.08)는 별도 분포라 직접 비교 대상 아님(§데이터).
 
 ## 채우는 표/섹션 + 커밋
 - **기여 ① / §6 Experiments — 멀티링구얼 평가**: EN+KO → **36개 언어**(28개 R@10≥50)로 확장; **언어별 offline 배포 프로파일**(MiniLM 30/36 최고). so400m-float ceiling 행은 **양자화 갭(해시가 float의 92.9% 유지)** 도 언어 전반에서 입증.
-- 브랜치 **`paper-multiling`**(`web-v3-hybrid`에서 분기). 평가 커밋 **`971185b`** → `origin/paper-multiling` push 완료.
+- **진단(§6/부록)**: maxlen 절단은 결과에 무영향(64 no-op) → offline 저하는 진짜 OOD 일반화 갭; de/te/th/hi의 offline>server는 so400m 텍스트 약점에 기인한 *실재 발견*(절단/버그 아님). offline-vs-server는 maxlen=64 사과-대-사과로 보고.
+- 브랜치 **`paper-multiling`**(`web-v3-hybrid`에서 분기). 평가 커밋 **`971185b`** · 진단 커밋 _커밋 후 기재_ → `origin/paper-multiling` push.
