@@ -2,13 +2,14 @@
 
 재학습/인덱스 재생성 없이 기존 캐시·헤드(ft113)로 측정한 4종. 프로토콜 = `eval_korean` 5K test(갤러리 `img_h(te_img)`, gold caption_i→image_i). **앵커 재현: 1024-bit 서버 EN R@10 79.92 / KO 71.08 ✓.** 스크립트: `web/eval_paper.py`(A/B/C), `web/eval_scaling.py`+`eval_scaling.mjs`(D). 데이터: `paper/*.csv`.
 
-## A. Float 상한 (→ 표 T2 맨 윗줄) — `paper/upper_bound.csv`
+## A. 상한 (→ 표 T2 맨 윗줄) — `paper/upper_bound.csv`  *(정정됨 — 헤드-연속이 진짜 이진화 상한)*
 | 경로 | EN R@1/5/10 | KO R@1/5/10 |
 |---|---|---|
-| **float (raw so400m cosine)** | 49.74 / 72.88 / **81.58** | 31.80 / 55.22 / **66.06** |
-| 1024-bit 서버(ft113) | 41.64 / 68.98 / 79.92 | 30.52 / 59.00 / 71.08 |
-- **EN**: float 81.58 ≥ 1bit 79.92 → 정상(양자화 손실 ~1.7pt). float이 상한.
-- **⚠️ KO: float 66.06 < 1bit 71.08 — "상한"이 1bit보다 낮음. 버그 아님.** `ft113`은 **한국어 fine-tune** 헤드라, 1bit 코드가 **raw so400m cosine을 추월**(프로젝트 메모리 "ft113 KO 71.1=float 추월"과 일치). 즉 *raw so400m float*은 EN엔 진짜 상한이지만 KO엔 상한이 아님(헤드가 KO 정렬을 raw 임베딩보다 개선). **논문 표기 주의**: T2 float row는 "raw so400m" 상한으로 라벨; KO는 fine-tuned 1bit가 이를 넘는다는 점을 본문에 명시 권장.
+| **head-continuous ceiling** (sign 직전, `F.normalize(BN(hash_head))`) | 42.74 / 70.52 / **80.52** | 32.34 / 60.68 / **72.04** |
+| 1024-bit 서버(ft113, 이진화) | 41.64 / 68.98 / 79.92 | 30.52 / 59.00 / 71.08 |
+| backbone-float, no head (raw so400m cosine) | 49.74 / 72.88 / 81.58 | 31.80 / 55.22 / 66.06 |
+- **진짜 이진화 상한 = head-continuous**(SignSTE가 이진화하는 바로 그 연속 텐서). **EN·KO 둘 다 ≥ 1bit 서버** ✓ (80.52≥79.92, 72.04≥71.08) — 이진화 손실 EN ~0.6pt / KO ~1.0pt. **이게 T2 상한 행.**
+- **backbone-float(no head)는 상한이 아니라 베이스라인**: 헤드 없는 raw so400m. EN 81.58(>1bit, 백본이 더 높음 — 헤드가 EN 약간 희생) / **KO 66.06(<1bit 71.08, ft113 한국어 fine-tune이 raw 백본을 추월** = 헤드 가치). 직전 사이클의 "KO float<1bit 역전"은 이 베이스라인을 상한으로 오인했던 것 — 정정 완료(head-continuous는 둘 다 1bit 이상).
 
 ## B. 비트길이 스윕 (→ 그림 F-bits) — `paper/bits_sweep.csv`
 | bits | B/img | 50K idx | 서버 EN R@1/5/10 | 서버 KO R@1/5/10 | 오프라인(C1) EN R@10 | 오프라인 KO R@10 |
@@ -31,8 +32,8 @@
 | emb | fp16 | 0.02 | 1.000 | 79.92 | 71.06 | 임베딩 storage-cast |
 | emb | bf16 | 0.18 | 0.998 | 79.92 | 71.04 | 임베딩 storage-cast |
 | emb | int8 | 5.45 | 0.966 | 79.84 | 70.84 | 임베딩 storage-cast(per-tensor) |
-| **text_tower** | **bf16** | **2.72** | — | 80.6 | 73.3 | **so400m 타워 compute bf16 vs fp32 cache, head fp32, n=1000/lang** |
-- **bf16 명시 재측정**: 아웃라인의 "~2.7/1024 flip"은 **텍스트 타워를 bf16으로 *연산***할 때(27레이어 누적) = **2.72/1024**로 재현 ✓. 단순 임베딩 storage-cast bf16은 0.18, head-cast bf16은 0.95 — **조건(어디를 bf16으로 두는가)에 따라 다름**. (text_tower R@10은 n=1000 샘플이라 5K 79.92/71.08과 표본오차 차이.)
+| **text_tower** | **bf16** | **2.57** | — | 79.98 | 70.98 | **so400m 타워 compute bf16 vs fp32 cache, head fp32, FULL 5K** |
+- **bf16 명시 재측정(full 5K)**: 아웃라인의 "~2.7/1024 flip"은 **텍스트 타워를 bf16으로 *연산***할 때(27레이어 누적) = **2.57/1024**(full 5K; n=1000에선 2.72)로 재현 ✓, R@10 79.98/70.98 = fp32 앵커(79.92/71.08)와 **사실상 동일**(Top-K 무영향, 이제 사과-대-사과). 단순 임베딩 storage-cast bf16은 0.18, head-cast bf16은 0.95 — **조건(어디를 bf16으로 두는가)에 따라 다름**.
 - 정밀도 영향: fp16 무시 가능(flip≤0.12, R@10 동일). bf16도 R@10 ~무영향. **int8: head(19 flip, KO −0.6pt) > emb(5.5 flip, KO −0.2pt)** — head가 0-근처 비트에 더 민감(사이클 2 관찰 재확인). 검색 품질은 전 dtype에서 product-viable.
 
 ## D. 인덱스 스케일링 레이턴시 (→ 그림 F-scale) — `paper/scaling.csv`
@@ -45,11 +46,11 @@
 - **브라우저(JS 단일스레드)**: 50K ~26ms(데모 즉답), 500K ~257ms(수용), 5M ~1.3s(느림 → Web Worker/WASM-SIMD/faiss-wasm 필요). 데모 코퍼스 50K는 브라우저로 충분. **faiss(서버)**: 5M에서도 116ms — 서버 스케일 모드 여유. F-scale는 브라우저 단일스레드의 선형 스케일 한계와 "언제 전략 전환"을 보여줌.
 
 ## 앵커/교차검증 + 채우는 표·그림
-- 앵커 1024 서버 **79.92 / 71.08 재현** ✓. 오프라인 1024 **74.0/66.2 = 사이클5 C1** ✓. text_tower bf16 **2.72/1024 = 사이클2** ✓.
-- **A → T2 top row**(float 상한; KO 추월 주석). **B → F-bits**(+ T2/T3 size 행). **C → §4.1 T-prec**. **D → F-scale**.
-- 이상치: A-KO(설명함, 비버그). text_tower R@10은 n=1000 샘플(주석).
+- 앵커 1024 서버 **79.92 / 71.08 재현** ✓. 오프라인 1024 **74.0/66.2 = 사이클5 C1** ✓. text_tower bf16 **2.57/1024(full 5K) ≈ 사이클2** ✓. head-continuous 상한 **80.52/72.04 ≥ 1bit 둘 다** ✓.
+- **A → T2 top row**(head-continuous = 이진화 상한; backbone-float = no-head 베이스라인). **B → F-bits**(+ T2/T3 size 행). **C → §4.1 T-prec**. **D → F-scale**.
+- 정정(이번 follow-up): (E) 상한을 raw-backbone → **head-continuous**로 교체(둘 다 1bit 이상; "KO 역전" 해소). (F) text_tower bf16 R@10을 **full 5K**로 재측정(79.98/70.98, flip 2.57; n=1000 캐비엇 제거).
 
 ## 산출물 / 커밋
-- 스크립트: `web/eval_paper.py`, `web/eval_scaling.py`, `web/eval_scaling.mjs`. 데이터: `paper/{upper_bound,bits_sweep,precision,scaling}.csv`. (합성 코드는 in-memory, 미저장.)
-- 재현: `HEAD_PATH=/tmp/ft_ko_113.pt .venv/bin/python web/eval_paper.py --txt-head /tmp/txt_h_e5.pt` · `.venv/bin/python web/eval_scaling.py`.
+- 스크립트: `web/eval_paper.py`(A/B/C), `web/eval_paper_fix.py`(E/F 정정), `web/eval_scaling.py`+`eval_scaling.mjs`(D). 데이터: `paper/{upper_bound,bits_sweep,precision,scaling}.csv`. (합성 코드는 in-memory, 미저장.)
+- 재현: `web/eval_paper.py --txt-head /tmp/txt_h_e5.pt` → `web/eval_paper_fix.py`(상한·bf16 정정) → `web/eval_scaling.py`. (모두 `HEAD_PATH=/tmp/ft_ko_113.pt .venv/bin/python …`.)
 - 브랜치 **`paper-evals`**(`web-v3-hybrid`에서 분기). **커밋 `1bf470e`**(scripts+CSV+보고서) → `origin/paper-evals` 푸시 완료. (이 SHA 기록 커밋이 뒤따름.)
