@@ -42,3 +42,11 @@ lightning_logs/
 
 .omc/
 .claude/
+
+# Lock file (per-project decision: exclude)
+uv.lock
+
+# Large / generated local artifacts (not for repo)
+claudedocs/hq_thumbs/
+claudedocs/hq_gallery*.json
+claudedocs/vlm_hashing_portfolio.zip
