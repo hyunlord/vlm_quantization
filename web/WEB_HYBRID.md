@@ -39,4 +39,4 @@
 
 ## 커밋·푸시
 - 브랜치 **`web-v3-hybrid`**(`web-v2-headadapt`에서 분기). 프론트엔드+스크립트+보고서 커밋, ONNX 미커밋.
-- **커밋 SHA**: (아래 후속 기록 커밋 참조) · **origin/web-v3-hybrid 푸시 완료**.
+- **커밋 `e4a4b7a`**(hybrid+PWA+Stage A 스크립트+보고서) → `origin/web-v3-hybrid` **푸시 완료**. (이 SHA 기록 커밋이 뒤따름.)
