@@ -66,6 +66,9 @@ def main():
     for e in exts:
         paths += glob.glob(os.path.join(IMG_DIR, "**", e), recursive=True)
     paths = sorted(paths)
+    _lim = int(os.environ.get("LIMIT", "0"))
+    if _lim:
+        paths = paths[:_lim]
     print(f"found {len(paths)} images in {IMG_DIR}", flush=True)
 
     hh = torch.load(HEADS, map_location="cpu"); BITS = hh["bits"]
