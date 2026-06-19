@@ -49,4 +49,5 @@ HEAD_PATH=/tmp/ft_ko_113.pt .venv/bin/python web/verify_fidelity.py   # exit 0=P
 
 ## 커밋·푸시
 - 브랜치 **`web-v1`**. 생성물(`web/static/data`, `thumbs`) 미커밋. 검증 스크립트만 추가.
-- **커밋 SHA**: (아래 후속 기록 커밋 참조) · **origin/web-v1 푸시 완료**.
+- **커밋 `f6bbc18`** (verify_fidelity + smoke + HANDOFF) → `origin/web-v1` **푸시 완료**. (이 SHA 기록 커밋이 뒤따름.)
+- 사이클1 토대: `d3f8f34`/`85ebb02`/`b5fc7d3` (`web/HANDOFF_v1.md`).
