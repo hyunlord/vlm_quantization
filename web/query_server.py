@@ -105,7 +105,13 @@ def icon():
     return FileResponse(STATIC / "icon.svg", media_type="image/svg+xml")
 
 
-# Static artifacts: index.bin / meta.json / thumbnails, and the offline head txt_h.onnx.
+# Offline head txt_h.onnx — explicit binary MIME (StaticFiles guesses text/plain; ort/fetch
+# read bytes regardless, but octet-stream is cleaner).
+@app.get("/onnx/txt_h.onnx")
+def onnx_head():
+    return FileResponse(STATIC / "onnx" / "txt_h.onnx", media_type="application/octet-stream")
+
+
+# Static artifacts: index.bin / meta.json / index_info.json and thumbnails.
 app.mount("/data", StaticFiles(directory=str(STATIC / "data")), name="data")
 app.mount("/thumbs", StaticFiles(directory=str(STATIC / "thumbs")), name="thumbs")
-app.mount("/onnx", StaticFiles(directory=str(STATIC / "onnx")), name="onnx")
