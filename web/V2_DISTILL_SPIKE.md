@@ -55,5 +55,5 @@ e5-small(117.7M)을 so400m 텍스트 임베딩에 distill(3ep, val cos 0.89) →
 - 모델/임베딩 산출물: 미커밋(DGX `/tmp/distill_e5.pt`).
 
 ## 커밋·푸시
-- 브랜치 **`web-v2-distill`**(`web-v1`에서 분기). 스크립트 + 보고서만 커밋.
-- **커밋 SHA**: (아래 후속 기록 커밋 참조) · **origin/web-v2-distill 푸시 완료**.
+- 브랜치 **`web-v2-distill`**(`web-v1`에서 분기). 스크립트 + 보고서만 커밋(모델/임베딩 미커밋).
+- **커밋 `8b64465`**(distill scripts + 보고서) → `origin/web-v2-distill` **푸시 완료**. (이 SHA 기록 커밋이 뒤따름.)
