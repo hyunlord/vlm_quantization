@@ -100,4 +100,4 @@ HEAD_PATH=/tmp/ft_ko_113.pt .venv/bin/python web/paper_multiling_maxlen.py --dat
 ## 채우는 표/섹션 + 커밋
 - **기여 ① / §6 Experiments — 멀티링구얼 평가**: EN+KO → **36개 언어**(28개 R@10≥50)로 확장; **언어별 offline 배포 프로파일**(MiniLM 30/36 최고). so400m-float ceiling 행은 **양자화 갭(해시가 float의 92.9% 유지)** 도 언어 전반에서 입증.
 - **진단(§6/부록)**: maxlen 절단은 결과에 무영향(64 no-op) → offline 저하는 진짜 OOD 일반화 갭; de/te/th/hi의 offline>server는 so400m 텍스트 약점에 기인한 *실재 발견*(절단/버그 아님). offline-vs-server는 maxlen=64 사과-대-사과로 보고.
-- 브랜치 **`paper-multiling`**(`web-v3-hybrid`에서 분기). 평가 커밋 **`971185b`** · 진단 커밋 _커밋 후 기재_ → `origin/paper-multiling` push.
+- 브랜치 **`paper-multiling`**(`web-v3-hybrid`에서 분기). 평가 커밋 **`971185b`** · 진단 커밋 **`12b8cb9`** → `origin/paper-multiling` push 완료.
