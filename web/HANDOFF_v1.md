@@ -71,4 +71,6 @@ HEAD_PATH=/tmp/ft_ko_113.pt .venv/bin/python web/verify_parity.py \
 - 다음(범위 밖이었던 것): **v2** 클라이언트 사이드 텍스트 인코더 · **v1.5** Matryoshka coarse-to-fine(64bit 프리필터→1024 리랭크) · Web Worker 분리 · 스케일 모드(전체 1.09M).
 
 ## 커밋·푸시
-- 브랜치 **`web-v1`** (HEAD `improve-consistency-quality-tests`에서 분기). `web/` 소스만 스테이징(생성물 제외). **origin에 푸시 완료** — 아래 "커밋 SHA" 참조.
+- 브랜치 **`web-v1`** (HEAD `improve-consistency-quality-tests`에서 분기). `web/` 소스만 스테이징(생성물 제외).
+- **커밋 `d3f8f34`** → `origin/web-v1` **푸시 완료**. (이 HANDOFF의 SHA 기록 커밋이 뒤따름.)
+- PR: https://github.com/hyunlord/vlm_quantization/pull/new/web-v1
