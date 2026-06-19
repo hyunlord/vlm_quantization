@@ -49,7 +49,7 @@ font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;opacity:0;tr
 </style></head><body><div class="wrap">
 
 <h1>같은 검색, 다른 속도 — Float vs 바이너리 해시</h1>
-<p class="sub">동일 쿼리를 양쪽에 동시에 보냅니다. <b style="color:var(--good)">먼저 화면에 뜨는 쪽이 더 빠른 검색</b>입니다.</p>
+<p class="sub">동일 쿼리를 양쪽에서 <b>순차로(서로 경합 없이)</b> 측정합니다. <b style="color:var(--good)">검색 시간이 짧은 쪽이 더 빠릅니다</b>.</p>
 <div class="statline" id="stat"></div>
 
 <div class="bar">
@@ -66,20 +66,20 @@ font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;opacity:0;tr
 
 <div class="cols">
   <div class="col" id="col-float">
-    <div class="win-badge" id="win-float">🏆 먼저 도착</div>
+    <div class="win-badge" id="win-float">🏆 더 빠름</div>
     <h2>왼쪽 · Float <span class="tag" id="tag-float">cosine · 4608 B/img</span></h2>
     <div class="lat" id="lat-float"></div>
     <div id="gal-float"></div>
   </div>
   <div class="col" id="col-bit">
-    <div class="win-badge" id="win-bit">🏆 먼저 도착</div>
+    <div class="win-badge" id="win-bit">🏆 더 빠름</div>
     <h2>오른쪽 · 바이너리 해시 <span class="tag" id="tag-bit"></span></h2>
     <div class="lat" id="lat-bit"></div>
     <div id="gal-bit"></div>
   </div>
 </div>
 
-<div class="foot">검색 단계만 측정 (쿼리 인코딩은 양쪽 공통, 위에 별도 표시). corpus는 실제 이미지를 타일링해 검색 부하를 키운 값입니다(정직하게 표기). 결과는 실제 이미지로 중복 제거.</div>
+<div class="foot">검색 단계만 측정(쿼리 인코딩은 양쪽 공통, 위에 별도 표시). 두 검색은 <b>메모리 대역폭 경합을 피하려 순차로</b> 측정합니다(동시 실행 시 무거운 float 스캔이 비트 검색까지 늦춤). corpus는 전부 서로 다른 실제 이미지입니다.</div>
 </div>
 
 <script>
@@ -130,34 +130,34 @@ async function run(){
   try{ enc=await (await fetch("/encode",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({q})})).json(); }
   catch(e){ $("encbar").innerHTML="인코딩 오류: "+e; $("go").disabled=false; return; }
   if(myRun!==runId) return;
-  $("encbar").innerHTML=`쿼리 인코딩(SigLIP2, 양쪽 공통): <b>${enc.encode_ms} ms</b> — 이제 두 검색을 동시에 시작합니다 ⏱`;
+  $("encbar").innerHTML=`쿼리 인코딩(SigLIP2, 양쪽 공통): <b>${enc.encode_ms} ms</b> — 이제 두 검색을 순차로(경합 없이) 측정합니다 ⏱`;
 
-  // 2) fire both searches in parallel; render whichever lands first
-  const t0=performance.now();
-  let firstDone=null;
-  const arrival={};
+  // 2) run searches SEQUENTIALLY so neither steals memory bandwidth from the
+  //    other. Each search_ms then reflects true single-query latency. Bit is
+  //    lighter so it runs/renders first; winner is decided by search_ms.
+  const ms={};
   const fire=(side,url)=>{
     const tStart=performance.now();
     return fetch(url).then(r=>r.json()).then(d=>{
       if(myRun!==runId) return;
-      const wall=performance.now()-t0;
-      arrival[side]=wall;
+      const wall=performance.now()-tStart;
+      ms[side]=d.search_ms;
       $("lat-"+side).className="lat";
-      $("lat-"+side).innerHTML=`검색 <span class="ms">${d.search_ms} ms</span> · 화면 도착 +${wall.toFixed(0)}ms · ${d.corpus.toLocaleString()}장`;
+      $("lat-"+side).innerHTML=`검색 <span class="ms">${d.search_ms} ms</span> · 왕복 ${wall.toFixed(0)}ms · ${d.corpus.toLocaleString()}장`;
       gallery($("gal-"+side),d.results.slice(0,K));
-      if(firstDone===null){firstDone=side;$("win-"+side).classList.add("show");$("col-"+side).classList.add("winner");}
     }).catch(e=>{ if(myRun!==runId)return; $("lat-"+side).className="lat";$("lat-"+side).textContent="오류: "+e;});
   };
-  await Promise.all([
-    fire("float",`/search/float?qid=${enc.qid}&k=${K}`),
-    fire("bit",`/search/bit?qid=${enc.qid}&bit=${bit}&k=${K}`),
-  ]);
+  await fire("bit",`/search/bit?qid=${enc.qid}&bit=${bit}&k=${K}`);
   if(myRun!==runId) return;
-  // summary on the encbar
-  if(arrival.float!=null && arrival.bit!=null){
-    const fast=arrival.bit<arrival.float?"바이너리":"Float";
-    const ratio=(Math.max(arrival.float,arrival.bit)/Math.max(Math.min(arrival.float,arrival.bit),0.01));
-    $("encbar").innerHTML+=` &nbsp;→ <b style="color:var(--good)">${fast}가 먼저 도착</b>`;
+  await fire("float",`/search/float?qid=${enc.qid}&k=${K}`);
+  if(myRun!==runId) return;
+  // winner decided by true (uncontended) search time
+  if(ms.float!=null && ms.bit!=null){
+    const bitWins=ms.bit<=ms.float;
+    const win=bitWins?"bit":"float";
+    $("win-"+win).classList.add("show"); $("col-"+win).classList.add("winner");
+    const ratio=(Math.max(ms.float,ms.bit)/Math.max(Math.min(ms.float,ms.bit),0.001));
+    $("encbar").innerHTML+=` &nbsp;→ <b style="color:var(--good)">${bitWins?"바이너리 해시":"Float"}가 ${ratio.toFixed(1)}× 빠름</b> (검색시간 기준)`;
   }
   $("go").disabled=false;
 }
