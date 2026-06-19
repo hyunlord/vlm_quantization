@@ -1,0 +1,181 @@
+language,encoder,family,n_captions,n_images,R1,R5,R10
+ar,so400m-float (ceiling),SigLIP2-so400m,7367,3600,51.24,76.26,83.58
+ar,server (so400m+ft113),SigLIP2-so400m,7367,3600,40.17,67.27,77.25
+ar,"e5-small (C1, no-prefix)",e5/XLM-R,7367,3600,8.81,22.95,32.02
+ar,MiniLM-L12-v2,paraphrase/XLM-R,7367,3600,22.0,45.57,56.77
+ar,e5-base (query:),e5/XLM-R,7367,3600,12.33,29.12,39.22
+bn,so400m-float (ceiling),SigLIP2-so400m,3600,3600,12.33,25.39,33.06
+bn,server (so400m+ft113),SigLIP2-so400m,3600,3600,11.39,26.06,34.81
+bn,"e5-small (C1, no-prefix)",e5/XLM-R,3600,3600,9.64,24.78,34.33
+bn,MiniLM-L12-v2,paraphrase/XLM-R,3600,3600,2.33,6.53,10.64
+bn,e5-base (query:),e5/XLM-R,3600,3600,8.14,21.5,29.56
+cs,so400m-float (ceiling),SigLIP2-so400m,7207,3600,35.49,57.47,65.96
+cs,server (so400m+ft113),SigLIP2-so400m,7207,3600,30.18,53.81,64.22
+cs,"e5-small (C1, no-prefix)",e5/XLM-R,7207,3600,7.52,19.76,27.5
+cs,MiniLM-L12-v2,paraphrase/XLM-R,7207,3600,23.49,47.38,58.0
+cs,e5-base (query:),e5/XLM-R,7207,3600,12.89,31.65,42.31
+da,so400m-float (ceiling),SigLIP2-so400m,7264,3600,51.46,74.12,80.69
+da,server (so400m+ft113),SigLIP2-so400m,7264,3600,42.36,67.0,76.09
+da,"e5-small (C1, no-prefix)",e5/XLM-R,7264,3600,11.1,27.02,36.67
+da,MiniLM-L12-v2,paraphrase/XLM-R,7264,3600,29.76,53.88,64.59
+da,e5-base (query:),e5/XLM-R,7264,3600,18.65,39.92,50.96
+de,so400m-float (ceiling),SigLIP2-so400m,8643,3600,16.85,31.03,37.58
+de,server (so400m+ft113),SigLIP2-so400m,8643,3600,10.75,22.92,30.05
+de,"e5-small (C1, no-prefix)",e5/XLM-R,8643,3600,16.57,36.49,46.4
+de,MiniLM-L12-v2,paraphrase/XLM-R,8643,3600,30.28,55.52,66.55
+de,e5-base (query:),e5/XLM-R,8643,3600,21.91,44.9,55.69
+el,so400m-float (ceiling),SigLIP2-so400m,7204,3600,33.44,55.15,63.76
+el,server (so400m+ft113),SigLIP2-so400m,7204,3600,28.78,51.75,61.4
+el,"e5-small (C1, no-prefix)",e5/XLM-R,7204,3600,6.3,17.21,24.53
+el,MiniLM-L12-v2,paraphrase/XLM-R,7204,3600,22.58,45.27,55.52
+el,e5-base (query:),e5/XLM-R,7204,3600,10.66,25.64,34.61
+en,so400m-float (ceiling),SigLIP2-so400m,7200,3600,53.04,76.28,83.36
+en,server (so400m+ft113),SigLIP2-so400m,7200,3600,43.0,68.79,77.86
+en,"e5-small (C1, no-prefix)",e5/XLM-R,7200,3600,23.85,47.38,59.15
+en,MiniLM-L12-v2,paraphrase/XLM-R,7200,3600,31.21,57.39,68.69
+en,e5-base (query:),e5/XLM-R,7200,3600,27.53,53.61,65.04
+es,so400m-float (ceiling),SigLIP2-so400m,8614,3600,52.44,76.27,83.57
+es,server (so400m+ft113),SigLIP2-so400m,8614,3600,38.39,64.4,74.29
+es,"e5-small (C1, no-prefix)",e5/XLM-R,8614,3600,14.48,33.93,44.25
+es,MiniLM-L12-v2,paraphrase/XLM-R,8614,3600,25.12,49.81,60.29
+es,e5-base (query:),e5/XLM-R,8614,3600,21.41,44.85,56.04
+fa,so400m-float (ceiling),SigLIP2-so400m,7245,3600,58.26,82.64,88.47
+fa,server (so400m+ft113),SigLIP2-so400m,7245,3600,47.04,74.66,82.88
+fa,"e5-small (C1, no-prefix)",e5/XLM-R,7245,3600,11.39,27.96,37.56
+fa,MiniLM-L12-v2,paraphrase/XLM-R,7245,3600,27.07,51.8,62.77
+fa,e5-base (query:),e5/XLM-R,7245,3600,15.62,35.35,46.58
+fi,so400m-float (ceiling),SigLIP2-so400m,7127,3600,31.42,52.79,61.33
+fi,server (so400m+ft113),SigLIP2-so400m,7127,3600,25.19,47.62,58.02
+fi,"e5-small (C1, no-prefix)",e5/XLM-R,7127,3600,5.51,14.21,20.51
+fi,MiniLM-L12-v2,paraphrase/XLM-R,7127,3600,25.93,49.74,60.5
+fi,e5-base (query:),e5/XLM-R,7127,3600,11.9,29.11,39.12
+fil,so400m-float (ceiling),SigLIP2-so400m,7109,3600,12.72,26.68,33.25
+fil,server (so400m+ft113),SigLIP2-so400m,7109,3600,9.89,24.01,31.96
+fil,"e5-small (C1, no-prefix)",e5/XLM-R,7109,3600,6.88,18.1,25.07
+fil,MiniLM-L12-v2,paraphrase/XLM-R,7109,3600,1.84,6.18,8.82
+fil,e5-base (query:),e5/XLM-R,7109,3600,8.54,21.7,29.47
+fr,so400m-float (ceiling),SigLIP2-so400m,8562,3600,66.88,87.81,92.58
+fr,server (so400m+ft113),SigLIP2-so400m,8562,3600,53.42,79.02,86.53
+fr,"e5-small (C1, no-prefix)",e5/XLM-R,8562,3600,17.62,39.07,49.93
+fr,MiniLM-L12-v2,paraphrase/XLM-R,8562,3600,30.83,56.01,66.75
+fr,e5-base (query:),e5/XLM-R,8562,3600,23.2,46.24,57.05
+he,so400m-float (ceiling),SigLIP2-so400m,7200,3600,48.08,72.53,80.44
+he,server (so400m+ft113),SigLIP2-so400m,7200,3600,38.58,64.57,74.1
+he,"e5-small (C1, no-prefix)",e5/XLM-R,7200,3600,6.46,17.26,24.54
+he,MiniLM-L12-v2,paraphrase/XLM-R,7200,3600,29.15,53.36,64.07
+he,e5-base (query:),e5/XLM-R,7200,3600,11.83,27.75,36.88
+hi,so400m-float (ceiling),SigLIP2-so400m,8503,3600,16.02,32.41,40.9
+hi,server (so400m+ft113),SigLIP2-so400m,8503,3600,16.09,33.86,43.38
+hi,"e5-small (C1, no-prefix)",e5/XLM-R,8503,3600,8.53,22.11,30.48
+hi,MiniLM-L12-v2,paraphrase/XLM-R,8503,3600,20.12,41.22,52.36
+hi,e5-base (query:),e5/XLM-R,8503,3600,8.28,21.8,29.98
+hr,so400m-float (ceiling),SigLIP2-so400m,7280,3600,37.29,60.12,68.08
+hr,server (so400m+ft113),SigLIP2-so400m,7280,3600,30.0,53.68,63.06
+hr,"e5-small (C1, no-prefix)",e5/XLM-R,7280,3600,10.54,25.14,34.0
+hr,MiniLM-L12-v2,paraphrase/XLM-R,7280,3600,29.34,54.08,64.35
+hr,e5-base (query:),e5/XLM-R,7280,3600,15.25,33.38,43.06
+hu,so400m-float (ceiling),SigLIP2-so400m,7216,3600,40.65,63.82,71.72
+hu,server (so400m+ft113),SigLIP2-so400m,7216,3600,31.65,55.46,64.88
+hu,"e5-small (C1, no-prefix)",e5/XLM-R,7216,3600,5.61,16.37,23.32
+hu,MiniLM-L12-v2,paraphrase/XLM-R,7216,3600,26.95,48.92,59.27
+hu,e5-base (query:),e5/XLM-R,7216,3600,15.09,33.61,44.07
+id,so400m-float (ceiling),SigLIP2-so400m,7126,3600,62.84,84.91,90.4
+id,server (so400m+ft113),SigLIP2-so400m,7126,3600,52.08,78.23,85.56
+id,"e5-small (C1, no-prefix)",e5/XLM-R,7126,3600,14.19,33.12,43.43
+id,MiniLM-L12-v2,paraphrase/XLM-R,7126,3600,35.81,62.74,73.24
+id,e5-base (query:),e5/XLM-R,7126,3600,19.46,40.99,52.65
+it,so400m-float (ceiling),SigLIP2-so400m,8471,3600,62.94,84.41,90.12
+it,server (so400m+ft113),SigLIP2-so400m,8471,3600,46.49,72.52,81.64
+it,"e5-small (C1, no-prefix)",e5/XLM-R,8471,3600,13.42,31.05,40.73
+it,MiniLM-L12-v2,paraphrase/XLM-R,8471,3600,27.77,50.35,61.68
+it,e5-base (query:),e5/XLM-R,8471,3600,18.5,38.86,49.33
+ja,so400m-float (ceiling),SigLIP2-so400m,7185,3600,47.89,73.14,80.6
+ja,server (so400m+ft113),SigLIP2-so400m,7185,3600,38.61,65.65,74.92
+ja,"e5-small (C1, no-prefix)",e5/XLM-R,7185,3600,14.08,31.83,42.34
+ja,MiniLM-L12-v2,paraphrase/XLM-R,7185,3600,32.18,57.59,68.7
+ja,e5-base (query:),e5/XLM-R,7185,3600,17.23,38.79,50.41
+ko,so400m-float (ceiling),SigLIP2-so400m,7650,3600,59.32,82.93,88.89
+ko,server (so400m+ft113),SigLIP2-so400m,7650,3600,48.84,75.83,83.8
+ko,"e5-small (C1, no-prefix)",e5/XLM-R,7650,3600,20.85,43.07,54.16
+ko,MiniLM-L12-v2,paraphrase/XLM-R,7650,3600,25.73,49.31,60.18
+ko,e5-base (query:),e5/XLM-R,7650,3600,25.01,48.2,59.15
+mi,so400m-float (ceiling),SigLIP2-so400m,4732,3600,0.23,0.61,1.06
+mi,server (so400m+ft113),SigLIP2-so400m,4732,3600,0.25,1.01,1.48
+mi,"e5-small (C1, no-prefix)",e5/XLM-R,4732,3600,1.14,3.25,5.52
+mi,MiniLM-L12-v2,paraphrase/XLM-R,4732,3600,0.11,0.23,0.42
+mi,e5-base (query:),e5/XLM-R,4732,3600,1.29,4.67,7.23
+nl,so400m-float (ceiling),SigLIP2-so400m,8059,3600,49.16,71.99,79.55
+nl,server (so400m+ft113),SigLIP2-so400m,8059,3600,37.83,62.84,71.73
+nl,"e5-small (C1, no-prefix)",e5/XLM-R,8059,3600,12.69,29.95,40.13
+nl,MiniLM-L12-v2,paraphrase/XLM-R,8059,3600,24.94,49.22,59.46
+nl,e5-base (query:),e5/XLM-R,8059,3600,18.05,39.31,49.68
+no,so400m-float (ceiling),SigLIP2-so400m,7213,3600,47.77,71.94,79.29
+no,server (so400m+ft113),SigLIP2-so400m,7213,3600,39.39,65.19,73.73
+no,"e5-small (C1, no-prefix)",e5/XLM-R,7213,3600,10.94,26.73,36.07
+no,MiniLM-L12-v2,paraphrase/XLM-R,7213,3600,27.82,51.75,62.3
+no,e5-base (query:),e5/XLM-R,7213,3600,18.73,40.04,50.87
+pl,so400m-float (ceiling),SigLIP2-so400m,7141,3600,54.12,75.47,82.44
+pl,server (so400m+ft113),SigLIP2-so400m,7141,3600,42.32,67.11,76.19
+pl,"e5-small (C1, no-prefix)",e5/XLM-R,7141,3600,10.4,26.89,36.21
+pl,MiniLM-L12-v2,paraphrase/XLM-R,7141,3600,27.42,51.81,62.43
+pl,e5-base (query:),e5/XLM-R,7141,3600,15.74,35.61,46.51
+pt,so400m-float (ceiling),SigLIP2-so400m,7243,3600,55.6,78.06,84.43
+pt,server (so400m+ft113),SigLIP2-so400m,7243,3600,41.42,66.55,75.11
+pt,"e5-small (C1, no-prefix)",e5/XLM-R,7243,3600,13.71,32.14,42.16
+pt,MiniLM-L12-v2,paraphrase/XLM-R,7243,3600,27.76,51.26,62.05
+pt,e5-base (query:),e5/XLM-R,7243,3600,15.81,34.56,44.97
+quz,so400m-float (ceiling),SigLIP2-so400m,7200,3600,2.42,6.11,8.22
+quz,server (so400m+ft113),SigLIP2-so400m,7200,3600,1.85,5.36,7.69
+quz,"e5-small (C1, no-prefix)",e5/XLM-R,7200,3600,1.08,3.25,5.32
+quz,MiniLM-L12-v2,paraphrase/XLM-R,7200,3600,0.69,2.11,3.21
+quz,e5-base (query:),e5/XLM-R,7200,3600,1.18,3.89,6.14
+ro,so400m-float (ceiling),SigLIP2-so400m,7123,3600,44.64,66.81,74.95
+ro,server (so400m+ft113),SigLIP2-so400m,7123,3600,34.55,57.74,67.28
+ro,"e5-small (C1, no-prefix)",e5/XLM-R,7123,3600,7.97,20.2,27.4
+ro,MiniLM-L12-v2,paraphrase/XLM-R,7123,3600,28.2,51.65,62.4
+ro,e5-base (query:),e5/XLM-R,7123,3600,14.4,31.9,42.82
+ru,so400m-float (ceiling),SigLIP2-so400m,7200,3600,64.76,85.99,90.97
+ru,server (so400m+ft113),SigLIP2-so400m,7200,3600,51.18,76.39,84.01
+ru,"e5-small (C1, no-prefix)",e5/XLM-R,7200,3600,14.65,33.57,43.6
+ru,MiniLM-L12-v2,paraphrase/XLM-R,7200,3600,32.93,59.06,69.88
+ru,e5-base (query:),e5/XLM-R,7200,3600,21.18,42.75,53.4
+sv,so400m-float (ceiling),SigLIP2-so400m,7273,3600,50.24,72.36,79.18
+sv,server (so400m+ft113),SigLIP2-so400m,7273,3600,41.91,66.9,75.69
+sv,"e5-small (C1, no-prefix)",e5/XLM-R,7273,3600,11.76,27.58,37.21
+sv,MiniLM-L12-v2,paraphrase/XLM-R,7273,3600,28.46,51.42,62.19
+sv,e5-base (query:),e5/XLM-R,7273,3600,18.45,39.93,51.08
+sw,so400m-float (ceiling),SigLIP2-so400m,7046,3600,5.02,11.2,14.62
+sw,server (so400m+ft113),SigLIP2-so400m,7046,3600,3.62,9.72,13.87
+sw,"e5-small (C1, no-prefix)",e5/XLM-R,7046,3600,3.6,11.16,16.43
+sw,MiniLM-L12-v2,paraphrase/XLM-R,7046,3600,0.5,2.44,3.8
+sw,e5-base (query:),e5/XLM-R,7046,3600,4.88,13.74,20.38
+te,so400m-float (ceiling),SigLIP2-so400m,7200,3600,0.81,3.07,4.6
+te,server (so400m+ft113),SigLIP2-so400m,7200,3600,1.17,3.83,6.17
+te,"e5-small (C1, no-prefix)",e5/XLM-R,7200,3600,6.76,18.29,26.29
+te,MiniLM-L12-v2,paraphrase/XLM-R,7200,3600,2.61,8.28,12.67
+te,e5-base (query:),e5/XLM-R,7200,3600,7.99,20.6,28.39
+th,so400m-float (ceiling),SigLIP2-so400m,7200,3600,27.18,50.64,60.04
+th,server (so400m+ft113),SigLIP2-so400m,7200,3600,23.03,46.08,57.46
+th,"e5-small (C1, no-prefix)",e5/XLM-R,7200,3600,12.04,28.99,39.44
+th,MiniLM-L12-v2,paraphrase/XLM-R,7200,3600,31.15,58.25,69.47
+th,e5-base (query:),e5/XLM-R,7200,3600,17.12,37.62,48.35
+tr,so400m-float (ceiling),SigLIP2-so400m,7233,3600,47.5,71.87,80.02
+tr,server (so400m+ft113),SigLIP2-so400m,7233,3600,37.65,63.69,73.47
+tr,"e5-small (C1, no-prefix)",e5/XLM-R,7233,3600,8.45,21.68,29.7
+tr,MiniLM-L12-v2,paraphrase/XLM-R,7233,3600,26.14,50.77,61.27
+tr,e5-base (query:),e5/XLM-R,7233,3600,14.57,33.24,43.63
+uk,so400m-float (ceiling),SigLIP2-so400m,7215,3600,46.58,69.81,77.51
+uk,server (so400m+ft113),SigLIP2-so400m,7215,3600,35.99,61.55,71.19
+uk,"e5-small (C1, no-prefix)",e5/XLM-R,7215,3600,8.87,22.76,31.31
+uk,MiniLM-L12-v2,paraphrase/XLM-R,7215,3600,29.26,53.17,63.62
+uk,e5-base (query:),e5/XLM-R,7215,3600,17.19,36.13,46.87
+vi,so400m-float (ceiling),SigLIP2-so400m,7350,3600,62.97,85.18,90.97
+vi,server (so400m+ft113),SigLIP2-so400m,7350,3600,52.76,79.24,86.99
+vi,"e5-small (C1, no-prefix)",e5/XLM-R,7350,3600,12.82,29.89,40.11
+vi,MiniLM-L12-v2,paraphrase/XLM-R,7350,3600,33.84,60.11,70.69
+vi,e5-base (query:),e5/XLM-R,7350,3600,21.28,44.76,56.59
+zh,so400m-float (ceiling),SigLIP2-so400m,7174,3600,50.66,74.39,81.92
+zh,server (so400m+ft113),SigLIP2-so400m,7174,3600,40.06,66.53,76.3
+zh,"e5-small (C1, no-prefix)",e5/XLM-R,7174,3600,11.86,28.53,38.64
+zh,MiniLM-L12-v2,paraphrase/XLM-R,7174,3600,33.25,60.23,71.41
+zh,e5-base (query:),e5/XLM-R,7174,3600,17.19,38.71,50.56
