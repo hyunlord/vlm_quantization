@@ -1,0 +1,169 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>라이브 해시 검색 데모 — 좌/우 옵션 비교</title>
+<style>
+:root{--bg:#0d1117;--card:#161b22;--bd:#30363d;--fg:#e6edf3;--mut:#8b949e;--accent:#58a6ff;--good:#3fb950;--warn:#d29922}
+*{box-sizing:border-box}body{background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;padding:18px;max-width:1500px;margin:0 auto}
+h1{font-size:20px;margin:0 0 2px}.sub{color:var(--mut);margin:0 0 14px;font-size:12.5px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:11px}
+input[type=text]{flex:1;min-width:240px;background:#0b0f15;border:1px solid var(--bd);color:var(--fg);border-radius:6px;padding:9px 12px;font-size:15px}
+select,button{background:#1c2230;color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:8px 11px;font-size:13px;cursor:pointer}
+button.go{background:var(--accent);color:#0d1117;font-weight:700;border:none;padding:9px 18px;font-size:15px}
+.tog{display:inline-flex}.tog button{border-radius:0;padding:8px 10px}.tog button:first-child{border-radius:6px 0 0 6px}.tog button:last-child{border-radius:0 6px 6px 0}.tog button.on{background:var(--accent);color:#0d1117;font-weight:700}
+.hint{color:var(--mut);font-size:11.5px;margin:6px 2px 0}.ex{color:var(--accent);cursor:pointer;text-decoration:underline;margin-right:10px}
+.panes{display:flex;gap:14px;margin-top:12px}@media(max-width:860px){.panes{flex-direction:column}}
+.pane{flex:1;min-width:0;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px}
+.phead{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-bottom:8px}
+.meta{font-size:11.5px;color:var(--mut);margin:8px 0;min-height:34px}
+.meta .pill{display:inline-block;background:#1c2230;border:1px solid var(--bd);border-radius:20px;padding:2px 9px;margin:2px 5px 2px 0}
+.meta b{color:var(--fg)} .ms b{color:var(--good)} .by b{color:var(--warn)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px}
+.cardx{background:#0b0f15;border:1px solid var(--bd);border-radius:7px;overflow:hidden;cursor:pointer;transition:border-color .15s}
+.cardx:hover{border-color:var(--accent)}
+.cardx img{width:100%;height:108px;object-fit:cover;display:block;background:#0b0f15}
+.cardx .d{padding:2px 7px 0;font-size:10.5px;color:var(--good);font-weight:600}
+.cardx .cap{padding:1px 7px 6px;font-size:10px;color:var(--mut);line-height:1.3;height:40px;overflow:hidden}
+.spin{color:var(--accent)}
+</style></head><body>
+<h1>라이브 해시 검색 데모 <span style="color:var(--mut);font-size:13px">— 좌/우 옵션 비교 · 1024-bit 학습 옵션</span></h1>
+<p class="sub">텍스트 입력 → 양쪽 pane이 <b>각자의 옵션·비트</b>로 동시에 검색(t2i). 이미지를 클릭하면 그 pane 옵션으로 <b>유사검색(i2i)</b>. 각 pane에 <b>검색시간·저장용량</b> 표시. 코퍼스=<b>COCO 113K + Open Images 167K = 280K</b>(검색은 좌→우 순차). (포트 8200) · <b>bit-old demo·raw</b>는 정규화 모드(LayerNorm이 스케일 흡수). 한글 쿼리 지원(SigLIP2 멀티링구얼).</p>
+
+<div class="bar">
+  <input id="q" type="text" placeholder="예: a dog running on grass / a slice of pizza / red umbrella" autofocus>
+  <button class="go" id="go">양쪽 검색</button>
+</div>
+<div class="hint">🇬🇧 EN:
+  <span class="ex" data-q="a dog running on grass">dog on grass</span>
+  <span class="ex" data-q="a slice of pizza">pizza</span>
+  <span class="ex" data-q="red umbrella in the rain">red umbrella</span>
+  <span class="ex" data-q="a steam train">steam train</span>
+  <span class="ex" data-q="snowy mountain landscape">snowy mountain</span>
+  <span class="ex" data-q="a cat sleeping on a couch">cat on couch</span>
+  <span class="ex" data-q="people playing soccer">soccer</span>
+  <span class="ex" data-q="a child blowing out birthday candles">birthday candles</span>
+  <span class="ex" data-q="a sailboat on the ocean">sailboat</span>
+  <span class="ex" data-q="a plate of sushi">sushi</span>
+  <span class="ex" data-q="a laptop on a wooden desk">laptop on desk</span>
+  <span class="ex" data-q="an airplane taking off">airplane</span>
+  <span class="ex" data-q="a surfer riding a wave">surfer</span>
+  <span class="ex" data-q="a giraffe eating leaves">giraffe</span>
+  <span class="ex" data-q="a colorful hot air balloon">hot air balloon</span>
+  <span class="ex" data-q="two dogs playing in the snow">dogs in snow</span>
+  <span class="ex" data-q="a bowl of ramen noodles">ramen</span>
+  <span class="ex" data-q="city skyline at night">city at night</span>
+  <span class="ex" data-q="a waterfall in the forest">waterfall</span>
+  <span class="ex" data-q="a person riding a horse">horseback</span>
+  <span class="ex" data-q="a yellow taxi on a busy street">yellow taxi</span>
+  <span class="ex" data-q="an elephant in the savanna">elephant</span>
+  <span class="ex" data-q="a couple holding hands at sunset">couple at sunset</span>
+  <span class="ex" data-q="a vintage red sports car">red sports car</span>
+  <span class="ex" data-q="a chef cooking in a kitchen">chef cooking</span>
+  <span class="ex" data-q="fireworks over the city">fireworks</span>
+  <span class="ex" data-q="a polar bear on the ice">polar bear</span>
+  <span class="ex" data-q="a hamburger with fries">hamburger</span>
+  <span class="ex" data-q="a hand holding a smartphone">smartphone</span>
+</div>
+<div class="hint">🇰🇷 한글:
+  <span class="ex" data-q="잔디밭에서 뛰노는 강아지">잔디밭 강아지</span>
+  <span class="ex" data-q="피자 한 조각">피자</span>
+  <span class="ex" data-q="비 오는 날 빨간 우산을 쓴 사람">빨간 우산</span>
+  <span class="ex" data-q="증기 기관차">증기 기관차</span>
+  <span class="ex" data-q="눈 덮인 산 풍경">눈 덮인 산</span>
+  <span class="ex" data-q="소파에서 자는 고양이">소파 고양이</span>
+  <span class="ex" data-q="축구하는 사람들">축구</span>
+  <span class="ex" data-q="촛불이 꽂힌 생일 케이크">생일 케이크</span>
+  <span class="ex" data-q="바다 위의 요트">요트</span>
+  <span class="ex" data-q="초밥 한 접시">초밥</span>
+  <span class="ex" data-q="책상 위의 노트북">노트북</span>
+  <span class="ex" data-q="이륙하는 비행기">비행기</span>
+  <span class="ex" data-q="해변에서 노는 아이들">해변 아이들</span>
+  <span class="ex" data-q="자전거를 타는 사람">자전거</span>
+  <span class="ex" data-q="커피 한 잔">커피</span>
+  <span class="ex" data-q="기차역 플랫폼">기차역</span>
+  <span class="ex" data-q="노란 꽃밭">노란 꽃밭</span>
+  <span class="ex" data-q="우산을 든 여자">우산 든 여자</span>
+  <span class="ex" data-q="알록달록한 열기구">열기구</span>
+  <span class="ex" data-q="눈밭에서 노는 강아지 두 마리">눈밭 강아지</span>
+  <span class="ex" data-q="라면 한 그릇">라면</span>
+  <span class="ex" data-q="밤의 도시 야경">도시 야경</span>
+  <span class="ex" data-q="숲속의 폭포">폭포</span>
+  <span class="ex" data-q="말을 타는 사람">승마</span>
+  <span class="ex" data-q="번화가의 노란 택시">노란 택시</span>
+  <span class="ex" data-q="초원 위의 코끼리">코끼리</span>
+  <span class="ex" data-q="노을 질 때 손을 잡은 연인">노을 연인</span>
+  <span class="ex" data-q="빨간 클래식 스포츠카">빨간 스포츠카</span>
+  <span class="ex" data-q="주방에서 요리하는 셰프">요리하는 셰프</span>
+  <span class="ex" data-q="도시 위로 터지는 불꽃놀이">불꽃놀이</span>
+  <span class="ex" data-q="얼음 위의 북극곰">북극곰</span>
+  <span class="ex" data-q="감자튀김과 햄버거">햄버거</span>
+  <span class="ex" data-q="스마트폰을 든 손">스마트폰</span>
+</div>
+
+<div class="panes">
+  <div class="pane" id="paneL"></div>
+  <div class="pane" id="paneR"></div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+let OPTS=[], OFFER=[64,256,1024], CORP=0, FLOATB=4608;
+const PANES={};
+
+async function init(){
+  const o=await (await fetch('/options')).json();
+  OPTS=o.options; OFFER=o.offer_bits; CORP=o.corpus; FLOATB=o.float_bytes;
+  const labels=OPTS.map(x=>x.label).concat(['float']);
+  mkPane('L','paneL', labels.includes('best (1:2 mix)')?'best (1:2 mix)':labels[0], 1024);
+  mkPane('R','paneR', 'float', 256);
+  $('#go').onclick=runAll; $('#q').addEventListener('keydown',e=>{if(e.key==='Enter')runAll();});
+  document.querySelectorAll('.ex').forEach(e=>e.onclick=()=>{$('#q').value=e.dataset.q; runAll();});
+}
+function bitsFor(label){return label==='float'?[]:(OPTS.find(x=>x.label===label)||{bits:OFFER}).bits;}
+function mkPane(side,elid,opt,bit){
+  const el=$('#'+elid);
+  const labels=OPTS.map(x=>x.label).concat(['float']);
+  el.innerHTML=`<div class="phead"><select class="psel">${labels.map(l=>`<option ${l===opt?'selected':''}>${l}</option>`).join('')}</select><span class="tog pbit"></span></div><div class="meta">옵션을 고르고 위에서 검색하세요.</div><div class="grid"></div>`;
+  const P={side,el,opt,bit,sel:el.querySelector('.psel'),bitEl:el.querySelector('.pbit'),metaEl:el.querySelector('.meta'),gridEl:el.querySelector('.grid')};
+  PANES[side]=P;
+  P.sel.onchange=()=>{P.opt=P.sel.value; drawBits(P); const q=$('#q').value.trim(); if(q)search(P,q);};
+  drawBits(P);
+}
+function drawBits(P){
+  const bits=bitsFor(P.opt);
+  if(!bits.length){P.bitEl.innerHTML='<button class="on" disabled>float (임베딩)</button>';return;}
+  if(!bits.includes(P.bit)) P.bit=bits.includes(256)?256:bits[bits.length-1];
+  P.bitEl.innerHTML=bits.map(b=>`<button data-b="${b}" class="${b==P.bit?'on':''}">${b}b</button>`).join('');
+  P.bitEl.querySelectorAll('button').forEach(b=>b.onclick=()=>{P.bit=+b.dataset.b;drawBits(P);const q=$('#q').value.trim();if(q)search(P,q);});
+}
+function fmtBytes(b){return b>=1e9?(b/1e9).toFixed(2)+' GB':b>=1e6?(b/1e6).toFixed(1)+' MB':b>=1e3?(b/1e3).toFixed(1)+' KB':b+' B';}
+function render(P,j,title){
+  const bp=j.bytes_per_item, tot=bp*j.corpus;
+  P.metaEl.innerHTML=`<span class="pill">${title}</span>`+
+    `<span class="pill ms">검색 <b>${j.search_ms} ms</b></span>`+
+    (j.encode_ms!=null?`<span class="pill">인코딩 ${j.encode_ms} ms</span>`:'')+
+    `<span class="pill by">벡터당 <b>${bp} B</b></span>`+
+    `<span class="pill">코퍼스 ${fmtBytes(tot)}${j.option!=='float'?` · float比 ${Math.round(FLOATB/bp)}×↓`:''}</span>`+
+    (j.faiss!==undefined?`<span class="pill">${j.faiss?'faiss':'numpy'}</span>`:'');
+  P.gridEl.innerHTML=j.results.map(r=>{
+    const m=r.hamming!=null?`Hamming ${r.hamming}`:(r.cosine!=null?`cos ${r.cosine}`:'');
+    return `<div class="cardx" data-pos="${r.pos}" title="이 이미지로 유사검색"><img loading="lazy" src="${r.url}" onerror="this.style.opacity=.15">`+
+      `<div class="d">${m}</div><div class="cap">${(r.caption||'').replace(/</g,'&lt;')}</div></div>`;}).join('');
+  P.gridEl.querySelectorAll('.cardx').forEach(c=>c.onclick=()=>sim(P,+c.dataset.pos));
+}
+async function search(P,q){
+  P.metaEl.innerHTML='<span class="spin">검색 중…</span>';
+  const u=`/search?q=${encodeURIComponent(q)}&option=${encodeURIComponent(P.opt)}&bit=${P.bit}&k=24`;
+  try{render(P,await (await fetch(u)).json(),`t2i: "${q}"`);}catch(e){P.metaEl.innerHTML='오류: '+e;}
+}
+async function sim(P,pos){
+  P.metaEl.innerHTML='<span class="spin">유사검색 중…</span>';
+  const u=`/similar?pos=${pos}&option=${encodeURIComponent(P.opt)}&bit=${P.bit}&k=24`;
+  try{const j=await (await fetch(u)).json(); render(P,j,`i2i: 씨앗 #${pos}`);}catch(e){P.metaEl.innerHTML='오류: '+e;}
+}
+async function runAll(){const q=$('#q').value.trim(); if(!q)return;
+  PANES.R.metaEl.innerHTML='<span class="spin">대기 중…</span>'; PANES.R.gridEl.innerHTML='';
+  await search(PANES.L,q);   // 순차: 좌 검색 완료 후 우 검색 → faiss 스레드 경합 제거(깨끗한 per-pane 시간)
+  await search(PANES.R,q);}
+init();
+</script>
+</body></html>

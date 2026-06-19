@@ -26,6 +26,9 @@ def main():
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
 
+    # Seed everything for reproducible runs (data shuffling, dropout, init).
+    pl.seed_everything(cfg.get("seed", 42), workers=True)
+
     # Auto-configure GPU-dependent parameters
     if cfg["training"].get("batch_size") == "auto":
         gpu_cfg = auto_configure(
@@ -49,6 +52,8 @@ def main():
         karpathy_json=karpathy_json,
         extra_datasets=extra_datasets,
         instances_json=instances_json,
+        num_captions=cfg["data"].get("num_captions", 1),
+        text_dropout_prob=cfg["data"].get("text_dropout_prob", 0.0),
     )
 
     # Estimate max_steps
@@ -94,6 +99,7 @@ def main():
         supervised_weight=cfg["loss"].get("supervised_weight", 0.0),
         temperature=cfg["loss"]["temperature"],
         ema_decay=cfg["loss"]["ema_decay"],
+        focal_gamma=cfg["loss"].get("focal_gamma", 0.0),
     )
 
     # Timestamped checkpoint directory (avoid overwriting between runs)

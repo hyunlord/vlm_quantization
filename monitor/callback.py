@@ -88,8 +88,6 @@ class MonitorCallback(pl.Callback):
             "loss_consistency": self._to_float(logged.get("train/consistency")),
             "loss_ortho": self._to_float(logged.get("train/ortho")),
             "loss_lcs": self._to_float(logged.get("train/lcs")),
-            "loss_distillation": self._to_float(logged.get("train/distillation")),
-            "loss_adapter_align": self._to_float(logged.get("train/adapter_align")),
             "lr": trainer.optimizers[0].param_groups[0]["lr"],
             "temperature": self._to_float(logged.get("train/temperature"), None),
         })
@@ -183,12 +181,6 @@ class MonitorCallback(pl.Callback):
         )
         eval_data["val_loss_lcs"] = self._to_float(
             logged.get("val/lcs"), None
-        )
-        eval_data["val_loss_distillation"] = self._to_float(
-            logged.get("val/distillation"), None
-        )
-        eval_data["val_loss_adapter_align"] = self._to_float(
-            logged.get("val/adapter_align"), None
         )
 
         self._post("/api/metrics/eval", eval_data)

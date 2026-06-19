@@ -1,0 +1,65 @@
+# Experiment: add higher-quality + more diverse ENGLISH image-text data on top of
+# COCO Karpathy, via the frozen-backbone extra_datasets hook (only the hash heads
+# train, so adding data is cheap).
+#
+# Adds:
+#   - DOCCI (9.6K train imgs, ~136-word dense HUMAN descriptions, CC BY 4.0)
+#       -> much higher caption detail/quality than COCO's short captions
+#   - Flickr30K train (29K imgs, 5 human captions each)
+#       -> domain diversity + the train split of the standard 2nd retrieval benchmark
+#
+# Eval still uses COCO Karpathy test (5K). Separately validate the RAW backbone
+# against published COCO/Flickr R@1 with: scripts/zeroshot_benchmark.py
+
+model:
+  backbone: "google/siglip2-so400m-patch14-384"
+  bit_list: [8, 16, 32, 48, 64, 128, 256, 512]
+  hidden_dim: 768
+  dropout: 0.1
+  freeze_backbone: true   # only hash heads train -> adding datasets is cheap
+
+training:
+  batch_size: 256
+  max_epochs: 30
+  hash_lr: 1.0e-3
+  backbone_lr: 1.0e-5
+  weight_decay: 0.01
+  warmup_steps: 2000
+  gradient_clip_val: 1.0
+  accumulate_grad_batches: 1
+  val_check_interval: 0.5
+  early_stopping_patience: 5
+  checkpoint_dir: "checkpoints"
+
+loss:
+  contrastive_weight: 1.0
+  ortho_weight: 0.1
+  quantization_weight: 0.1
+  balance_weight: 0.01
+  consistency_weight: 0.5
+  lcs_weight: 0.5
+  supervised_weight: 0.0
+  temperature: 0.07
+  ema_decay: 0.99
+  focal_gamma: 0.0
+
+data:
+  data_root: "data/coco"
+  karpathy_json: "data/coco/dataset_coco.json"
+  num_workers: 8
+  max_text_length: 64
+  image_size: 384
+  num_captions: 1
+  # Higher-quality + diverse English data (each with its own data_root).
+  extra_datasets:
+    - jsonl_path: "data/docci/docci_train.jsonl"          # 9,647 imgs, dense human captions
+      data_root: "data/docci/images"                      # DOCCI image_file is a bare filename
+    - jsonl_path: "data/flickr30k/flickr30k_train.jsonl"  # diverse Flickr scenes
+      data_root: "data/flickr30k"
+    # - jsonl_path: "data/coco_ko/coco_ko_train.jsonl"     # optional Korean (no leakage)
+    #   data_root: "data/coco"
+
+monitor:
+  enabled: false
+  server_url: "http://localhost:8001"
+  log_every_n_steps: 10

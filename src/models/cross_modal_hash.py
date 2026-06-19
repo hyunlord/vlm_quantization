@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytorch_lightning as pl
 import torch
-import torch.nn as nn
 from transformers import AutoModel
 
 from src.losses.combined import CombinedHashLoss
@@ -47,6 +46,7 @@ class CrossModalHashModel(pl.LightningModule):
         supervised_weight: float = 0.0,
         temperature: float = 0.07,
         ema_decay: float = 0.99,
+        focal_gamma: float = 0.0,
     ):
         super().__init__()
         if bit_list is None:
@@ -87,6 +87,7 @@ class CrossModalHashModel(pl.LightningModule):
             supervised_weight=supervised_weight,
             temperature=temperature,
             ema_decay=ema_decay,
+            focal_gamma=focal_gamma,
         )
 
     def _pool(self, outputs) -> torch.Tensor:
@@ -141,11 +142,18 @@ class CrossModalHashModel(pl.LightningModule):
         if "aug_pixel_values" in batch:
             aug_image_out = self.encode_image(batch["aug_pixel_values"])
 
+        aux_text_out = None
+        if "aux_input_ids" in batch:
+            aux_text_out = self.encode_text(
+                batch["aux_input_ids"], batch.get("aux_attention_mask")
+            )
+
         return {
             "image": image_out,
             "weak_image": weak_image_out,
             "text": text_out,
             "aug_image": aug_image_out,
+            "aux_text": aux_text_out,
         }
 
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
@@ -157,6 +165,7 @@ class CrossModalHashModel(pl.LightningModule):
             text_outputs=outputs["text"],
             weak_image_outputs=outputs["weak_image"],
             aug_image_outputs=outputs["aug_image"],
+            aux_text_outputs=outputs["aux_text"],
             labels=batch.get("labels"),
             progress=progress,
         )

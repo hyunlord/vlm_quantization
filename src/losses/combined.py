@@ -41,6 +41,7 @@ class CombinedHashLoss(nn.Module):
         supervised_weight: float = 0.0,
         temperature: float = 0.07,
         ema_decay: float = 0.99,
+        focal_gamma: float = 0.0,
     ):
         super().__init__()
         self.bit_list = sorted(bit_list)
@@ -52,7 +53,7 @@ class CombinedHashLoss(nn.Module):
         self.lcs_weight = lcs_weight
         self.supervised_weight = supervised_weight
 
-        self.contrastive_loss = CrossModalContrastiveLoss(temperature)
+        self.contrastive_loss = CrossModalContrastiveLoss(temperature, focal_gamma)
         self.eaql_loss = EAQLLoss(ema_decay)
         self.ortho_loss = CrossModalOrthoHashLoss()
         self.balance_losses = nn.ModuleList(
@@ -67,6 +68,7 @@ class CombinedHashLoss(nn.Module):
         text_outputs: list[dict[str, torch.Tensor]],
         weak_image_outputs: list[dict[str, torch.Tensor]] | None = None,
         aug_image_outputs: list[dict[str, torch.Tensor]] | None = None,
+        aux_text_outputs: list[dict[str, torch.Tensor]] | None = None,
         labels: torch.Tensor | None = None,
         progress: float = 1.0,
     ) -> dict[str, torch.Tensor]:
@@ -76,6 +78,7 @@ class CombinedHashLoss(nn.Module):
             text_outputs: same structure
             weak_image_outputs: optional weak-augmented image outputs
             aug_image_outputs: optional strong-augmented image outputs
+            aux_text_outputs: optional second-caption text outputs (extra positive)
             labels: (B, C) multi-hot label vectors for supervised loss (optional)
             progress: training progress in [0, 1] for quantization ramp-up
         """
@@ -107,6 +110,13 @@ class CombinedHashLoss(nn.Module):
                 aug_cont = aug_image_outputs[k]["continuous"]
                 contrastive_total = contrastive_total + self.contrastive_loss(
                     aug_cont, txt_cont
+                )
+                n_views += 1
+            if aux_text_outputs is not None:
+                # Second caption ↔ original image as an extra positive pair
+                aux_txt_cont = aux_text_outputs[k]["continuous"]
+                contrastive_total = contrastive_total + self.contrastive_loss(
+                    img_cont, aux_txt_cont
                 )
                 n_views += 1
 

@@ -52,15 +52,25 @@ class EAQLLoss(nn.Module):
 
         bit = continuous.size(1)
         ema = self._get_ema(bit)
-        if ema is None:
-            self._set_ema(bit, bitwise_error.detach().clone())
-        else:
-            self._set_ema(
-                bit,
-                self.ema_decay * ema + (1 - self.ema_decay) * bitwise_error.detach(),
-            )
 
-        ema = self._get_ema(bit)
+        # Only update the persistent EMA during training. In eval/validation the
+        # buffer is read-only so validation-set statistics never leak into the
+        # bit-importance weights used at train time.
+        if self.training:
+            if ema is None:
+                self._set_ema(bit, bitwise_error.detach().clone())
+            else:
+                self._set_ema(
+                    bit,
+                    self.ema_decay * ema
+                    + (1 - self.ema_decay) * bitwise_error.detach(),
+                )
+            ema = self._get_ema(bit)
+        elif ema is None:
+            # Eval before any training step has populated the buffer: fall back to
+            # the current batch error without mutating the persistent EMA.
+            ema = bitwise_error.detach()
+
         weights = ema / (ema.sum() + 1e-6)  # normalize to sum=1
 
         weighted_error = (quant_error * weights).sum(dim=1)  # (B,)

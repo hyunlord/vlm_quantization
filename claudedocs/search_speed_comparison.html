@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>검색 속도 업그레이드 — Float vs 바이너리(faiss)</title>
+<style>
+:root{--bg:#0b0e14;--panel:#141925;--panel2:#1b2230;--line:#243044;--text:#e6edf6;
+--muted:#8b98ad;--accent:#6ea8fe;--good:#7ef0c5;--warn:#ffd479;--bad:#ff8f8f;--gold:#ffd479}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo",sans-serif}
+.wrap{max-width:1040px;margin:0 auto;padding:30px 20px 80px}
+h1{font-size:25px;letter-spacing:-.4px;margin:0 0 6px}
+h2{font-size:18px;margin:34px 0 10px;padding-top:14px;border-top:1px solid var(--line)}
+.sub{color:var(--muted);margin:0 0 6px;font-size:13.5px}
+.env{color:var(--muted);font-size:12.5px;background:var(--panel);border:1px solid var(--line);
+border-radius:10px;padding:10px 14px;margin:14px 0}
+table{border-collapse:collapse;width:100%;margin:10px 0;font-size:13.5px}
+th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:600;font-size:12.5px}
+td:first-child,th:first-child{text-align:left}
+.win{color:var(--good);font-weight:700}
+.dim{color:var(--muted)}
+.bad{color:var(--bad)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:12px 0}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0}
+@media(max-width:720px){.kpis{grid-template-columns:1fr}}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+.kpi .n{font-size:30px;font-weight:800;color:var(--good);font-variant-numeric:tabular-nums}
+.kpi .l{color:var(--muted);font-size:12.5px;margin-top:4px}
+.bars{margin:8px 0 4px}
+.brow{display:flex;align-items:center;gap:10px;margin:6px 0}
+.brow .lab{width:120px;color:var(--muted);font-size:12.5px;flex:none}
+.brow .track{flex:1;background:var(--panel2);border-radius:6px;height:22px;position:relative;overflow:hidden}
+.brow .fill{height:100%;border-radius:6px;display:flex;align-items:center;justify-content:flex-end;
+padding-right:8px;font-size:11.5px;font-weight:700;color:#06101f;font-variant-numeric:tabular-nums;white-space:nowrap}
+.f-float{background:#ff8f8f}.f-numpy{background:#ffd479}.f-faiss{background:#7ef0c5}
+.note{color:var(--muted);font-size:12.5px;margin:8px 0}
+.tag{display:inline-block;background:var(--panel2);border:1px solid var(--line);border-radius:6px;
+padding:2px 8px;font-size:11px;color:var(--muted);margin-left:6px}
+code{background:var(--panel2);padding:1px 6px;border-radius:5px;font-size:12.5px}
+ul{margin:8px 0;padding-left:20px}li{margin:4px 0}
+</style></head><body><div class="wrap">
+
+<h1>검색 속도 업그레이드 — Float vs 바이너리 해시(faiss)</h1>
+<p class="sub">비트 검색을 numpy popcount → <b>faiss IndexBinaryFlat</b>로 전환하고, 같은 corpus에서 재비교</p>
+<div class="env">측정: DGX(GB10, aarch64) · numpy 2.x(<code>bitwise_count</code>) · faiss 1.14.3(20스레드) ·
+실제 Open Images 임베딩 코드(41,620장)를 타일링해 N 확대 · 256-bit · top-k=12 · median</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="n">3.6×</div><div class="l">비트 검색 업그레이드<br>numpy → faiss (1M)</div></div>
+  <div class="kpi"><div class="n">25.9×</div><div class="l">faiss 비트 vs float<br>(1M, GB10 ARM)</div></div>
+  <div class="kpi"><div class="n">144×</div><div class="l">저장 절감 (256-bit)<br>4608B → 32B / 사진</div></div>
+</div>
+
+<h2>① 업그레이드 후 재비교 — 전체 검색 시간 (낮을수록 좋음)</h2>
+<p class="note">float cosine(기존) vs 비트 numpy(구) vs 비트 faiss(신). 1M corpus, 256-bit.</p>
+<div class="card"><div class="bars">
+  <div class="brow"><span class="lab">float cosine</span><div class="track"><div class="fill f-float" style="width:100%">248.4 ms</div></div></div>
+  <div class="brow"><span class="lab">비트 numpy (구)</span><div class="track"><div class="fill f-numpy" style="width:13.9%">34.6 ms</div></div></div>
+  <div class="brow"><span class="lab">비트 faiss (신)</span><div class="track"><div class="fill f-faiss" style="width:3.9%">9.6 ms</div></div></div>
+</div>
+<p class="note">faiss 비트 검색은 float 대비 <b class="win">25.9×</b>, 기존 numpy 비트 대비 <b class="win">3.6×</b> 빠름.</p></div>
+
+<table>
+<tr><th>corpus</th><th>float cosine (기존)</th><th>비트 numpy (구)</th><th>비트 faiss (신)</th><th>faiss vs float</th><th>faiss vs numpy</th></tr>
+<tr><td>100K</td><td class="dim">29.6 ms</td><td>3.5 ms</td><td class="win">2.1 ms</td><td class="win">14.4×</td><td>1.7×</td></tr>
+<tr><td>500K</td><td class="dim">142.2 ms</td><td>23.5 ms</td><td class="win">5.7 ms</td><td class="win">25.1×</td><td>4.1×</td></tr>
+<tr><td>1M</td><td class="dim">248.4 ms</td><td>34.6 ms</td><td class="win">9.6 ms</td><td class="win">25.9×</td><td>3.6×</td></tr>
+</table>
+<p class="note">⚠️ 정직한 주석: float-vs-bit 격차의 일부는 GB10(ARM)의 float BLAS가 느린 탓. x86(좋은 BLAS)이면 float이 더 빨라 격차는 줄어든다.
+반면 <b>numpy→faiss 3.6–4.1×</b>와 <b>저장 144×</b>는 하드웨어와 무관하게 성립.</p>
+
+<h2>② 백엔드 4종 비교 (거리계산, 256-bit)</h2>
+<p class="note">top-k는 numpy 기준과 <b>완전 일치 검증</b>(거리 multiset 동일).</p>
+<table>
+<tr><th>corpus</th><th>numpy uint8 (기존)</th><th>numpy uint64</th><th>matmul ±1 (BLAS)</th><th>faiss</th></tr>
+<tr><td>100K</td><td>3.78 ms</td><td>2.48 ms</td><td class="bad">9.27 ms</td><td class="win">0.31 ms (12×)</td></tr>
+<tr><td>500K</td><td>19.77 ms</td><td>12.94 ms</td><td class="bad">44.53 ms</td><td class="win">4.88 ms (4.1×)</td></tr>
+<tr><td>1M</td><td>43.46 ms</td><td>29.51 ms</td><td class="bad">87.27 ms</td><td class="win">8.76 ms (5.0×)</td></tr>
+</table>
+<p class="note"><b>matmul ±1 트릭</b><span class="tag">±1 dot = (D−Hamming)/2</span>은 Mac에선 빨랐지만 GB10(ARM)에선 오히려 느리고 packed를 풀어 저장 이점 상실 → <b>폐기</b>. 타깃 하드웨어 측정의 중요성.</p>
+
+<h2>③ 1024-bit에서 더 벌어지는 우위</h2>
+<table>
+<tr><th>corpus</th><th>numpy uint8</th><th>numpy uint64</th><th>faiss</th></tr>
+<tr><td>100K (1024-bit)</td><td>14.00 ms</td><td>7.27 ms</td><td class="win">2.16 ms (6.5×)</td></tr>
+<tr><td>1M (1024-bit)</td><td>142.05 ms</td><td>56.47 ms</td><td class="win">23.66 ms (6.0×)</td></tr>
+<tr><td>1M (64-bit)</td><td>21.79 ms</td><td>2.11 ms</td><td class="win">1.99 ms (10.9×)</td></tr>
+</table>
+
+<h2>④ 왜 10만에선 차이가 작았나 (원인 규명)</h2>
+<div class="card">
+<ul>
+<li><b>비트의 진짜 병목은 <code>sum(axis=1)</code></b> — xor 0.36ms, +popcount 0.47ms, <b>+sum 1.20ms</b>. XOR가 아니라 리덕션이 범인.</li>
+<li><b>float은 BLAS(멀티스레드+SIMD)라 안 느림</b>; numpy 비트는 싱글스레드+임시배열 3회 → 144× 메모리 이점이 ~1.8×로 붕괴.</li>
+<li><b>공유 고정비용</b>(argpartition·dedup·JSON·HTTP)이 양쪽 동일 → 거리계산 1–2ms가 묻혀 비율 1:1로 보임.</li>
+</ul>
+<p class="note">→ 해법: 비트 거리계산을 하드웨어 명령·병렬·무할당으로 끝까지 짜내는 <b>faiss IndexBinaryFlat</b>로 교체.</p>
+</div>
+
+<h2>⑤ faiss IndexBinaryFlat 가 빠른 이유</h2>
+<table>
+<tr><th>항목</th><th>numpy 경로</th><th>faiss IndexBinaryFlat</th></tr>
+<tr><td>popcount</td><td>bitwise_count(범용)</td><td class="win">CPU POPCNT 하드웨어 명령</td></tr>
+<tr><td>스레드</td><td>싱글스레드</td><td class="win">OpenMP 멀티스레드(20)</td></tr>
+<tr><td>메모리</td><td>임시 3회 할당·3패스</td><td class="win">단일 패스·무할당</td></tr>
+<tr><td>저장</td><td>packed 32B</td><td class="win">packed 32B 유지(풀지 않음)</td></tr>
+<tr><td>정확도</td><td>정확(전수)</td><td class="win">정확(전수, "Flat") — 동일 결과</td></tr>
+</table>
+<p class="note">검증: 전 비트 길이에서 numpy와 K개 최소 Hamming 거리 multiset 완전 일치. 더 큰 스케일은 <code>IndexBinaryIVF</code>(근사)/GPU로 확장 가능.</p>
+
+<p class="note" style="margin-top:30px;border-top:1px solid var(--line);padding-top:14px">
+재현: <code>scripts/bench_hamming.py</code> (백엔드 4종+정확성), <code>scripts/bench_float_vs_bit.py</code> (float vs 비트 구/신). 반영: <code>demo/server.py</code> (faiss 우선 + numpy fallback).</p>
+
+</div></body></html>

@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>사진을 말로 찾다 — Natural-language photo search</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#141925; --panel2:#1b2230; --line:#222b3b;
+    --text:#e6edf6; --muted:#8b98ad; --accent:#6ea8fe; --accent2:#7ef0c5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo",sans-serif}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 80px}
+  header h1{margin:0 0 4px;font-size:26px;letter-spacing:-.4px}
+  header p{margin:0;color:var(--muted)}
+  .pitch{margin-top:10px;color:var(--muted);font-size:13px}
+  .pitch b{color:var(--accent2);font-weight:600}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:22px 0}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .stat .v{font-size:22px;font-weight:700;letter-spacing:-.5px}
+  .stat .k{font-size:12px;color:var(--muted);margin-top:2px}
+  .stat .v.accent{color:var(--accent2)}
+
+  .searchbar{display:flex;gap:10px;margin:6px 0 14px}
+  .searchbar input[type=text]{flex:1;background:var(--panel2);border:1px solid var(--line);
+    color:var(--text);border-radius:12px;padding:14px 16px;font-size:16px;outline:none}
+  .searchbar input[type=text]:focus{border-color:var(--accent)}
+  .searchbar button{background:var(--accent);color:#06101f;border:0;border-radius:12px;
+    padding:0 22px;font-size:15px;font-weight:700;cursor:pointer}
+  .searchbar button:disabled{opacity:.5;cursor:default}
+
+  .controls{display:flex;gap:16px;align-items:center;color:var(--muted);font-size:13px;flex-wrap:wrap}
+  .controls select{background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    border-radius:8px;padding:5px 8px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 6px}
+  .chip{background:var(--panel);border:1px solid var(--line);color:var(--text);
+    border-radius:999px;padding:7px 13px;font-size:13px;cursor:pointer}
+  .chip:hover{border-color:var(--accent)}
+
+  .timing{min-height:22px;color:var(--muted);font-size:13px;margin:14px 0 6px}
+  .timing b{color:var(--accent);font-variant-numeric:tabular-nums}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:8px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .card .imgwrap{aspect-ratio:1/1;background:#0b0e14;display:flex;align-items:center;justify-content:center}
+  .card img{width:100%;height:100%;object-fit:cover;display:block}
+  .card .meta{padding:8px 10px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+  .card .sim{color:var(--accent2);font-weight:600;font-variant-numeric:tabular-nums}
+  .empty{color:var(--muted);text-align:center;padding:40px 0}
+  footer{margin-top:30px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:14px}
+  code{background:var(--panel2);padding:1px 6px;border-radius:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>사진을 말로 찾다</h1>
+    <p>Natural-language photo search · binary cross-modal hashing (SigLIP2)</p>
+    <div class="pitch">
+      오프라인 · 프라이빗 · 다국어. 사진은 <b>코드 한 줄(수십~128바이트)</b>로 저장되고,
+      검색은 <b>XOR 비트연산(Hamming)</b>이라 수십만 장도 즉시 훑습니다.
+    </div>
+  </header>
+
+  <div class="stats" id="stats">
+    <div class="stat"><div class="v" id="s-items">—</div><div class="k">색인된 사진</div></div>
+    <div class="stat"><div class="v accent" id="s-bpp">—</div><div class="k">사진당 인덱스 크기</div></div>
+    <div class="stat"><div class="v" id="s-total">—</div><div class="k">전체 인덱스 크기</div></div>
+    <div class="stat"><div class="v" id="s-bit">—</div><div class="k">코드 길이 (bit)</div></div>
+  </div>
+
+  <div class="searchbar">
+    <input id="q" type="text" placeholder="예: 졸려하는 강아지, 해변의 노을, 커피를 마시는 사람…"
+           autocomplete="off" />
+    <button id="go">검색</button>
+  </div>
+  <div class="controls">
+    <label>코드 길이
+      <select id="bit"></select>
+    </label>
+    <label>결과 수
+      <select id="k">
+        <option>12</option><option>24</option><option selected>36</option><option>60</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="chips" id="chips"></div>
+  <div class="timing" id="timing"></div>
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty">검색어를 입력해 보세요.</div>
+
+  <footer>
+    텍스트를 해시 코드로 인코딩 → 이미지 코드들과 Hamming 거리 → 상위 K.
+    품질은 float 대비 약간 손해, 대신 저장/속도가 압도적. ·
+    특정 인물·반려동물("우리집 태기")은 zero-shot이 아닌 <em>등록(개인화)</em>이 필요합니다.
+  </footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const fmtBytes = (n) => n < 1024 ? n + " B"
+  : n < 1024*1024 ? (n/1024).toFixed(1) + " KB"
+  : n < 1024*1024*1024 ? (n/1024/1024).toFixed(1) + " MB"
+  : (n/1024/1024/1024).toFixed(2) + " GB";
+
+const EXAMPLES = ["졸려하는 강아지","해변의 노을","눈 오는 거리","생일 케이크와 촛불",
+  "커피를 마시는 사람","파란 우산","a cat on a sofa","mountains at sunset"];
+
+let STATS = null;
+
+async function loadStats(){
+  try{
+    const r = await fetch("/stats"); if(!r.ok) throw new Error(await r.text());
+    STATS = await r.json();
+  }catch(e){ $("timing").innerHTML = "인덱스 미로드: <code>"+String(e).slice(0,120)+"</code>"; return; }
+  const bit = STATS.default_bit;
+  const bytesPerItem = STATS.index_bytes[bit] / Math.max(STATS.items,1);
+  $("s-items").textContent = STATS.items.toLocaleString();
+  $("s-bpp").textContent = fmtBytes(bytesPerItem);
+  $("s-total").textContent = fmtBytes(STATS.index_bytes[bit]);
+  $("s-bit").textContent = bit + "-bit";
+  const sel = $("bit"); sel.innerHTML = "";
+  STATS.bits.forEach(b=>{
+    const o=document.createElement("option"); o.value=b; o.textContent=b+"-bit";
+    if(b===bit) o.selected=true; sel.appendChild(o);
+  });
+  sel.onchange = ()=>{
+    const b=+sel.value;
+    $("s-bpp").textContent = fmtBytes(STATS.index_bytes[b]/Math.max(STATS.items,1));
+    $("s-total").textContent = fmtBytes(STATS.index_bytes[b]);
+    $("s-bit").textContent = b + "-bit";
+  };
+}
+
+function chips(){
+  const c=$("chips"); c.innerHTML="";
+  EXAMPLES.forEach(t=>{
+    const el=document.createElement("span"); el.className="chip"; el.textContent=t;
+    el.onclick=()=>{ $("q").value=t; search(); }; c.appendChild(el);
+  });
+}
+
+async function search(){
+  const query = $("q").value.trim(); if(!query) return;
+  const bit = +$("bit").value || undefined;
+  const k = +$("k").value;
+  $("go").disabled = true; $("timing").textContent = "검색 중…"; $("empty").style.display="none";
+  try{
+    const r = await fetch("/search/text",{method:"POST",headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({query, k, bit})});
+    if(!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    const t = d.took_ms || {};
+    $("timing").innerHTML = `“${query}” · ${d.results.length}건 · `
+      + `인코딩 <b>${(t.encode??0).toFixed(1)}ms</b> + 검색 <b>${(t.search??0).toFixed(2)}ms</b>`
+      + ` · ${d.bit}-bit`;
+    render(d.results);
+  }catch(e){ $("timing").innerHTML = "오류: <code>"+String(e).slice(0,160)+"</code>"; }
+  finally{ $("go").disabled = false; }
+}
+
+function render(results){
+  const g=$("grid"); g.innerHTML="";
+  if(!results || !results.length){ $("empty").style.display="block"; $("empty").textContent="결과 없음"; return; }
+  results.forEach(h=>{
+    const card=document.createElement("div"); card.className="card";
+    const wrap=document.createElement("div"); wrap.className="imgwrap";
+    if(h.path){
+      const img=document.createElement("img"); img.loading="lazy";
+      img.src="/images/"+encodeURI(h.path); img.alt=h.caption||"";
+      img.onerror=()=>{ wrap.textContent="이미지 없음"; };
+      wrap.appendChild(img);
+    } else { wrap.textContent = "(no image)"; }
+    const meta=document.createElement("div"); meta.className="meta";
+    meta.innerHTML = `<span class="sim">${(h.similarity*100).toFixed(0)}%</span>`
+      + `<span>d=${h.distance}</span>`;
+    card.appendChild(wrap); card.appendChild(meta); g.appendChild(card);
+  });
+}
+
+$("go").onclick = search;
+$("q").addEventListener("keydown", e=>{ if(e.key==="Enter") search(); });
+loadStats(); chips();
+</script>
+</body>
+</html>
