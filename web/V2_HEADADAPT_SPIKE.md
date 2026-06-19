@@ -49,5 +49,5 @@ C1은 cycle 4의 근본 원인(e5≠so400m × so400m-head 비트민감도)을 **
 - 모델/임베딩 미커밋(DGX `/tmp`).
 
 ## 커밋·푸시
-- 브랜치 **`web-v2-headadapt`**(`web-v2-distill`에서 분기). 스크립트 + 보고서만 커밋.
-- **커밋 SHA**: (아래 후속 기록 커밋 참조) · **origin/web-v2-headadapt 푸시 완료**.
+- 브랜치 **`web-v2-headadapt`**(`web-v2-distill`에서 분기). 스크립트 + 보고서만 커밋(모델 미커밋).
+- **커밋 `13d6f3b`**(C1 scripts + 보고서) → `origin/web-v2-headadapt` **푸시 완료**. (이 SHA 기록 커밋이 뒤따름.)
