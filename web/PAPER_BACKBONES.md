@@ -34,4 +34,4 @@
 - **기여 ②~④ 일반성(§4/§6)**: 다른 크기·같은 계열 백본(base)에서 head 민감도·head-adapt 회복·이진화 거의 공짜가 **모두 재현** → 방법이 백본-불문 일반적. (#2 jina-clip-v2로 *다른 계열* 추가 검증 예정.)
 - 산출물: `web/paper_backbone_run.py`(5-stage 파이프라인, 백본 인자화) + `paper/backbones.csv`(누적). 임베딩·헤드(`/tmp/bb_*`) 미커밋(재생성 스크립트만).
 - 재현: `HEAD_PATH=/tmp/ft_ko_113.pt .venv/bin/python web/paper_backbone_run.py --model google/siglip2-base-patch16-256 --tag siglip2-base --epochs 25`
-- 브랜치 **`paper-backbones`**(`web-v3-hybrid`에서 분기). #1 커밋 SHA: _커밋 후 기재_ → push.
+- 브랜치 **`paper-backbones`**(`web-v3-hybrid`에서 분기). #1(siglip2-base) 커밋 **`d19d82f`** → `origin/paper-backbones` push 완료.
