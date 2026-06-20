@@ -36,4 +36,4 @@
 - **기여 ②~④ 일반성(§4/§6)**: 다른 크기(base)·**다른 계열(AltCLIP)** 백본에서 head 민감도·head-adapt 회복·이진화 거의 공짜가 **모두 재현** → 방법이 백본-불문 일반적. SigLIP-specific 반박.
 - 산출물: `web/paper_backbone_run.py`(5-stage, `--backbone-type {siglip,altclip}`) + `paper/backbones.csv`(So400m 참조 + base + AltCLIP). 임베딩·헤드(`/tmp/bb_*`) 미커밋(재생성 스크립트만).
 - 재현: `… web/paper_backbone_run.py --model google/siglip2-base-patch16-256 --tag siglip2-base` / `… --model BAAI/AltCLIP-m18 --tag altclip-m18 --family AltCLIP-XLMR --backbone-type altclip`
-- 브랜치 **`paper-backbones`**(`web-v3-hybrid`에서 분기). #1(siglip2-base) `d19d82f` · #2(AltCLIP-m18) 커밋 SHA: _커밋 후 기재_ → push.
+- 브랜치 **`paper-backbones`**(`web-v3-hybrid`에서 분기). #1(siglip2-base) **`d19d82f`** · #2(AltCLIP-m18) **`c74b43d`** → `origin/paper-backbones` push 완료.
