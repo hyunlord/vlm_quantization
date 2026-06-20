@@ -1,0 +1,2 @@
+n,so400m_vision_img_per_s_bf16,est_vision_50k_min,img_h+pack_50k_s,img_h+pack_img_per_s,index_serialize_s,index_MB,bytes_per_img,js_search_footprint_MB
+50000,20.8,40.0,2.69,18557.0,0.006,6.4,128,6.6

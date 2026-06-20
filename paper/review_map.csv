@@ -1,0 +1,7 @@
+row,lang,R10,mAP10
+server (so400m+ft113),EN,79.92,53.34
+server (so400m+ft113),KO,71.08,42.49
+MiniLM head-adapt,EN,78.16,49.68
+MiniLM head-adapt,KO,65.44,37.24
+e5-small deployed offline,EN,74.0,44.84
+e5-small deployed offline,KO,66.2,36.28
