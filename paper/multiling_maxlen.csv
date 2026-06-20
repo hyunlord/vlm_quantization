@@ -1,0 +1,325 @@
+language,encoder,maxlen,R10
+ar,"e5-small (C1, no-prefix)",64,32.02
+ar,"e5-small (C1, no-prefix)",128,32.02
+ar,"e5-small (C1, no-prefix)",256,32.02
+bn,"e5-small (C1, no-prefix)",64,34.33
+bn,"e5-small (C1, no-prefix)",128,34.33
+bn,"e5-small (C1, no-prefix)",256,34.33
+cs,"e5-small (C1, no-prefix)",64,27.5
+cs,"e5-small (C1, no-prefix)",128,27.5
+cs,"e5-small (C1, no-prefix)",256,27.5
+da,"e5-small (C1, no-prefix)",64,36.67
+da,"e5-small (C1, no-prefix)",128,36.67
+da,"e5-small (C1, no-prefix)",256,36.67
+de,"e5-small (C1, no-prefix)",64,46.4
+de,"e5-small (C1, no-prefix)",128,46.4
+de,"e5-small (C1, no-prefix)",256,46.4
+el,"e5-small (C1, no-prefix)",64,24.53
+el,"e5-small (C1, no-prefix)",128,24.54
+el,"e5-small (C1, no-prefix)",256,24.54
+en,"e5-small (C1, no-prefix)",64,59.15
+en,"e5-small (C1, no-prefix)",128,59.15
+en,"e5-small (C1, no-prefix)",256,59.15
+es,"e5-small (C1, no-prefix)",64,44.25
+es,"e5-small (C1, no-prefix)",128,44.25
+es,"e5-small (C1, no-prefix)",256,44.25
+fa,"e5-small (C1, no-prefix)",64,37.56
+fa,"e5-small (C1, no-prefix)",128,37.56
+fa,"e5-small (C1, no-prefix)",256,37.56
+fi,"e5-small (C1, no-prefix)",64,20.51
+fi,"e5-small (C1, no-prefix)",128,20.5
+fi,"e5-small (C1, no-prefix)",256,20.5
+fil,"e5-small (C1, no-prefix)",64,25.07
+fil,"e5-small (C1, no-prefix)",128,25.09
+fil,"e5-small (C1, no-prefix)",256,25.09
+fr,"e5-small (C1, no-prefix)",64,49.93
+fr,"e5-small (C1, no-prefix)",128,49.93
+fr,"e5-small (C1, no-prefix)",256,49.93
+he,"e5-small (C1, no-prefix)",64,24.54
+he,"e5-small (C1, no-prefix)",128,24.57
+he,"e5-small (C1, no-prefix)",256,24.57
+hi,"e5-small (C1, no-prefix)",64,30.48
+hi,"e5-small (C1, no-prefix)",128,30.48
+hi,"e5-small (C1, no-prefix)",256,30.48
+hr,"e5-small (C1, no-prefix)",64,34.0
+hr,"e5-small (C1, no-prefix)",128,33.98
+hr,"e5-small (C1, no-prefix)",256,33.98
+hu,"e5-small (C1, no-prefix)",64,23.32
+hu,"e5-small (C1, no-prefix)",128,23.32
+hu,"e5-small (C1, no-prefix)",256,23.32
+id,"e5-small (C1, no-prefix)",64,43.43
+id,"e5-small (C1, no-prefix)",128,43.43
+id,"e5-small (C1, no-prefix)",256,43.43
+it,"e5-small (C1, no-prefix)",64,40.73
+it,"e5-small (C1, no-prefix)",128,40.73
+it,"e5-small (C1, no-prefix)",256,40.73
+ja,"e5-small (C1, no-prefix)",64,42.34
+ja,"e5-small (C1, no-prefix)",128,42.34
+ja,"e5-small (C1, no-prefix)",256,42.34
+ko,"e5-small (C1, no-prefix)",64,54.16
+ko,"e5-small (C1, no-prefix)",128,54.16
+ko,"e5-small (C1, no-prefix)",256,54.16
+mi,"e5-small (C1, no-prefix)",64,5.52
+mi,"e5-small (C1, no-prefix)",128,5.54
+mi,"e5-small (C1, no-prefix)",256,5.54
+nl,"e5-small (C1, no-prefix)",64,40.13
+nl,"e5-small (C1, no-prefix)",128,40.13
+nl,"e5-small (C1, no-prefix)",256,40.13
+no,"e5-small (C1, no-prefix)",64,36.07
+no,"e5-small (C1, no-prefix)",128,36.07
+no,"e5-small (C1, no-prefix)",256,36.07
+pl,"e5-small (C1, no-prefix)",64,36.21
+pl,"e5-small (C1, no-prefix)",128,36.21
+pl,"e5-small (C1, no-prefix)",256,36.21
+pt,"e5-small (C1, no-prefix)",64,42.16
+pt,"e5-small (C1, no-prefix)",128,42.18
+pt,"e5-small (C1, no-prefix)",256,42.18
+quz,"e5-small (C1, no-prefix)",64,5.32
+quz,"e5-small (C1, no-prefix)",128,5.32
+quz,"e5-small (C1, no-prefix)",256,5.32
+ro,"e5-small (C1, no-prefix)",64,27.4
+ro,"e5-small (C1, no-prefix)",128,27.31
+ro,"e5-small (C1, no-prefix)",256,27.32
+ru,"e5-small (C1, no-prefix)",64,43.6
+ru,"e5-small (C1, no-prefix)",128,43.6
+ru,"e5-small (C1, no-prefix)",256,43.6
+sv,"e5-small (C1, no-prefix)",64,37.21
+sv,"e5-small (C1, no-prefix)",128,37.21
+sv,"e5-small (C1, no-prefix)",256,37.21
+sw,"e5-small (C1, no-prefix)",64,16.43
+sw,"e5-small (C1, no-prefix)",128,16.43
+sw,"e5-small (C1, no-prefix)",256,16.43
+te,"e5-small (C1, no-prefix)",64,26.29
+te,"e5-small (C1, no-prefix)",128,26.29
+te,"e5-small (C1, no-prefix)",256,26.29
+th,"e5-small (C1, no-prefix)",64,39.44
+th,"e5-small (C1, no-prefix)",128,39.44
+th,"e5-small (C1, no-prefix)",256,39.44
+tr,"e5-small (C1, no-prefix)",64,29.7
+tr,"e5-small (C1, no-prefix)",128,29.75
+tr,"e5-small (C1, no-prefix)",256,29.75
+uk,"e5-small (C1, no-prefix)",64,31.31
+uk,"e5-small (C1, no-prefix)",128,31.32
+uk,"e5-small (C1, no-prefix)",256,31.32
+vi,"e5-small (C1, no-prefix)",64,40.11
+vi,"e5-small (C1, no-prefix)",128,40.11
+vi,"e5-small (C1, no-prefix)",256,40.11
+zh,"e5-small (C1, no-prefix)",64,38.64
+zh,"e5-small (C1, no-prefix)",128,38.63
+zh,"e5-small (C1, no-prefix)",256,38.63
+ar,MiniLM-L12-v2,64,56.77
+ar,MiniLM-L12-v2,128,56.77
+ar,MiniLM-L12-v2,256,56.77
+bn,MiniLM-L12-v2,64,10.64
+bn,MiniLM-L12-v2,128,10.64
+bn,MiniLM-L12-v2,256,10.64
+cs,MiniLM-L12-v2,64,58.0
+cs,MiniLM-L12-v2,128,58.0
+cs,MiniLM-L12-v2,256,58.0
+da,MiniLM-L12-v2,64,64.59
+da,MiniLM-L12-v2,128,64.59
+da,MiniLM-L12-v2,256,64.59
+de,MiniLM-L12-v2,64,66.55
+de,MiniLM-L12-v2,128,66.55
+de,MiniLM-L12-v2,256,66.55
+el,MiniLM-L12-v2,64,55.52
+el,MiniLM-L12-v2,128,55.52
+el,MiniLM-L12-v2,256,55.52
+en,MiniLM-L12-v2,64,68.69
+en,MiniLM-L12-v2,128,68.69
+en,MiniLM-L12-v2,256,68.69
+es,MiniLM-L12-v2,64,60.3
+es,MiniLM-L12-v2,128,60.3
+es,MiniLM-L12-v2,256,60.3
+fa,MiniLM-L12-v2,64,62.77
+fa,MiniLM-L12-v2,128,62.76
+fa,MiniLM-L12-v2,256,62.76
+fi,MiniLM-L12-v2,64,60.5
+fi,MiniLM-L12-v2,128,60.53
+fi,MiniLM-L12-v2,256,60.53
+fil,MiniLM-L12-v2,64,8.82
+fil,MiniLM-L12-v2,128,8.82
+fil,MiniLM-L12-v2,256,8.82
+fr,MiniLM-L12-v2,64,66.75
+fr,MiniLM-L12-v2,128,66.75
+fr,MiniLM-L12-v2,256,66.75
+he,MiniLM-L12-v2,64,64.07
+he,MiniLM-L12-v2,128,64.15
+he,MiniLM-L12-v2,256,64.15
+hi,MiniLM-L12-v2,64,52.36
+hi,MiniLM-L12-v2,128,52.36
+hi,MiniLM-L12-v2,256,52.36
+hr,MiniLM-L12-v2,64,64.35
+hr,MiniLM-L12-v2,128,64.35
+hr,MiniLM-L12-v2,256,64.35
+hu,MiniLM-L12-v2,64,59.27
+hu,MiniLM-L12-v2,128,59.24
+hu,MiniLM-L12-v2,256,59.24
+id,MiniLM-L12-v2,64,73.24
+id,MiniLM-L12-v2,128,73.24
+id,MiniLM-L12-v2,256,73.24
+it,MiniLM-L12-v2,64,61.68
+it,MiniLM-L12-v2,128,61.68
+it,MiniLM-L12-v2,256,61.68
+ja,MiniLM-L12-v2,64,68.7
+ja,MiniLM-L12-v2,128,68.7
+ja,MiniLM-L12-v2,256,68.7
+ko,MiniLM-L12-v2,64,60.18
+ko,MiniLM-L12-v2,128,60.18
+ko,MiniLM-L12-v2,256,60.18
+mi,MiniLM-L12-v2,64,0.42
+mi,MiniLM-L12-v2,128,0.42
+mi,MiniLM-L12-v2,256,0.42
+nl,MiniLM-L12-v2,64,59.46
+nl,MiniLM-L12-v2,128,59.46
+nl,MiniLM-L12-v2,256,59.46
+no,MiniLM-L12-v2,64,62.3
+no,MiniLM-L12-v2,128,62.3
+no,MiniLM-L12-v2,256,62.3
+pl,MiniLM-L12-v2,64,62.43
+pl,MiniLM-L12-v2,128,62.43
+pl,MiniLM-L12-v2,256,62.43
+pt,MiniLM-L12-v2,64,62.05
+pt,MiniLM-L12-v2,128,62.06
+pt,MiniLM-L12-v2,256,62.06
+quz,MiniLM-L12-v2,64,3.21
+quz,MiniLM-L12-v2,128,3.21
+quz,MiniLM-L12-v2,256,3.21
+ro,MiniLM-L12-v2,64,62.4
+ro,MiniLM-L12-v2,128,62.46
+ro,MiniLM-L12-v2,256,62.46
+ru,MiniLM-L12-v2,64,69.88
+ru,MiniLM-L12-v2,128,69.88
+ru,MiniLM-L12-v2,256,69.88
+sv,MiniLM-L12-v2,64,62.19
+sv,MiniLM-L12-v2,128,62.19
+sv,MiniLM-L12-v2,256,62.19
+sw,MiniLM-L12-v2,64,3.8
+sw,MiniLM-L12-v2,128,3.8
+sw,MiniLM-L12-v2,256,3.8
+te,MiniLM-L12-v2,64,12.67
+te,MiniLM-L12-v2,128,12.67
+te,MiniLM-L12-v2,256,12.67
+th,MiniLM-L12-v2,64,69.47
+th,MiniLM-L12-v2,128,69.47
+th,MiniLM-L12-v2,256,69.47
+tr,MiniLM-L12-v2,64,61.27
+tr,MiniLM-L12-v2,128,61.34
+tr,MiniLM-L12-v2,256,61.34
+uk,MiniLM-L12-v2,64,63.62
+uk,MiniLM-L12-v2,128,63.69
+uk,MiniLM-L12-v2,256,63.69
+vi,MiniLM-L12-v2,64,70.69
+vi,MiniLM-L12-v2,128,70.69
+vi,MiniLM-L12-v2,256,70.69
+zh,MiniLM-L12-v2,64,71.41
+zh,MiniLM-L12-v2,128,71.41
+zh,MiniLM-L12-v2,256,71.41
+ar,e5-base (query:),64,39.22
+ar,e5-base (query:),128,39.22
+ar,e5-base (query:),256,39.22
+bn,e5-base (query:),64,29.58
+bn,e5-base (query:),128,29.58
+bn,e5-base (query:),256,29.58
+cs,e5-base (query:),64,42.31
+cs,e5-base (query:),128,42.31
+cs,e5-base (query:),256,42.31
+da,e5-base (query:),64,50.96
+da,e5-base (query:),128,50.96
+da,e5-base (query:),256,50.96
+de,e5-base (query:),64,55.69
+de,e5-base (query:),128,55.69
+de,e5-base (query:),256,55.69
+el,e5-base (query:),64,34.61
+el,e5-base (query:),128,34.61
+el,e5-base (query:),256,34.61
+en,e5-base (query:),64,65.04
+en,e5-base (query:),128,65.04
+en,e5-base (query:),256,65.04
+es,e5-base (query:),64,56.04
+es,e5-base (query:),128,56.04
+es,e5-base (query:),256,56.04
+fa,e5-base (query:),64,46.58
+fa,e5-base (query:),128,46.57
+fa,e5-base (query:),256,46.57
+fi,e5-base (query:),64,39.12
+fi,e5-base (query:),128,39.12
+fi,e5-base (query:),256,39.12
+fil,e5-base (query:),64,29.47
+fil,e5-base (query:),128,29.46
+fil,e5-base (query:),256,29.46
+fr,e5-base (query:),64,57.05
+fr,e5-base (query:),128,57.05
+fr,e5-base (query:),256,57.05
+he,e5-base (query:),64,36.88
+he,e5-base (query:),128,36.88
+he,e5-base (query:),256,36.88
+hi,e5-base (query:),64,29.98
+hi,e5-base (query:),128,29.98
+hi,e5-base (query:),256,29.98
+hr,e5-base (query:),64,43.06
+hr,e5-base (query:),128,43.06
+hr,e5-base (query:),256,43.06
+hu,e5-base (query:),64,44.07
+hu,e5-base (query:),128,44.08
+hu,e5-base (query:),256,44.08
+id,e5-base (query:),64,52.65
+id,e5-base (query:),128,52.65
+id,e5-base (query:),256,52.65
+it,e5-base (query:),64,49.33
+it,e5-base (query:),128,49.33
+it,e5-base (query:),256,49.33
+ja,e5-base (query:),64,50.41
+ja,e5-base (query:),128,50.4
+ja,e5-base (query:),256,50.4
+ko,e5-base (query:),64,59.15
+ko,e5-base (query:),128,59.15
+ko,e5-base (query:),256,59.15
+mi,e5-base (query:),64,7.23
+mi,e5-base (query:),128,7.21
+mi,e5-base (query:),256,7.21
+nl,e5-base (query:),64,49.68
+nl,e5-base (query:),128,49.68
+nl,e5-base (query:),256,49.68
+no,e5-base (query:),64,50.87
+no,e5-base (query:),128,50.87
+no,e5-base (query:),256,50.87
+pl,e5-base (query:),64,46.51
+pl,e5-base (query:),128,46.51
+pl,e5-base (query:),256,46.51
+pt,e5-base (query:),64,44.97
+pt,e5-base (query:),128,44.97
+pt,e5-base (query:),256,44.97
+quz,e5-base (query:),64,6.14
+quz,e5-base (query:),128,6.15
+quz,e5-base (query:),256,6.15
+ro,e5-base (query:),64,42.82
+ro,e5-base (query:),128,42.72
+ro,e5-base (query:),256,42.72
+ru,e5-base (query:),64,53.4
+ru,e5-base (query:),128,53.42
+ru,e5-base (query:),256,53.42
+sv,e5-base (query:),64,51.08
+sv,e5-base (query:),128,51.08
+sv,e5-base (query:),256,51.08
+sw,e5-base (query:),64,20.38
+sw,e5-base (query:),128,20.39
+sw,e5-base (query:),256,20.39
+te,e5-base (query:),64,28.39
+te,e5-base (query:),128,28.39
+te,e5-base (query:),256,28.39
+th,e5-base (query:),64,48.35
+th,e5-base (query:),128,48.35
+th,e5-base (query:),256,48.35
+tr,e5-base (query:),64,43.63
+tr,e5-base (query:),128,43.66
+tr,e5-base (query:),256,43.66
+uk,e5-base (query:),64,46.87
+uk,e5-base (query:),128,46.94
+uk,e5-base (query:),256,46.94
+vi,e5-base (query:),64,56.59
+vi,e5-base (query:),128,56.59
+vi,e5-base (query:),256,56.59
+zh,e5-base (query:),64,50.56
+zh,e5-base (query:),128,50.57
+zh,e5-base (query:),256,50.57

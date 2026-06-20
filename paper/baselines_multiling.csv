@@ -1,0 +1,46 @@
+model,space,dataset,lang,n_caps,n_imgs,R1,R5,R10,mAP10
+SigLIP2 text tower (so400m float),float,coco,en,5000,5000,49.74,72.88,81.58,59.77
+SigLIP2 text tower (so400m float),float,coco,ko,5000,5000,31.8,55.22,66.06,42.04
+Ours: server (so400m+ft113),1bit,coco,en,5000,5000,41.64,68.98,79.92,53.34
+Ours: server (so400m+ft113),1bit,coco,ko,5000,5000,30.52,59.0,71.08,42.49
+Ours: offline (MiniLM head-adapt),1bit,coco,en,5000,5000,37.06,66.58,78.16,49.68
+Ours: offline (MiniLM head-adapt),1bit,coco,ko,5000,5000,25.84,52.8,65.44,37.24
+SigLIP2 text tower (so400m float),float,xm3600,de,8643,3600,16.85,31.03,37.58,22.96
+SigLIP2 text tower (so400m float),float,xm3600,en,7200,3600,53.04,76.28,83.36,62.97
+SigLIP2 text tower (so400m float),float,xm3600,hi,8503,3600,16.02,32.41,40.9,23.11
+SigLIP2 text tower (so400m float),float,xm3600,ko,7650,3600,59.32,82.93,88.89,69.39
+SigLIP2 text tower (so400m float),float,xm3600,te,7200,3600,0.81,3.07,4.6,1.82
+SigLIP2 text tower (so400m float),float,xm3600,th,7200,3600,27.18,50.64,60.04,37.19
+SigLIP2 text tower (so400m float),float,xm3600,avg36,,3600,40.56,60.32,66.89,49.03
+Ours: server (so400m+ft113),1bit,xm3600,de,8643,3600,10.75,22.92,30.05,16.08
+Ours: server (so400m+ft113),1bit,xm3600,en,7200,3600,43.0,68.79,77.86,54.09
+Ours: server (so400m+ft113),1bit,xm3600,hi,8503,3600,16.09,33.86,43.38,23.75
+Ours: server (so400m+ft113),1bit,xm3600,ko,7650,3600,48.84,75.83,83.8,60.2
+Ours: server (so400m+ft113),1bit,xm3600,te,7200,3600,1.17,3.83,6.17,2.37
+Ours: server (so400m+ft113),1bit,xm3600,th,7200,3600,23.03,46.08,57.46,33.04
+Ours: server (so400m+ft113),1bit,xm3600,avg36,,3600,32.44,54.08,62.36,41.68
+Ours: offline (MiniLM head-adapt),1bit,xm3600,de,8643,3600,30.28,55.52,66.55,41.15
+Ours: offline (MiniLM head-adapt),1bit,xm3600,en,7200,3600,31.21,57.39,68.69,42.37
+Ours: offline (MiniLM head-adapt),1bit,xm3600,hi,8503,3600,20.12,41.22,52.36,29.32
+Ours: offline (MiniLM head-adapt),1bit,xm3600,ko,7650,3600,25.73,49.31,60.18,35.78
+Ours: offline (MiniLM head-adapt),1bit,xm3600,te,7200,3600,2.61,8.28,12.67,5.11
+Ours: offline (MiniLM head-adapt),1bit,xm3600,th,7200,3600,31.15,58.25,69.47,42.6
+Ours: offline (MiniLM head-adapt),1bit,xm3600,avg36,,3600,23.74,44.57,53.92,32.65
+NLLB-CLIP (nllb-clip-base-siglip),float,coco,en,5000,5000,43.0,69.68,78.68,54.24
+NLLB-CLIP (nllb-clip-base-siglip),float,coco,ko,5000,5000,35.38,61.58,71.72,46.55
+NLLB-CLIP (nllb-clip-base-siglip),float,xm3600,de,8643,3600,67.87,89.4,94.03,77.09
+NLLB-CLIP (nllb-clip-base-siglip),float,xm3600,en,7200,3600,49.97,76.43,84.36,61.26
+NLLB-CLIP (nllb-clip-base-siglip),float,xm3600,hi,8503,3600,38.02,64.72,74.26,49.26
+NLLB-CLIP (nllb-clip-base-siglip),float,xm3600,ko,7650,3600,54.07,79.18,86.67,64.72
+NLLB-CLIP (nllb-clip-base-siglip),float,xm3600,te,7200,3600,38.82,67.18,77.42,50.76
+NLLB-CLIP (nllb-clip-base-siglip),float,xm3600,th,7200,3600,55.53,80.65,87.72,66.14
+NLLB-CLIP (nllb-clip-base-siglip),float,xm3600,avg36,,3600,54.89,79.17,86.06,65.22
+AltCLIP-m18,float,coco,en,5000,5000,45.68,70.02,79.12,56.11
+AltCLIP-m18,float,coco,ko,5000,5000,38.16,62.24,72.0,48.43
+AltCLIP-m18,float,xm3600,de,8643,3600,69.93,89.96,94.24,78.55
+AltCLIP-m18,float,xm3600,en,7200,3600,54.1,79.07,86.38,64.8
+AltCLIP-m18,float,xm3600,hi,8503,3600,31.48,54.36,64.77,41.33
+AltCLIP-m18,float,xm3600,ko,7650,3600,58.14,81.53,87.88,68.11
+AltCLIP-m18,float,xm3600,te,7200,3600,5.44,12.68,17.33,8.59
+AltCLIP-m18,float,xm3600,th,7200,3600,62.0,85.38,91.31,71.93
+AltCLIP-m18,float,xm3600,avg36,,3600,32.75,47.45,52.16,39.05

@@ -1,0 +1,9 @@
+target,dtype,bitflips_per_1024,top10_overlap,EN_R10,KO_R10,note
+head,fp32,0.0,1.0,79.92,71.08,baseline
+head,fp16,0.12,0.998,79.98,71.08,
+head,bf16,0.95,0.99,79.94,71.0,
+head,int8,18.97,0.929,79.7,70.52,
+emb,fp16,0.02,1.0,79.92,71.06,storage-cast
+emb,bf16,0.18,0.998,79.92,71.04,storage-cast
+emb,int8,5.45,0.966,79.84,70.84,storage-cast
+text_tower,bf16,2.57,,79.98,70.98,"so400m tower bf16(cuda) vs fp32 cache, head fp32, FULL 5K"

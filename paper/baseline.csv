@@ -1,0 +1,8 @@
+model,family,variant,dim,EN_R10,KO_R10,EN_R1,KO_R1
+SigLIP2-So400m,SigLIP2-so400m,"naive (sign, no head)",1152,70.2,52.24,36.72,21.56
+AltCLIP-m18 (stock mCLIP),AltCLIP-XLMR,"naive (sign, no head)",1024,68.0,62.16,33.64,27.92
+"CLIP-ViT-B/32 (stock, EN-only)",openai-CLIP,"naive (sign, no head)",512,45.08,0.32,16.24,0.06
+SigLIP2-So400m,SigLIP2-so400m,"server (head, 1024-bit)",1024,79.92,71.08,,
+SigLIP2+MiniLM,head-adapt offline,head-adapt (1024-bit),1024,78.16,65.44,,
+SigLIP2+e5-small,head-adapt offline (deployed),head-adapt (1024-bit),1024,74.0,66.2,,
+AltCLIP-m18,AltCLIP-XLMR,"head (1024-bit, Ext③)",1024,77.96,70.52,,

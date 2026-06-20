@@ -1,0 +1,4 @@
+path,EN_R1,EN_R5,EN_R10,KO_R1,KO_R5,KO_R10
+head_continuous_ceiling,42.74,70.52,80.52,32.34,60.68,72.04
+bit1024_server,41.64,68.98,79.92,30.52,59.0,71.08
+backbone_float_no_head,49.74,72.88,81.58,31.8,55.22,66.06

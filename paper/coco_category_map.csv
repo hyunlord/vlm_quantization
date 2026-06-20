@@ -1,0 +1,6 @@
+row,task,mAP10,mAP_R,mAP100
+float (ceiling),T2I,95.81,77.67,90.52
+float (ceiling),I2I,95.75,73.06,88.4
+server (so400m+ft113),T2I,95.84,74.3,90.72
+deployed offline (e5),T2I,95.72,74.78,90.86
+ft113 image codes,I2I,97.02,76.8,92.44
