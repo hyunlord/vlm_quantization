@@ -113,6 +113,36 @@ def emb_texts_siglip(m, proc, strings, dev, dtype, batch=256, maxlen=64):
     return torch.cat(out)
 
 
+# ---------- AltCLIP (CLIP-family: visual/text projection of pooler_output; get_*_features returns a
+#            ModelOutput in transformers 5.1, so use the projection components directly) ----------
+def load_altclip(name, dev, dtype):
+    from transformers import AltCLIPModel, AltCLIPProcessor
+    m = AltCLIPModel.from_pretrained(name, dtype=dtype).to(dev).eval()
+    return m, AltCLIPProcessor.from_pretrained(name)
+
+
+@torch.no_grad()
+def emb_images_altclip(m, proc, paths, dev, dtype, batch=64):
+    out, t0, M = [], time.perf_counter(), len(paths)
+    for s in range(0, M, batch):
+        imgs = [Image.open(p).convert("RGB") for p in paths[s:s + batch]]
+        pv = proc(images=imgs, return_tensors="pt")["pixel_values"].to(dev, dtype=dtype)
+        out.append(m.visual_projection(m.vision_model(pixel_values=pv).pooler_output).float().cpu())
+        if (s // batch) % 25 == 0:
+            print(f"  img {min(s + batch, M)}/{M} ({(s + len(imgs)) / (time.perf_counter() - t0 + 1e-9):.0f}/s)", flush=True)
+    return torch.cat(out)
+
+
+@torch.no_grad()
+def emb_texts_altclip(m, proc, strings, dev, dtype, batch=256, maxlen=64):
+    out = []
+    for s in range(0, len(strings), batch):
+        t = proc(text=strings[s:s + batch], return_tensors="pt", padding=True, truncation=True, max_length=maxlen)
+        out.append(m.text_projection(m.text_model(
+            input_ids=t["input_ids"].to(dev), attention_mask=t["attention_mask"].to(dev)).pooler_output).float().cpu())
+    return torch.cat(out)
+
+
 @torch.no_grad()
 def emb_texts_xlmr(name, strings, dev, batch=256, maxlen=64):
     """mean-pool + L2 (e5/MiniLM offline encoder convention, no prefix)."""
@@ -238,6 +268,7 @@ def main():
     ap.add_argument("--model", required=True)
     ap.add_argument("--tag", required=True)
     ap.add_argument("--family", default="SigLIP2")
+    ap.add_argument("--backbone-type", choices=["siglip", "altclip"], default="siglip")
     ap.add_argument("--epochs", type=int, default=25)
     ap.add_argument("--adapt-epochs", type=int, default=25)
     ap.add_argument("--dtype", choices=["fp32", "bf16", "fp16"], default="bf16")
@@ -268,13 +299,18 @@ def main():
         TR = torch.load(tr_cache, map_location="cpu"); TE = torch.load(te_cache, map_location="cpu")
         print(f"[bb:{tag}] embeddings from cache", flush=True)
     else:
-        m, proc = load_siglip(args.model, dev, dtype)
+        if args.backbone_type == "altclip":
+            m, proc = load_altclip(args.model, dev, dtype)
+            img_fn, txt_fn = emb_images_altclip, emb_texts_altclip
+        else:
+            m, proc = load_siglip(args.model, dev, dtype)
+            img_fn, txt_fn = emb_images, emb_texts_siglip
         t0 = time.perf_counter()
-        tr_img = emb_images(m, proc, [f"{REPO}/data/coco/{r[1]}" for r in tr], dev, dtype)
-        tr_txt = emb_texts_siglip(m, proc, [r[2] for r in tr], dev, dtype)
-        te_img = emb_images(m, proc, [f"{REPO}/data/coco/{r[1]}" for r in te], dev, dtype)
-        te_txt = emb_texts_siglip(m, proc, [r[2] for r in te], dev, dtype)
-        ko_txt = emb_texts_siglip(m, proc, ko_caps, dev, dtype)
+        tr_img = img_fn(m, proc, [f"{REPO}/data/coco/{r[1]}" for r in tr], dev, dtype)
+        tr_txt = txt_fn(m, proc, [r[2] for r in tr], dev, dtype)
+        te_img = img_fn(m, proc, [f"{REPO}/data/coco/{r[1]}" for r in te], dev, dtype)
+        te_txt = txt_fn(m, proc, [r[2] for r in te], dev, dtype)
+        ko_txt = txt_fn(m, proc, ko_caps, dev, dtype)
         TR = {"img": tr_img, "txt": tr_txt}
         TE = {"img": te_img, "en": te_txt, "ko": ko_txt, "ids": te_ids}
         torch.save(TR, tr_cache); torch.save(TE, te_cache)
