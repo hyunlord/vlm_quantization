@@ -1,7 +1,8 @@
 # PAPER_BASELINES_EXP — absolute baselines · loss ablation · category mAP · mAP@10 (handoff)
 
 Branch `paper-baselines-exp` (from `web-v3-hybrid`). EVAL-only / head-only-retrain; **frozen SigLIP2-So400m
-backbone**, cached embeddings reused. Commit SHA: **`<FILL_ON_COMMIT>`**.
+backbone**, cached embeddings reused. Commit SHA: **`13234f17afe73c554238cc70e41d39e3227d8f9f`**
+(this doc's SHA-record line lands in the follow-up commit).
 
 Four core experiments (a–d) requested for the systems+empirical paper (frozen SigLIP2 + learned
 Matryoshka hash head, 1024-bit sign-STE, text→image 1-bit retrieval, full-browser). All numbers below are
