@@ -39,4 +39,4 @@
 ## 채우는 논문 표/문장 + 커밋
 - **베이스라인 비교행**(#1): 스톡 CLIP naive < SigLIP2+head → 방법(강한 백본+학습 헤드) 정당화. **분산 표기**(#2): head-adapt R@10 = mean±0.1~0.2pt(시드 안정). **mAP 컬럼**(#3): 핵심 행 mAP@10. **구축비용**(#5): 50K 40min 인코딩·6.4MB 인덱스·~6.6MB JS.
 - 산출 스크립트: `web/paper_baseline.py`(#1 naive) + `web/paper_review_exp.py`(#2/#3/#5). 캐시/헤드(`/tmp/*`) 미커밋.
-- 브랜치 **`paper-review-exp`**(`web-v3-hybrid`에서 분기). 커밋 SHA: _커밋 후 기재_ → push.
+- 브랜치 **`paper-review-exp`**(`web-v3-hybrid`에서 분기). 커밋 **`7a104f0`** → `origin/paper-review-exp` push 완료.
