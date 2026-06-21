@@ -1,7 +1,8 @@
 # PAPER_NLLB_BITS_EXP — NLLB-CLIP backbone hashing · German sanity · extreme bit sweep (handoff)
 
 Branch `paper-nllb-bits-exp` (from `paper-baselines-exp` 34492bb / batch #1 13234f1). EVAL-only / head-only,
-**frozen backbones**, cached embeddings reused. Commit SHA: **`<FILL_ON_COMMIT>`**.
+**frozen backbones**, cached embeddings reused. Commit SHA: **`edfe16ddb204ca6177dc568e96a762239d14dc9c`**
+(this SHA-record line lands in the follow-up commit).
 
 Scripts (under `web/`): `paper_german_sanity.py` (g), `paper_bits_extreme.py` (h-instance),
 `paper_cmh_benchmark.py --bits ...` (h-CMH, batch #1 script reused), `paper_nllb_hashing.py` (f).
