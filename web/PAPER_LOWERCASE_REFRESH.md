@@ -3,7 +3,7 @@
 Branch `paper-lowercase-refresh` (from `paper-lowercase-fix` 5fd42ef). **Final consistency batch.** Batch #3
 fixed only COCO R@10/mAP@10 + the multiling FLOAT ceiling. This puts **every paper table that runs so400m
 text** onto the correct lowercased preprocessing, at full R@{1,5,10}+mAP@10, and confirms the relative
-findings survive the correction. Commit SHA: **`1002b11`** (this batch's deliverable commit).
+findings survive the correction. Commit SHA: **`1002b11`** (deliverable) + **`ddbf661`** (precision faithfulness fix — reproduces the recorded int8 18.97/5.45). Clone the branch HEAD to verify.
 
 ## Fixed rule (unchanged from batch #3, verified)
 so400m text = **`.lower()` + `padding="max_length", max_length=64, truncation=True`**. Only so400m is
