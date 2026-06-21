@@ -1,0 +1,19 @@
+model,space,dataset,lang,n_caps,R1,R5,R10,mAP10
+MetaCLIP2+head,1bit,coco,en,5000,31.06,59.58,71.86,43.15
+MetaCLIP2 float,float,coco,en,5000,45.84,70.0,78.92,56.25
+MetaCLIP2+head,1bit,coco,ko,5000,24.1,51.68,64.88,35.88
+MetaCLIP2 float,float,coco,ko,5000,33.56,58.16,68.94,44.21
+MetaCLIP2+head,1bit,xm3600,de,8643,29.02,53.81,64.26,39.64
+MetaCLIP2 float,float,xm3600,de,8643,69.05,89.83,94.34,78.0
+MetaCLIP2+head,1bit,xm3600,en,7200,22.85,44.69,55.56,32.35
+MetaCLIP2 float,float,xm3600,en,7200,51.54,77.43,84.58,62.4
+MetaCLIP2+head,1bit,xm3600,hi,8503,12.45,28.33,37.62,19.29
+MetaCLIP2 float,float,xm3600,hi,8503,26.2,47.68,57.51,35.36
+MetaCLIP2+head,1bit,xm3600,ko,7650,25.71,48.77,59.73,35.54
+MetaCLIP2 float,float,xm3600,ko,7650,55.02,80.43,87.42,65.9
+MetaCLIP2+head,1bit,xm3600,te,7200,10.44,26.33,35.62,17.44
+MetaCLIP2 float,float,xm3600,te,7200,25.92,49.47,59.6,35.93
+MetaCLIP2+head,1bit,xm3600,th,7200,22.64,45.68,56.35,32.43
+MetaCLIP2 float,float,xm3600,th,7200,54.36,78.88,86.43,64.94
+MetaCLIP2+head,1bit,xm3600,avg36,,21.49,42.21,52.01,30.38
+MetaCLIP2 float,float,xm3600,avg36,,51.31,73.27,79.62,60.7

@@ -1,0 +1,38 @@
+table,backbone,lang_or_metric,value_orig,value_lower,preproc
+backbones,SigLIP2-base,server_1bit_EN_R10,78.12,79.0,lowercased
+backbones,SigLIP2-base,server_1bit_EN_R1,38.16,39.02,lowercased
+backbones,SigLIP2-base,server_1bit_KO_R10,56.7,56.7,native(caseless)
+backbones,SigLIP2-base,server_1bit_KO_R1,21.14,21.14,native(caseless)
+backbones,SigLIP2-base,head_cont_ceiling_EN_R10,78.62,80.04,lowercased
+backbones,SigLIP2-base,head_cont_ceiling_KO_R10,57.9,57.9,native(caseless)
+backbones,SigLIP2-base,head_bf16_flip,0.98,0.97,lowercased
+backbones,SigLIP2-base,head_int8_flip,24.48,24.21,lowercased
+backbones,SigLIP2-base,emb_bf16_flip,0.0,0.0,lowercased
+backbones,SigLIP2-base,emb_int8_flip,9.19,8.7,lowercased
+backbones,SigLIP2-base,MiniLM_headadapt_EN_R10,76.14,76.14,"native(offline, unchanged)"
+backbones,SigLIP2-base,MiniLM_headadapt_KO_R10,53.78,53.78,"native(offline, unchanged)"
+backbones,AltCLIP-m18,float_EN_R10 (native vs lower check),79.12,79.12,native — keep native (lowercasing hurts/flat)
+baselines_multiling,so400m-float,coco_en_R10,81.58,83.58,lowercased
+baselines_multiling,so400m-server-1bit,coco_en_R10,79.92,81.24,lowercased
+baselines_multiling,so400m-float,coco_ko_R10,66.06,66.26,lowercased
+baselines_multiling,so400m-server-1bit,coco_ko_R10,71.08,71.04,lowercased
+baselines_multiling,so400m-float,xm3600_de_R10,37.58,96.54,lowercased
+baselines_multiling,so400m-server-1bit,xm3600_de_R10,30.05,92.63,lowercased
+baselines_multiling,so400m-float,xm3600_en_R10,83.36,88.35,lowercased
+baselines_multiling,so400m-server-1bit,xm3600_en_R10,77.86,81.69,lowercased
+baselines_multiling,so400m-float,xm3600_hi_R10,40.9,40.9,lowercased
+baselines_multiling,so400m-server-1bit,xm3600_hi_R10,43.38,43.38,lowercased
+baselines_multiling,so400m-float,xm3600_ko_R10,88.89,88.93,lowercased
+baselines_multiling,so400m-server-1bit,xm3600_ko_R10,83.8,83.84,lowercased
+baselines_multiling,so400m-float,xm3600_te_R10,4.6,4.6,lowercased
+baselines_multiling,so400m-server-1bit,xm3600_te_R10,6.17,6.17,lowercased
+baselines_multiling,so400m-float,xm3600_th_R10,60.04,60.92,lowercased
+baselines_multiling,so400m-server-1bit,xm3600_th_R10,57.46,57.94,lowercased
+baselines_multiling,so400m-float,xm3600_avg36_R10,66.89,74.46,lowercased
+baselines_multiling,so400m-server-1bit,xm3600_avg36_R10,62.36,70.3,lowercased
+baselines_multiling,NLLB-CLIP (nllb-clip-base-siglip),xm3600_en_R10,84.36,84.36,native(unchanged: not SigLIP-family)
+baselines_multiling,NLLB-CLIP (nllb-clip-base-siglip),xm3600_avg36_R10,86.06,86.06,native(unchanged: not SigLIP-family)
+baselines_multiling,AltCLIP-m18,xm3600_en_R10,86.38,86.38,native(unchanged: not SigLIP-family)
+baselines_multiling,AltCLIP-m18,xm3600_avg36_R10,52.16,52.16,native(unchanged: not SigLIP-family)
+baselines_multiling,Ours: offline (MiniLM head-adapt),xm3600_en_R10,68.69,68.69,"native(offline, case-insensitive)"
+baselines_multiling,Ours: offline (MiniLM head-adapt),xm3600_avg36_R10,53.92,53.92,"native(offline, case-insensitive)"
