@@ -1,17 +1,17 @@
-target,dtype,variant,bitflips_per_1024,top10_overlap,EN_R1,EN_R5,EN_R10,EN_mAP10
-fp32,fp32,orig,0.0,1.0,41.66,69.14,79.98,53.39
-head,fp16,orig,0.12,0.9984,41.66,69.1,79.98,53.4
-head,bf16,orig,0.95,0.9899,41.58,69.12,79.9,53.35
-head,int8,orig,1.75,0.9836,41.46,69.18,79.92,53.27
-emb,fp16,orig,0.0,1.0,41.66,69.14,79.98,53.39
-emb,bf16,orig,0.0,1.0,41.66,69.14,79.98,53.39
-emb,int8,orig,3.79,0.973,41.52,68.92,80.14,53.26
-text_tower,bf16,orig,2.57,0.9781,41.66,69.14,79.98,53.39
-fp32,fp32,lower,0.0,1.0,43.4,71.16,81.24,55.15
-head,fp16,lower,0.12,0.9983,43.42,71.1,81.2,55.16
-head,bf16,lower,0.94,0.9898,43.46,71.1,81.28,55.2
-head,int8,lower,1.81,0.983,43.28,71.32,81.34,55.15
-emb,fp16,lower,0.0,1.0,43.4,71.16,81.24,55.15
-emb,bf16,lower,0.0,1.0,43.4,71.16,81.24,55.15
-emb,int8,lower,3.96,0.9731,43.32,70.94,81.26,55.15
-text_tower,bf16,lower,2.23,0.9804,43.4,71.16,81.24,55.15
+target,dtype,variant,bitflips_per_1024,top10_overlap,EN_R10,KO_R10,note
+head,fp32,orig,0.0,1.0,79.92,71.08,baseline
+head,fp16,orig,0.12,0.998,79.98,71.08,
+head,bf16,orig,0.95,0.99,79.94,71.0,
+head,int8,orig,18.97,0.929,79.7,70.52,
+emb,fp16,orig,0.02,1.0,79.92,71.06,storage-cast
+emb,bf16,orig,0.18,0.997,79.92,71.04,storage-cast
+emb,int8,orig,5.45,0.966,79.84,70.84,storage-cast
+text_tower,bf16,orig,1.52,,79.92,,"so400m tower bf16 vs fp32 backbone, head fp32 (EN)"
+head,fp32,lower,0.0,1.0,81.24,71.08,baseline
+head,fp16,lower,0.12,0.998,81.24,71.08,
+head,bf16,lower,0.95,0.99,81.26,71.0,
+head,int8,lower,18.75,0.93,81.04,70.52,
+emb,fp16,lower,0.02,1.0,81.24,71.06,storage-cast
+emb,bf16,lower,0.18,0.997,81.24,71.04,storage-cast
+emb,int8,lower,5.55,0.965,81.2,70.84,storage-cast
+text_tower,bf16,lower,2.23,,81.24,,"so400m tower bf16 vs fp32 backbone, head fp32 (EN)"

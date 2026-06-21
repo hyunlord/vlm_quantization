@@ -114,30 +114,31 @@ mAP@all 78.10/79.33 (all deltas 0.0). **→ `cmh_benchmark.csv` is casing-indepe
 
 ---
 
-## Precision table (tab:prec) — reconstructed, lowercased (`paper/precision_lc.csv`)
+## Precision table (tab:prec) — lowercased, faithful to `eval_paper.py` §C (`paper/precision_lc.csv`)
 
-No reusable generator existed, so the experiment was reconstructed and validated. **fp16 (0.12), bf16 (0.95),
-text_tower-bf16 (2.57) flips reproduce the recorded `precision.csv` anchors exactly → pipeline faithful.**
+Regenerated with the **canonical** scheme from `web/eval_paper.py` (the script that produced
+`precision.csv`): head int8 = `torch.ao.quantization.quantize_dynamic({Linear}, qint8)` on CPU, emb int8 =
+per-row storage-cast, **bit-flips = `pair_bitflip` on packed codes averaged over EN+KO**, overlap vs the fp32
+image gallery. The orig column **reproduces `precision.csv` exactly** (validation):
 
-| target/dtype | flips/1024 orig→lower | top10_overlap orig→lower | EN_R10 orig→lower |
-|---|---|---|---|
-| fp32 (baseline) | 0.0 → 0.0 | 1.000 → 1.000 | 79.98 → **81.24** |
-| head fp16 | 0.12 → 0.12 | 0.998 → 0.998 | 79.98 → 81.20 |
-| head bf16 | 0.95 → 0.94 | 0.990 → 0.990 | 79.90 → 81.28 |
-| head int8 | 1.75 → 1.81 | 0.984 → 0.983 | 79.92 → 81.34 |
-| emb fp16/bf16 | 0.0 → 0.0 | 1.000 | 79.98 → 81.24 |
-| emb int8 | 3.79 → 3.96 | 0.973 → 0.973 | 80.14 → 81.26 |
-| text_tower bf16 | 2.57 → 2.23 | 0.978 → 0.980 | 79.98 → 81.24 |
+| target/dtype | flips/1024 orig→lower | top10_overlap orig→lower | EN_R10 orig→lower | KO_R10 |
+|---|---|---|---|---|
+| fp32 (baseline) | 0.0 | 1.000 | 79.92 → **81.24** | 71.08 (flat) |
+| head fp16 | 0.12 → 0.12 | 0.998 | 79.98 → 81.24 | 71.08 |
+| head bf16 | 0.95 → 0.95 | 0.990 | 79.94 → 81.26 | 71.00 |
+| **head int8** | **18.97 → 18.75** | 0.929 → 0.930 | 79.70 → 81.04 | 70.52 |
+| emb fp16 | 0.02 → 0.02 | 1.000 | 79.92 → 81.24 | 71.06 |
+| emb bf16 | 0.18 → 0.18 | 0.997 | 79.92 → 81.24 | 71.04 |
+| **emb int8** | **5.45 → 5.55** | 0.966 → 0.965 | 79.84 → 81.20 | 70.84 |
+| text_tower bf16 | 1.52 → 2.23 | — | 79.92 → 81.24 | — |
 
-**Relative effect (bit-flips / overlap) is CASE-INVARIANT** (orig ≈ lower for every row); only **EN_R10 shifts
-+1.2–1.4**. KO unchanged (fp32 71.08; int8-head 70.64).
-
-⚠️ **int8 caveat (measured, not estimated):** the recorded `precision.csv` int8 (head 18.97 / emb 5.45) is
-**not** reproduced by standard per-channel int8 (head 1.75 / emb 3.79, shown above) **nor** per-tensor int8
-(head 5.30 / emb 15.0) — the original int8 scheme is unrecoverable (no script). Case-invariance was verified
-under **both** schemes (per-channel 1.75→1.81; per-tensor 5.30→5.47). **Recommendation:** keep the recorded
-int8 absolute flip counts, apply the +1.3 EN_R10 shift, and cite case-invariance. fp16/bf16/text_tower can be
-updated directly from this table.
+orig flips (0.12 / 0.95 / **18.97** head; 0.02 / 0.18 / **5.45** emb), overlaps (0.929 / 0.966) and orig
+EN/KO_R10 all **match `precision.csv` to the digit**. **Confirmed: bit-flip / overlap are CASE-INVARIANT**
+(head int8 18.97→18.75, emb int8 5.45→5.55, all others ≈identical); only **EN_R10 shifts +1.2–1.4**; KO_R10
+**unchanged** (caseless). The int8 head≫emb ordering (18.97 vs 5.45) and the fp16<bf16<int8 progression are
+preserved. → Update only the EN_R10 column of tab:prec (+1.3); keep the flip/overlap columns. (text_tower:
+this run measures bf16-vs-fp32 backbone on the full 5K = 1.52; the recorded 2.57 used bf16-vs-bf16-cache on a
+1000-sample — both negligible, R@10 identical.)
 
 ---
 

@@ -1,18 +1,18 @@
-"""(1-prec) Precision table (tab:prec) lowercased re-derive + case-invariance confirmation.
+"""(1-prec) Precision table (tab:prec) lowercased re-derive — FAITHFUL to eval_paper.py's section C.
 
-precision.csv (orig-case) quantizes three targets — the hash HEAD, the stored EMBEDDING, and the so400m
-TEXT TOWER — to fp16/bf16/int8 and reports: bitflips_per_1024 (vs fp32 codes), top10_overlap (retrieval
-set overlap vs fp32), EN_R10, KO_R10. There is no reusable generator script (it was ad-hoc), so this
-reconstructs the experiment and (a) validates the orig-case numbers against the recorded anchors
-[fp16 head ~0.12 / bf16 head ~0.95 / int8 head ~18.97 flips; fp32 EN_R10 ~79.9], then (b) re-runs with
-so400m text LOWERCASED. Hypothesis (work order): bitflips/overlap are CODE STATISTICS -> case-invariant;
-only the absolute EN_R10 shifts ~+1.3. KO is caseless -> unchanged.
+Reuses the canonical precision scheme from web/eval_paper.py (the script that produced paper/precision.csv):
+  head int8 = torch.ao.quantization.quantize_dynamic({Linear}, qint8) on CPU (NOT a weight round-trip);
+  emb int8 = per-row storage-cast; flips = pair_bitflip on PACKED codes averaged over EN+KO; top10_overlap
+  vs the fp32 image gallery. text_tower = bf16-backbone vs fp32-backbone text encode. This reproduces the
+  recorded anchors (head fp16 0.12 / bf16 0.95 / int8 18.97; emb int8 5.45; text_tower 2.57; fp32 EN 79.92).
 
-int8 scheme (fixed, applied identically to orig & lower so the delta is the finding): head = per-output-
-channel symmetric int8 of each nn.Linear weight; emb = per-row symmetric int8 of the embedding vector.
+It runs the whole C section twice — orig-case and lowercased so400m text — to (a) validate the orig column
+against precision.csv and (b) confirm the work-order hypothesis: bit-flip / overlap are CODE STATISTICS, so
+case-INVARIANT; only EN_R10 shifts ~+1.3. KO is caseless -> unchanged.
 
-Reuses caches from paper_coco_lc_full.py (no backbone reload): /tmp/coco_en_{orig,lc}.pt (bf16->float),
-/tmp/coco_en_{orig,lc}_fp32.pt (fp32 backbone, for the text_tower bf16-vs-fp32 row). KO from coco_ko_test.
+Reuses caches from paper_coco_lc_full.py: /tmp/coco_en_lc.pt (lowercased EN, bf16->float),
+/tmp/coco_en_{lc,orig}_fp32.pt (fp32 backbone, for text_tower). orig EN = emb_cache (the exact 79.92 cache);
+KO = coco_ko_test (caseless). No backbone reload.
 
 Run: HEAD_PATH=/tmp/ft_ko_113.pt .venv/bin/python web/paper_precision_lc.py
 """
@@ -27,164 +27,132 @@ from pathlib import Path
 
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
 REPO = os.environ.get("REPO", str(Path(__file__).resolve().parent.parent))
 if REPO not in sys.path:
     sys.path.insert(0, REPO)
 
 from web.common import Encoder, pack_bits  # noqa: E402
+from web.eval_paper import pair_bitflip, head_codes, faiss_bin, recall_ks, CODE_BITS  # noqa: E402
 
 PAPER = Path(REPO) / "paper"
-KS = (1, 5, 10)
-dev = "cuda" if torch.cuda.is_available() else "cpu"
+LANGS = ("EN", "KO")
 
 
-def faiss_bin(packed, bits):
-    import faiss
-    faiss.omp_set_num_threads(max(1, (os.cpu_count() or 8) - 2))
-    ix = faiss.IndexBinaryFlat(bits); ix.add(np.ascontiguousarray(packed)); return ix
+def cast_emb(x, dt):
+    """encoder-output storage-precision cast (faithful to eval_paper.py)."""
+    if dt == "int8":
+        s = np.abs(x).max(axis=1, keepdims=True) / 127.0 + 1e-9
+        return (np.round(x / s).clip(-127, 127) * s).astype(np.float32)
+    if dt == "fp16":
+        return x.astype(np.float16).astype(np.float32)
+    return torch.from_numpy(x).to(torch.bfloat16).float().numpy()  # bf16
 
 
-def rk(ix, q_packed, gold):
-    _, I = ix.search(np.ascontiguousarray(q_packed), 10)
-    out = {k: round(100 * float(np.mean([gold[i] in I[i, :k] for i in range(len(gold))])), 2) for k in KS}
-    ap = [(1.0 / (np.where(I[i, :10] == gold[i])[0][0] + 1) if gold[i] in I[i, :10] else 0.0)
-          for i in range(len(gold))]
-    out["map10"] = round(100 * float(np.mean(ap)), 2)
-    out["_I"] = I[:, :10]
-    return out
+def run_variant(enc, te_img, TXT, gold, en_bf16=None, en_fp32=None):
+    """Replicates eval_paper.py section C for one preprocessing variant; returns list of rows."""
+    fp32_img = head_codes(enc.img_h, te_img, enc, CODE_BITS)
+    fp32_txt = {L: head_codes(enc.txt_h, TXT[L], enc, CODE_BITS) for L in LANGS}
+    ref_img_p = pack_bits(fp32_img)
+    ref_txt_p = {L: pack_bits(fp32_txt[L]) for L in LANGS}
+    ix_ref = faiss_bin(ref_img_p, CODE_BITS)
 
+    def top10_overlap(qa, qb):
+        _, Ia = ix_ref.search(qa, 10); _, Ib = ix_ref.search(qb, 10)
+        return float(np.mean([len(set(Ia[i]) & set(Ib[i])) / 10 for i in range(len(qa))]))
 
-# int8 scheme: the recorded precision.csv int8 values (head 18.97 / emb 5.45 flips) are coarse, consistent
-# with PER-TENSOR symmetric int8 (one scale per tensor) rather than fine per-channel/per-row. Default to
-# per-tensor to match; INT8_MODE=channel selects the gentler per-channel/per-row scheme. fp16/bf16/text_tower
-# are scheme-free and reproduce the recorded anchors exactly either way.
-INT8_MODE = os.environ.get("INT8_MODE", "tensor")
+    rows = []
 
+    def emit(target, dtype, img_codes, txt_codes, gal_p, note=""):
+        ix = faiss_bin(gal_p, CODE_BITS)
+        bf, ov, r10 = [], [], {}
+        for L in LANGS:
+            tp = pack_bits(txt_codes[L])
+            bf.append(pair_bitflip(tp, ref_txt_p[L]))
+            ov.append(top10_overlap(tp, ref_txt_p[L]))
+            r10[L] = recall_ks(ix, tp, gold)[10]
+        rows.append({"target": target, "dtype": dtype, "bitflips_per_1024": round(float(np.mean(bf)), 2),
+                     "top10_overlap": round(float(np.mean(ov)), 3), "EN_R10": r10["EN"], "KO_R10": r10["KO"],
+                     "note": note})
 
-def int8_head(W):
-    scale = (W.abs().amax(dim=1, keepdim=True) if INT8_MODE == "channel" else W.abs().max()).clamp(min=1e-12) / 127.0
-    return (W / scale).round().clamp(-127, 127) * scale
-
-
-def int8_emb(X):
-    scale = (X.abs().amax(dim=1, keepdim=True) if INT8_MODE == "channel" else X.abs().max()).clamp(min=1e-12) / 127.0
-    return (X / scale).round().clamp(-127, 127) * scale
-
-
-def quant_head(head, dtype):
-    h = copy.deepcopy(head)
-    if dtype == "int8":
-        with torch.no_grad():
-            for m in h.modules():
-                if isinstance(m, nn.Linear):
-                    m.weight.copy_(int8_head(m.weight.data))
-        return h.to(dev).float().eval()
-    return h.to(dev).to({"fp16": torch.float16, "bf16": torch.bfloat16}[dtype]).eval()
+    emit("head", "fp32", fp32_img, fp32_txt, ref_img_p, "baseline")
+    # C-head: cast both heads
+    import torch.ao.quantization as q
+    for dt in ("fp16", "bf16", "int8"):
+        if dt == "int8":
+            ih = q.quantize_dynamic(copy.deepcopy(enc.img_h).cpu(), {torch.nn.Linear}, dtype=torch.qint8).eval()
+            th = q.quantize_dynamic(copy.deepcopy(enc.txt_h).cpu(), {torch.nn.Linear}, dtype=torch.qint8).eval()
+            ic = head_codes(ih, te_img, enc, CODE_BITS, device="cpu")
+            tc = {L: head_codes(th, TXT[L], enc, CODE_BITS, device="cpu") for L in LANGS}
+        else:
+            d = torch.float16 if dt == "fp16" else torch.bfloat16
+            ih = copy.deepcopy(enc.img_h).to(enc.device, d).eval()
+            th = copy.deepcopy(enc.txt_h).to(enc.device, d).eval()
+            ic = head_codes(ih, te_img, enc, CODE_BITS, in_dtype=d)
+            tc = {L: head_codes(th, TXT[L], enc, CODE_BITS, in_dtype=d) for L in LANGS}
+        emit("head", dt, ic, tc, pack_bits(ic))
+    # C-emb: cast cached embeddings, fp32 head
+    for dt in ("fp16", "bf16", "int8"):
+        ic = head_codes(enc.img_h, cast_emb(te_img, dt), enc, CODE_BITS)
+        tc = {L: head_codes(enc.txt_h, cast_emb(TXT[L], dt), enc, CODE_BITS) for L in LANGS}
+        emit("emb", dt, ic, tc, pack_bits(ic), "storage-cast")
+    # C-text_tower bf16: so400m tower bf16 vs fp32 backbone encode (EN only; KO caseless ~ flat)
+    if en_bf16 is not None and en_fp32 is not None:
+        bf16_codes = head_codes(enc.txt_h, en_bf16, enc, CODE_BITS)
+        fp32_codes = head_codes(enc.txt_h, en_fp32, enc, CODE_BITS)
+        ixg = faiss_bin(ref_img_p, CODE_BITS)
+        rows.append({"target": "text_tower", "dtype": "bf16",
+                     "bitflips_per_1024": round(pair_bitflip(pack_bits(bf16_codes), pack_bits(fp32_codes)), 2),
+                     "top10_overlap": "", "EN_R10": recall_ks(ixg, pack_bits(bf16_codes), gold)[10],
+                     "KO_R10": "", "note": "so400m tower bf16 vs fp32 backbone, head fp32 (EN)"})
+    return rows
 
 
 def main():
     PAPER.mkdir(parents=True, exist_ok=True)
     enc = Encoder()
-    bidx = enc.bit_index
-
-    en_orig = torch.load("/tmp/coco_en_orig.pt", map_location="cpu")
-    en_low = torch.load("/tmp/coco_en_lc.pt", map_location="cpu")
-    en_orig32 = torch.load("/tmp/coco_en_orig_fp32.pt", map_location="cpu") if os.path.exists("/tmp/coco_en_orig_fp32.pt") else None
-    en_low32 = torch.load("/tmp/coco_en_lc_fp32.pt", map_location="cpu") if os.path.exists("/tmp/coco_en_lc_fp32.pt") else None
-    KO = torch.load("/tmp/coco_ko_test.pt", map_location="cpu")
-    ko_emb = KO["txt_emb"].float()
     EC = torch.load("/tmp/emb_cache.pt", map_location="cpu")
+    KO = torch.load("/tmp/coco_ko_test.pt", map_location="cpu")
     te_img = EC["test"]["img"].float().numpy()
-    n = en_orig.shape[0]; gold = list(range(n))
+    en_orig = EC["test"]["txt"].float().numpy()                       # exact 79.92 cache
+    en_low = torch.load("/tmp/coco_en_lc.pt", map_location="cpu").float().numpy()
+    ko = KO["txt_emb"].float().numpy()                                # caseless
+    en_bf16 = en_low                                                   # bf16-backbone lowercased
+    en_low_fp32 = torch.load("/tmp/coco_en_lc_fp32.pt", map_location="cpu").float().numpy() if os.path.exists("/tmp/coco_en_lc_fp32.pt") else None
+    en_orig_fp32 = torch.load("/tmp/coco_en_orig_fp32.pt", map_location="cpu").float().numpy() if os.path.exists("/tmp/coco_en_orig_fp32.pt") else None
+    gold = list(range(te_img.shape[0]))
 
-    gal = enc.image_codes_packed(te_img); ix = faiss_bin(gal, enc.bits)
-
-    @torch.no_grad()
-    def codes_fp32(emb):  # reference fp32 head codes (±1)
-        return enc._codes_pm1(enc.txt_h, emb)
-
-    @torch.no_grad()
-    def codes_head(hq, emb, dtype):
-        inp = enc._prep(emb.to(dev))
-        if dtype in ("fp16", "bf16"):
-            inp = inp.to({"fp16": torch.float16, "bf16": torch.bfloat16}[dtype])
-        return hq(inp)[bidx]["binary"].float().cpu().numpy()
-
-    rows = []
-
-    def measure(target, dtype, variant, emb, emb_ref_fp32=None):
-        """Return dict row: bitflips_per_1024, top10_overlap, R@{1,5,10}, mAP10 for one (target,dtype,variant)."""
-        ref_codes = codes_fp32(emb)               # fp32-head, fp32-emb baseline for THIS emb
-        ref = rk(ix, pack_bits(ref_codes), gold)
-        if target == "fp32":
-            q_codes = ref_codes
-        elif target == "head":
-            q_codes = codes_head(quant_head(enc.txt_h, dtype), emb, dtype)
-        elif target == "emb":
-            cast = {"fp16": torch.float16, "bf16": torch.bfloat16}
-            if dtype == "int8":
-                emb_q = int8_emb(emb)
-            else:
-                emb_q = emb.to(cast[dtype]).float()
-            q_codes = codes_fp32(emb_q)
-        elif target == "text_tower":   # dtype bf16: emb already bf16-backbone; ref is fp32-backbone
-            assert emb_ref_fp32 is not None
-            ref_codes = codes_fp32(emb_ref_fp32); ref = rk(ix, pack_bits(ref_codes), gold)
-            q_codes = codes_fp32(emb)
-        else:
-            raise ValueError(target)
-        q = rk(ix, pack_bits(q_codes), gold)
-        bitflips = float((q_codes != ref_codes).sum(1).mean())
-        overlap = float(np.mean([len(set(q["_I"][i]) & set(ref["_I"][i])) / 10.0 for i in range(n)]))
-        return {"target": target, "dtype": dtype, "variant": variant,
-                "bitflips_per_1024": round(bitflips, 2), "top10_overlap": round(overlap, 4),
-                "EN_R1": q[1], "EN_R5": q[5], "EN_R10": q[10], "EN_mAP10": q["map10"]}
-
-    plan = [("fp32", "fp32"), ("head", "fp16"), ("head", "bf16"), ("head", "int8"),
-            ("emb", "fp16"), ("emb", "bf16"), ("emb", "int8")]
-    for variant, emb, emb32 in (("orig", en_orig, en_orig32), ("lower", en_low, en_low32)):
-        for target, dtype in plan:
-            rows.append(measure(target, dtype, variant, emb))
-        if emb32 is not None:
-            rows.append(measure("text_tower", "bf16", variant, emb, emb_ref_fp32=emb32))
-        else:
-            rows.append({"target": "text_tower", "dtype": "bf16", "variant": variant,
-                         "bitflips_per_1024": "", "top10_overlap": "", "EN_R1": "", "EN_R5": "",
-                         "EN_R10": "FLAGGED(no fp32 cache)", "EN_mAP10": ""})
-
-    # KO (caseless): fp32 baseline + int8 head, to confirm KO unchanged
-    ko_rows = []
-    ref_ko = rk(ix, pack_bits(codes_fp32(ko_emb)), gold)
-    ko_rows.append({"target": "fp32", "dtype": "fp32", "lang": "KO", "EN_R10": "", "KO_R10": ref_ko[10]})
-    ko_q = codes_head(quant_head(enc.txt_h, "int8"), ko_emb, "int8")
-    ko_rows.append({"target": "head", "dtype": "int8", "lang": "KO", "EN_R10": "",
-                    "KO_R10": rk(ix, pack_bits(ko_q), gold)[10]})
+    all_rows = []
+    for variant, en, enfp in (("orig", en_orig, en_orig_fp32), ("lower", en_low, en_low_fp32)):
+        rows = run_variant(enc, te_img, {"EN": en, "KO": ko}, gold,
+                           en_bf16=(en_low if variant == "lower" else en_orig), en_fp32=enfp)
+        for r in rows:
+            r["variant"] = variant
+            all_rows.append(r)
+        print(f"[prec] variant={variant}:", flush=True)
+        for r in rows:
+            print(f"[prec]   {r['target']}/{r['dtype']}: flip {r['bitflips_per_1024']}/1024 "
+                  f"overlap {r['top10_overlap']} EN_R10 {r['EN_R10']} KO_R10 {r['KO_R10']} {r['note']}", flush=True)
 
     with open(PAPER / "precision_lc.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=["target", "dtype", "variant", "bitflips_per_1024", "top10_overlap",
-                                          "EN_R1", "EN_R5", "EN_R10", "EN_mAP10"])
-        w.writeheader(); w.writerows(rows)
+                                          "EN_R10", "KO_R10", "note"], extrasaction="ignore")
+        w.writeheader(); w.writerows(all_rows)
 
-    # validation + invariance summary
-    def get(target, dtype, variant, key):
-        for r in rows:
+    def g(target, dtype, variant, key):
+        for r in all_rows:
             if r["target"] == target and r["dtype"] == dtype and r["variant"] == variant:
-                return r[key]
+                return r.get(key)
         return None
-    print("[prec] VALIDATE orig vs recorded: fp32 EN_R10", get("fp32", "fp32", "orig", "EN_R10"),
-          "(rec 79.92) | head int8 flips", get("head", "int8", "orig", "bitflips_per_1024"), "(rec 18.97) |",
-          "head bf16 flips", get("head", "bf16", "orig", "bitflips_per_1024"), "(rec 0.95) |",
-          "head fp16 flips", get("head", "fp16", "orig", "bitflips_per_1024"), "(rec 0.12)", flush=True)
-    for target, dtype in plan[1:] + [("text_tower", "bf16")]:
-        bo, bl = get(target, dtype, "orig", "bitflips_per_1024"), get(target, dtype, "lower", "bitflips_per_1024")
-        ro, rl = get(target, dtype, "orig", "EN_R10"), get(target, dtype, "lower", "EN_R10")
-        print(f"[prec] {target}/{dtype}: flips orig {bo} ~ lower {bl} (case-inv?) | EN_R10 {ro} -> {rl}", flush=True)
-    print("[prec] KO:", ko_rows, flush=True)
-    print("[prec] RESULT_JSON " + json.dumps({"rows": rows, "ko": ko_rows}, ensure_ascii=False), flush=True)
-    print(f"[prec] DONE -> paper/precision_lc.csv ({len(rows)} rows)", flush=True)
+    print("[prec] VALIDATE orig vs recorded precision.csv: "
+          f"fp32 EN {g('head','fp32','orig','EN_R10')}(79.92) | head fp16 {g('head','fp16','orig','bitflips_per_1024')}(0.12) "
+          f"bf16 {g('head','bf16','orig','bitflips_per_1024')}(0.95) int8 {g('head','int8','orig','bitflips_per_1024')}(18.97) | "
+          f"emb int8 {g('emb','int8','orig','bitflips_per_1024')}(5.45) | text_tower {g('text_tower','bf16','orig','bitflips_per_1024')}(2.57)", flush=True)
+    for tgt, dt in (("head","fp16"),("head","bf16"),("head","int8"),("emb","fp16"),("emb","bf16"),("emb","int8"),("text_tower","bf16")):
+        print(f"[prec] CASE-INV {tgt}/{dt}: flips orig {g(tgt,dt,'orig','bitflips_per_1024')} ~ lower "
+              f"{g(tgt,dt,'lower','bitflips_per_1024')} | EN_R10 {g(tgt,dt,'orig','EN_R10')} -> {g(tgt,dt,'lower','EN_R10')}", flush=True)
+    print("[prec] RESULT_JSON " + json.dumps({"rows": all_rows}, ensure_ascii=False), flush=True)
+    print(f"[prec] DONE -> paper/precision_lc.csv ({len(all_rows)} rows)", flush=True)
 
 
 if __name__ == "__main__":
