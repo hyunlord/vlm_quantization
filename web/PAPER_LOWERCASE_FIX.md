@@ -1,7 +1,7 @@
 # PAPER_LOWERCASE_FIX — so400m text lowercasing correction (handoff)
 
 Branch `paper-lowercase-fix` (from `paper-nllb-bits-exp` 8fbf16e). **Correction batch.** Commit SHA:
-**`<FILL_ON_COMMIT>`**.
+**`86a2104884ca05f8e929851011ed49ee2ef4dce2`** (SHA-record line in the follow-up commit).
 
 ## The bug (verified, not assumed)
 The SigLIP2-So400m **text tower expects lowercased input** — transformers' `SiglipTokenizer` has
