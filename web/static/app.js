@@ -26,6 +26,13 @@ const State = {
   mode: "server", offline: null, offlineLoading: null,
 };
 
+// ---- perf instrumentation: active ONLY with ?perf=1 (perf.js is dynamic-imported below, so
+// normal UX never loads it). It only reads performance.now() timings + renders a separate
+// overlay; search results / encoding are byte-identical with or without it. ----
+const PERF_ON = new URLSearchParams(location.search).get("perf") === "1";
+let PERF = null;
+let _coldIndexMs = null;
+
 const $ = (id) => document.getElementById(id);
 const setStatus = (html) => { $("status").innerHTML = html; };
 
@@ -79,7 +86,7 @@ async function encodeServer(text) {
   const raw = atob(j.code);
   const q = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) q[i] = raw.charCodeAt(i);
-  return { q, encodeMs: j.encode_ms };
+  return { q, encodeMs: j.encode_ms, encMs: j.encode_ms, headMs: null };  // server: encode-only (no client head)
 }
 
 /* ---- offline encoding (in-browser, no backend) ------------------------- */
@@ -89,11 +96,18 @@ function loadOfflineEncoder() {
   if (State.offlineLoading) return State.offlineLoading;
   State.offlineLoading = (async () => {
     setStatus("오프라인 인코더 로딩… (최초 1회, e5 모델 다운로드)");
+    const _c0 = performance.now();
     const [{ pipeline, env }, ort] = await Promise.all([import(CDN_TFJS), import(CDN_ORT)]);
     env.allowLocalModels = false;                 // fetch stock e5 from the HF hub (cached by SW)
     const extractor = await pipeline("feature-extraction", E5_MODEL, { dtype: E5_DTYPE });
-    const session = await ort.InferenceSession.create("/onnx/txt_h.onnx");
+    const session = await ort.InferenceSession.create("/onnx/txt_h.onnx");   // default EP = wasm (unchanged)
     State.offline = { extractor, ort, session };
+    if (PERF) {  // perf: record the ORT-Web EP actually used (default 'wasm'; no providers requested) + WASM caps
+      const w = (ort.env && ort.env.wasm) || {};
+      PERF.setEnv({ ep: "wasm", simd: w.simd, threads: w.numThreads, bits: State.bits, n: State.n });
+      PERF.setCold({ encoder_ms: +(performance.now() - _c0).toFixed(1),
+        sw_controlled: !!(navigator.serviceWorker && navigator.serviceWorker.controller) });
+    }
     setStatus(`<span class="ok">오프라인 인코더 준비 완료</span>`);
     return State.offline;
   })();
@@ -103,11 +117,14 @@ function loadOfflineEncoder() {
 async function encodeOffline(text) {
   const { extractor, ort, session } = await loadOfflineEncoder();
   const t0 = performance.now();
-  const emb = await extractor(text, { pooling: "mean", normalize: true });   // (1,384) L2
+  const emb = await extractor(text, { pooling: "mean", normalize: true });   // (1,384) L2 [encode: tokenize+e5]
+  const t1 = performance.now();                                              // perf boundary: encode|head
   const tensor = new ort.Tensor("float32", Float32Array.from(emb.data), [1, emb.dims[1]]);
-  const cont = (await session.run({ emb: tensor })).code.data;               // Float32Array(1024)
-  const q = packBits(cont);                                                  // 128 bytes, == pack_bits
-  return { q, encodeMs: +(performance.now() - t0).toFixed(1) };
+  const cont = (await session.run({ emb: tensor })).code.data;               // Float32Array(1024) [txt_h' fp32]
+  const q = packBits(cont);                                                  // 128 bytes, == pack_bits [head end]
+  const t2 = performance.now();
+  // encodeMs (combined) preserved for the existing stats display; encMs/headMs = the perf split.
+  return { q, encodeMs: +(t2 - t0).toFixed(1), encMs: +(t1 - t0).toFixed(1), headMs: +(t2 - t1).toFixed(1) };
 }
 
 /* ---- search ------------------------------------------------------------ */
@@ -117,11 +134,13 @@ async function search(text) {
   const offline = State.mode === "offline";
   setStatus(offline ? "오프라인 인코딩 중…" : "쿼리 인코딩 중(서버)…");
   try {
-    const { q, encodeMs } = offline ? await encodeOffline(text) : await encodeServer(text);
+    const { q, encodeMs, encMs, headMs } = offline ? await encodeOffline(text) : await encodeServer(text);
     if (q.length !== State.codeBytes) throw new Error(`code ${q.length}B != ${State.codeBytes}B`);
     const t0 = performance.now();
     const hits = hammingTopK(State.index, State.n, State.codeBytes, q, 30);
     const searchMs = performance.now() - t0;
+    if (PERF) PERF.record({ encode: encMs, head: headMs, search: +searchMs.toFixed(2),
+      total: +((encMs || 0) + (headMs || 0) + searchMs).toFixed(2), qlen: text.length, mode: State.mode });
     console.log(`[search:${State.mode}] encode ${encodeMs} ms, search ${searchMs.toFixed(1)} ms / ${State.n}`);
     $("stats").innerHTML =
       `<b>${offline ? "오프라인" : "서버"}</b> 인코딩 ${encodeMs} ms · 검색 <b>${searchMs.toFixed(1)} ms</b> · ` +
@@ -184,7 +203,21 @@ $("go").onclick = () => search($("q").value);
 $("q").addEventListener("keydown", (e) => { if (e.key === "Enter") search($("q").value); });
 initChips();
 initModeToggle();
-loadIndex().catch((e) => setStatus(`<span class="warn">로딩 실패: ${e.message}</span>`));
+
+// perf: dynamic-import the panel ONLY when ?perf=1 (normal UX never fetches perf.js)
+if (PERF_ON) {
+  import("./perf.js").then((m) => {
+    PERF = m.PERF; PERF.mount();
+    PERF.setEnv({ bits: State.bits, n: State.n });
+    if (_coldIndexMs != null) PERF.setCold({ index_ms: _coldIndexMs });   // flush if index already done
+  }).catch((e) => console.warn("perf panel load failed", e));
+}
+
+const _idx0 = performance.now();
+loadIndex().then(() => {
+  _coldIndexMs = +(performance.now() - _idx0).toFixed(1);                  // perf: cold index load (per-query separate)
+  if (PERF) { PERF.setCold({ index_ms: _coldIndexMs }); PERF.setEnv({ bits: State.bits, n: State.n }); }
+}).catch((e) => setStatus(`<span class="warn">로딩 실패: ${e.message}</span>`));
 
 // register the PWA service worker (offline support); harmless if unsupported
 if ("serviceWorker" in navigator) {
