@@ -1,7 +1,7 @@
 # PAPER_METACLIP_MASTER — final batch: residual lowercasing · MetaCLIP2 backbone · master table (handoff)
 
 Branch `paper-metaclip-master` (from `paper-lowercase-refresh` a3cc7b5). **Final experiments batch.** Commit
-SHA: **`__FILL__`**. Same fixed rule: SigLIP2-family text = `.lower()`+maxlen64; all other encoders (NLLB /
+SHA: **`719b535`** (deliverable). Same fixed rule: SigLIP2-family text = `.lower()`+maxlen64; all other encoders (NLLB /
 AltCLIP / MetaCLIP2 / offline E5·MiniLM) keep **native** preprocessing. KO + non-Latin caseless (measured
 invariant). Anchors hit: SigLIP2-base orig reproduces backbones.csv 78.12 exactly; so400m de 96.54 / avg36
 74.46 (german_sanity); MetaCLIP2 loads with `force_quick_gelu=True` (mandatory — see gotcha).
