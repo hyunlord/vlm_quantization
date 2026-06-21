@@ -2,6 +2,12 @@ method,dataset,bits,mAP_I2T,mAP_T2I,mAP_I2T_all,mAP_T2I_all,protocol,source
 "SigLIP2-feat + label head (ours, frozen backbone)",MIRFLICKR-25K,16,83.6,78.32,73.61,75.42,q2000/tr5000/db~18015/24lab,this work (measured)
 "SigLIP2-feat + label head (ours, frozen backbone)",MIRFLICKR-25K,32,88.83,85.38,77.81,78.25,q2000/tr5000/db~18015/24lab,this work (measured)
 "SigLIP2-feat + label head (ours, frozen backbone)",MIRFLICKR-25K,64,88.2,88.44,78.1,79.33,q2000/tr5000/db~18015/24lab,this work (measured)
+"SigLIP2-feat + label head (ours, frozen backbone)",MIRFLICKR-25K,128,87.13,88.53,78.34,80.67,q2000/tr5000/db~18015/24lab,this work (measured)
+"SigLIP2-feat + label head (ours, frozen backbone)",MIRFLICKR-25K,256,84.29,89.08,76.67,80.87,q2000/tr5000/db~18015/24lab,this work (measured)
+"SigLIP2-feat + label head (ours, frozen backbone)",MIRFLICKR-25K,512,81.8,90.9,75.58,82.07,q2000/tr5000/db~18015/24lab,this work (measured)
+"SigLIP2-feat + label head (ours, frozen backbone)",MIRFLICKR-25K,1024,82.07,84.04,77.24,76.9,q2000/tr5000/db~18015/24lab,this work (measured)
+"SigLIP2-feat + label head (ours, frozen backbone)",MIRFLICKR-25K,2048,80.19,83.74,76.27,77.96,q2000/tr5000/db~18015/24lab,this work (measured)
+"SigLIP2-feat + label head (ours, frozen backbone)",MIRFLICKR-25K,4096,79.77,83.26,71.15,77.13,q2000/tr5000/db~18015/24lab,this work (measured)
 UCMFH,MIRFLICKR-25K,16,91.8,92.1,,,mAP@50,"SpikeHash arXiv:2606.00740 Tab. (mAP@50, CLIP-feature methods)"
 UCMFH,MIRFLICKR-25K,32,95.0,94.8,,,mAP@50,"SpikeHash arXiv:2606.00740 Tab. (mAP@50, CLIP-feature methods)"
 UCMFH,MIRFLICKR-25K,64,96.0,96.0,,,mAP@50,"SpikeHash arXiv:2606.00740 Tab. (mAP@50, CLIP-feature methods)"
