@@ -4,7 +4,8 @@ Branch `paper-image-encoders-headadapt` (from `paper-encoders`). Image-side mirr
 head-adaptation (Ext①): freeze a vision encoder E, train a small head `img_h'_E` that maps E's image
 embeddings into the **frozen SigLIP2-So400m 1024-bit code space** (the anchor that built `index.bin`). This
 quantifies **on-device image indexing**: can a phone hash a NEW photo with a small/mobile encoder into the
-SAME code space as the shipped index? Anchors / index / text side UNCHANGED.
+SAME code space as the shipped index? Anchors / index / text side UNCHANGED. Curve-extension commit SHA:
+**`38963ca`** (10 encoders; original 5-core Tier-1 in `ac56101`).
 
 ## Method (mirror of headadapt_train.py)
 - Anchor = `ft113 img_h(SigLIP2 image emb)` (frozen — the exact head behind `index.bin`).
