@@ -11,14 +11,14 @@
 import { packBits } from "./search.js";
 
 const CDN_ORT = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.all.min.mjs";
-const HEAD_URL = "/onnx/img_h_mobileclip2-s2.onnx";
-const META_URL = "/onnx/vis_mobileclip2-s2.meta.json";
-// Vision ONNX variants. fp32 is the FAITHFUL path (matches the trained code; runs on WebGPU+wasm).
-// int8 is ~37MB but dynamic-quant drifts ~35% of the 1024 bits on this conv-heavy FastViT arch —
-// LATENCY-ONLY, not a faithful index (opt in with ?imgvis=int8). fp16 auto-convert hits a FastViT
-// Cast-node bug (omitted). Default = fp32 for correct on-device codes.
-const VIS_FP32 = "/onnx/vis_mobileclip2-s2.onnx";
-const VIS_INT8 = "/onnx/vis_mobileclip2-s2.int8.onnx";
+// Model registry (all fp32 — the ONLY browser-runnable dtype: ort-web WASM has no ConvInteger for
+// int8, and onnxconverter fp16 uses external-data ort-web can't load). DEFAULT = s0 (~46MB): 3×
+// lighter than s2 → fast mobile load + fits phone WASM memory. ?imgmodel=s2 → bigger/faithful 144MB.
+const MODELS = {
+  s0: { vis: "/onnx/vis_mobileclip2-s0.onnx", head: "/onnx/img_h_mobileclip2-s0.onnx", meta: "/onnx/vis_mobileclip2-s0.meta.json", mb: 46, label: "MobileCLIP2-S0" },
+  s2: { vis: "/onnx/vis_mobileclip2-s2.onnx", head: "/onnx/img_h_mobileclip2-s2.onnx", meta: "/onnx/vis_mobileclip2-s2.meta.json", mb: 144, label: "MobileCLIP2-S2" },
+};
+const MODEL = MODELS[new URLSearchParams(location.search).get("imgmodel")] || MODELS.s0;
 
 let _ort = null, _vis = null, _head = null, _meta = null, _ep = null;
 
@@ -39,30 +39,26 @@ async function load(PERF, setStatus) {
   const t0 = performance.now();
   setStatus("이미지 인코더 로딩… (vision + head ONNX, 최초 1회)");
   _ort = await import(CDN_ORT);
-  _meta = await (await fetch(META_URL)).json().catch(() => ({ input: 256, resize: 256, crop: 256, dim: 512 }));
+  _meta = await (await fetch(MODEL.meta)).json().catch(() => ({ input: 256, resize: 256, crop: 256, dim: 512 }));
   _ep = pickEP();
 
-  // fp32 is the ONLY variant that runs in ort-web: int8 fails (ConvInteger op unimplemented in the
-  // WASM EP) and fp16 export uses external-data. fp32 (144MB) verified end-to-end (mobile-emul gate).
-  // Opt into int8 only for experiments (?imgmodel=int8 — will error in ort-web).
   const providers = _ep === "webgpu" ? ["webgpu", "wasm"] : ["wasm"];
-  const visUrl = new URLSearchParams(location.search).get("imgmodel") === "int8" ? VIS_INT8 : VIS_FP32;
-  setStatus(`vision 모델 로딩중 (${visUrl === VIS_INT8 ? "37MB int8" : "144MB fp32"})… 최초 1회, 잠시만요`);
-  _vis = await _ort.InferenceSession.create(visUrl, { executionProviders: providers });
-  _head = await _ort.InferenceSession.create(HEAD_URL, { executionProviders: ["wasm"] });
+  setStatus(`vision 모델 로딩중 (${MODEL.label} fp32 ~${MODEL.mb}MB)… 최초 1회, 잠시만요`);
+  _vis = await _ort.InferenceSession.create(MODEL.vis, { executionProviders: providers });
+  _head = await _ort.InferenceSession.create(MODEL.head, { executionProviders: ["wasm"] });
 
   // warmup (WebGPU shader compile / wasm JIT) — not recorded as a real measurement
   const warm = new _ort.Tensor("float32", new Float32Array(3 * _meta.input * _meta.input), [1, 3, _meta.input, _meta.input]);
   const we = (await _vis.run({ px: warm }))[_vis.outputNames[0]];
   await _head.run({ emb: we });
 
-  const onnxMb = await fetch(visUrl).then((r) => +(r.headers.get("Content-Length") || 0) / 1e6).catch(() => null);
-  PERF.setImgEnv({ ep: _ep, model: "MobileCLIP2-S2", input: _meta.input, dim: _meta.dim,
-    onnx_mb: onnxMb ? Math.round(onnxMb) : null, vis_file: visUrl.split("/").pop(),
-    faithful: visUrl === VIS_FP32 });
+  const onnxMb = await fetch(MODEL.vis).then((r) => +(r.headers.get("Content-Length") || 0) / 1e6).catch(() => null);
+  PERF.setImgEnv({ ep: _ep, model: MODEL.label, input: _meta.input, dim: _meta.dim,
+    onnx_mb: onnxMb ? Math.round(onnxMb) : null, vis_file: MODEL.vis.split("/").pop(),
+    faithful: MODEL === MODELS.s2 });
   PERF.setImgCold({ load_ms: +(performance.now() - t0).toFixed(1),
     sw_controlled: !!(navigator.serviceWorker && navigator.serviceWorker.controller) });
-  setStatus(`<span style="color:#36d399">✓ 준비완료 · ${visUrl.split("/").pop().includes("int8") ? "int8" : "fp32"}/${_ep}</span> — "샘플 ×8"을 누르세요`);
+  setStatus(`<span style="color:#36d399">✓ 준비완료 · ${MODEL.label}/${_ep}</span> — "샘플 ×8"을 누르세요`);
 }
 
 /* ---- preprocessing: replicate open_clip Resize(shorter->R, bicubic) + CenterCrop(C) + /255 ---- */
@@ -191,7 +187,7 @@ export async function initImgPanel(PERF) {
     runImages((i) => loadImageURL(`${SAMPLE_DIR}/${i}.jpg`).catch(() => null), SAMPLE_N, "번들 샘플");
 
   // EAGER PRELOAD while online (measurement is ONLINE — no airplane needed; latency is identical and
-  // it avoids the SW-precache race). int8 (~37MB) loads fast; status + big readout show progress.
+  // it avoids the SW-precache race). s0 fp32 (~46MB) loads fast; status + big readout show progress.
   if (navigator.onLine) { status("온라인 — 모델 로딩 시작…"); ensure(); }
   else { big("📴 오프라인", "온라인으로 1회 열어 모델 로드 후 측정", "#f0a73b"); }
 }

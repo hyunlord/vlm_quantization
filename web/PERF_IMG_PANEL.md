@@ -37,6 +37,17 @@ Fixes (image panel only; text/search/index/anchors untouched):
 Headless re-verify (fixed): eager preload → "준비완료 EP wasm"; "샘플 ×8" → **n=8, median vis 388.8 /
 head 0.3 / total 389.1 ms (WASM)**, cold 1741 ms, no errors.
 
+## Round 3 — lighter model default (s0 46MB) for phone memory/load
+int8 cannot run in ort-web (no `ConvInteger`) and fp16 export is external-data, so the only lever for a
+smaller browser-runnable model is a **smaller encoder**. Default is now **MobileCLIP2-S0 fp32 (~46 MB,
+all-fp32 ops, runs in ort-web)** — 3× lighter than s2 (144 MB) for fast mobile load and to fit phone
+WASM memory. `?imgmodel=s2` selects the bigger/faithful 144 MB s2 (the paper's *recommended* on-device
+encoder; s0 R@10 70.5 vs s2 76.2 — latency is representative, accuracy differs). Each model has its own
+`vis_*`/`img_h_*`/`*.meta.json` (dim 512 for both). Export: `web/export_vis_onnx.py` (s2) and the s0
+export in PAPER_IMAGE_ENCODERS notes; both verified torch-vs-ort (s0 max|Δ|=2.5e-6).
+Mobile-emul gate (Pixel 7, CPU 4× + throttle), **s0 default**: sample ×8 → **"📸 8장 · vis 1459 · tot
+1461 ms · median 1496 / p90 1532 / n=8 · wasm"**, onnx 46 MB, 0 errors (DOM + screenshot).
+
 ## Round 2 — "nothing visible on phone" fix (mobile-emulation gated)
 The numbers were rendering only in the tiny 10px panel text (off-screen / unnoticed on a phone), and
 the 143 MB fp32 model loaded slowly with no visible progress. Fixes:
