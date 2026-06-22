@@ -42,10 +42,12 @@ async function load(PERF, setStatus) {
   _meta = await (await fetch(META_URL)).json().catch(() => ({ input: 256, resize: 256, crop: 256, dim: 512 }));
   _ep = pickEP();
 
-  const wantInt8 = new URLSearchParams(location.search).get("imgvis") === "int8";
-  let visUrl = (wantInt8 && (await head(VIS_INT8))) ? VIS_INT8 : VIS_FP32;
-  setStatus("vision 모델 다운로드·로딩중 (143MB fp32, WiFi 권장)…");
+  // fp32 is the ONLY variant that runs in ort-web: int8 fails (ConvInteger op unimplemented in the
+  // WASM EP) and fp16 export uses external-data. fp32 (144MB) verified end-to-end (mobile-emul gate).
+  // Opt into int8 only for experiments (?imgmodel=int8 — will error in ort-web).
   const providers = _ep === "webgpu" ? ["webgpu", "wasm"] : ["wasm"];
+  const visUrl = new URLSearchParams(location.search).get("imgmodel") === "int8" ? VIS_INT8 : VIS_FP32;
+  setStatus(`vision 모델 로딩중 (${visUrl === VIS_INT8 ? "37MB int8" : "144MB fp32"})… 최초 1회, 잠시만요`);
   _vis = await _ort.InferenceSession.create(visUrl, { executionProviders: providers });
   _head = await _ort.InferenceSession.create(HEAD_URL, { executionProviders: ["wasm"] });
 
@@ -60,7 +62,7 @@ async function load(PERF, setStatus) {
     faithful: visUrl === VIS_FP32 });
   PERF.setImgCold({ load_ms: +(performance.now() - t0).toFixed(1),
     sw_controlled: !!(navigator.serviceWorker && navigator.serviceWorker.controller) });
-  setStatus(`<span style="color:#36d399">✓ vision+head 준비완료 · EP ${_ep}</span> — 이제 비행기모드 OK`);
+  setStatus(`<span style="color:#36d399">✓ 준비완료 · ${visUrl.split("/").pop().includes("int8") ? "int8" : "fp32"}/${_ep}</span> — "샘플 ×8"을 누르세요`);
 }
 
 /* ---- preprocessing: replicate open_clip Resize(shorter->R, bicubic) + CenterCrop(C) + /255 ---- */
@@ -122,54 +124,74 @@ function loadImageURL(src) {       // same-origin → no crossOrigin needed, can
   });
 }
 
+function fmt(v) { return v == null ? "–" : Math.round(v); }
+
 export async function initImgPanel(PERF) {
   const box = PERF.imgContainer();
   if (!box) return;
+  // widen the panel so the big readout is legible on a phone
+  const panel = document.getElementById("perfPanel");
+  if (panel) { panel.style.width = "340px"; panel.style.maxWidth = "94vw";
+    panel.style.maxHeight = "90vh"; panel.style.overflowY = "auto"; }  // scrollable so buttons stay tappable on phones
+
   box.innerHTML =
     '<input id="pfImgFile" type="file" accept="image/*" multiple style="display:none">' +
+    // BIG live readout — impossible to miss
+    '<div id="pfImgBig" style="margin:2px 0 6px;padding:8px;border-radius:8px;background:#0b0d12;border:1px solid #2a3247;text-align:center">' +
+    '<div id="pfImgBigMain" style="font-size:17px;font-weight:800;color:#36d399;line-height:1.25">📸 이미지 인코딩</div>' +
+    '<div id="pfImgBigSub" style="font-size:11px;color:#8b94a7;margin-top:2px">모델 준비 중…</div>' +
+    "</div>" +
     '<div style="display:flex;gap:6px">' +
-    '<button id="pfImgPick" style="flex:1;font:inherit;padding:4px;border:1px solid #2a3247;border-radius:6px;background:#141821;color:#e7ebf3;cursor:pointer">+ 사진 인코딩</button>' +
-    '<button id="pfImgSample" style="flex:1;font:inherit;padding:4px;border:1px solid #2a3247;border-radius:6px;background:#141821;color:#e7ebf3;cursor:pointer">샘플 ×8</button>' +
+    '<button id="pfImgPick" style="flex:1;font:inherit;padding:7px;border:1px solid #2a3247;border-radius:6px;background:#141821;color:#e7ebf3;cursor:pointer">+ 사진</button>' +
+    '<button id="pfImgSample" style="flex:1;font:inherit;padding:7px;border:1px solid #5b9dff;border-radius:6px;background:#16233b;color:#cfe0ff;cursor:pointer;font-weight:700">샘플 ×8</button>' +
     "</div><div id='pfImgStatus' style='margin-top:4px;color:#8b94a7;font-size:10px'></div>";
   const status = (h) => { const s = box.querySelector("#pfImgStatus"); if (s) s.innerHTML = h; };
+  const big = (main, sub, color) => {
+    const m = box.querySelector("#pfImgBigMain"), s = box.querySelector("#pfImgBigSub");
+    if (m) { m.innerHTML = main; if (color) m.style.color = color; }
+    if (s && sub != null) s.innerHTML = sub;
+  };
+  const showStats = () => {
+    const im = PERF.snapshot().image, st = im.stats, last = im.records[im.records.length - 1];
+    if (!last) return;
+    big(`📸 ${im.n}장 · vis <b>${fmt(last.vis)}</b> · tot <b>${fmt(last.total)}</b> ms`,
+        `median tot <b>${fmt(st.total.median)}</b> · p90 <b>${fmt(st.total.p90)}</b> · n=${im.n} · ${im.env.ep || "?"}`,
+        "#36d399");
+  };
   const file = box.querySelector("#pfImgFile");
 
-  // ensure() loads vision+head once; failures are SURFACED in the status line (never silent n=0)
+  // ensure() loads vision+head once; failures are SURFACED on-screen (never a silent no-op)
   const ensure = async () => {
     if (_vis) return true;
-    try { await load(PERF, status); return true; }
-    catch (e) { status(`<span style="color:#f0a73b">❌ 로딩 실패: ${(e && e.message) || e}</span>`); return false; }
+    big("⏳ 모델 로딩 중…", "vision+head ONNX 다운로드/초기화", "#f0a73b");
+    try { await load(PERF, status); big("✅ 준비완료 — 샘플 ×8 누르세요", null, "#36d399"); return true; }
+    catch (e) { big("❌ 로딩 실패", (e && e.message) || String(e), "#f0a73b"); status(`로딩 실패: ${(e && e.message) || e}`); return false; }
   };
+
+  async function runImages(getImg, count, label) {
+    if (!(await ensure())) return;
+    let done = 0;
+    for (let i = 0; i < count; i++) {
+      big(`⏳ 인코딩 중… ${i + 1}/${count}`, label, "#f0a73b");
+      try { const img = await getImg(i); if (!img) continue; await encodeOne(img, PERF); done++; showStats(); }
+      catch (e) { status(`인코딩 오류: ${e.message || e}`); }
+    }
+    if (!done) big('⚠ 인코딩된 이미지 없음', '"+ 사진"으로 갤러리 사진을 선택하세요', "#f0a73b");
+    else { showStats(); status(`완료 · ${done}장`); }
+  }
 
   box.querySelector("#pfImgPick").onclick = async () => { if (await ensure()) file.click(); };
   file.onchange = async () => {
-    if (!(await ensure())) return;
     const files = [...file.files];
-    for (let i = 0; i < files.length; i++) {
-      status(`인코딩 ${i + 1}/${files.length}…`);
-      try { const img = await fileToImage(files[i]); await encodeOne(img, PERF); }
-      catch (e) { status(`오류: ${e.message || e}`); }
-    }
-    status(`완료 · ${files.length}장`);
+    await runImages((i) => fileToImage(files[i]), files.length, "갤러리 사진");
     file.value = "";
   };
+  // sample = bundled same-origin JPEGs (/samples/0..N-1.jpg); no CORS taint, no file-picker
+  box.querySelector("#pfImgSample").onclick = () =>
+    runImages((i) => loadImageURL(`${SAMPLE_DIR}/${i}.jpg`).catch(() => null), SAMPLE_N, "번들 샘플");
 
-  // sample = bundled same-origin JPEGs (/samples/0..N-1.jpg); no CORS taint, works offline once
-  // cached, no file-picker needed. Missing files are skipped gracefully.
-  box.querySelector("#pfImgSample").onclick = async () => {
-    if (!(await ensure())) return;
-    let done = 0;
-    for (let i = 0; i < SAMPLE_N; i++) {
-      status(`샘플 인코딩 ${i + 1}/${SAMPLE_N}…`);
-      try { const img = await loadImageURL(`${SAMPLE_DIR}/${i}.jpg`); await encodeOne(img, PERF); done++; }
-      catch (_) { /* sample file absent — skip */ }
-    }
-    status(done ? `샘플 완료 · ${done}장` : `<span style="color:#f0a73b">샘플 없음 — "+ 사진 인코딩"으로 갤러리 사진 사용</span>`);
-  };
-
-  // EAGER PRELOAD: fetch vision(143MB)+head ONNX + ort-web WHILE ONLINE so the SW caches them before
-  // airplane mode (the phone n=0 root cause was a click-only, offline-fetched model). Status shows
-  // when it's safe to go offline. Idempotent with the button handlers (load() early-returns).
-  if (navigator.onLine) { status("온라인 — vision 모델 캐싱 시작(143MB)…"); ensure(); }
-  else status('<span style="color:#f0a73b">오프라인 — 온라인 상태로 1회 열어 모델을 캐시한 뒤 측정하세요</span>');
+  // EAGER PRELOAD while online (measurement is ONLINE — no airplane needed; latency is identical and
+  // it avoids the SW-precache race). int8 (~37MB) loads fast; status + big readout show progress.
+  if (navigator.onLine) { status("온라인 — 모델 로딩 시작…"); ensure(); }
+  else { big("📴 오프라인", "온라인으로 1회 열어 모델 로드 후 측정", "#f0a73b"); }
 }
