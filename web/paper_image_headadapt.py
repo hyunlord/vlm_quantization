@@ -54,8 +54,13 @@ ENCODERS = {
     "mobileclip2-s2": {"type": "oc", "id": "MobileCLIP2-S2", "pretrained": "dfndr2b", "qgelu": False, "ondevice": "TJS/WebGPU"},
     "mobileclip2-s4": {"type": "oc", "id": "MobileCLIP2-S4", "pretrained": "dfndr2b", "qgelu": False, "ondevice": "export"},
     "eva02-b16":      {"type": "oc", "id": "EVA02-B-16", "pretrained": "merged2b_s8b_b131k", "ondevice": "export"},
-    "openvision-s16": {"type": "oc-hf", "id": "hf-hub:UCSC-VLAA/openvision-vit-small-patch16-224", "ondevice": "export"},
-    "tinyclip-8m":    {"type": "oc", "id": "TinyCLIP-ViT-8M-16-Text-3M", "pretrained": "YFCC15M", "ondevice": "export"},
+    # PE-Core-B-16 (Meta Perception Encoder) — non-mobile VL reference (EVA02 substitute; EVA02 is GB10-slow).
+    "pe-core-b16":     {"type": "oc", "id": "PE-Core-B-16", "pretrained": "meta", "ondevice": "export"},
+    # OpenVision (UCSC-VLAA, Apache-2.0) via open_clip hf-hub. Ti/16=5.6M extreme-small VL endpoint; S/16=21.8M.
+    "openvision-ti16": {"type": "oc-hf", "id": "hf-hub:UCSC-VLAA/openvision-vit-tiny-patch16-224", "ondevice": "export"},
+    "openvision-s16":  {"type": "oc-hf", "id": "hf-hub:UCSC-VLAA/openvision-vit-small-patch16-224", "ondevice": "export"},
+    # TinyCLIP-8M — wkcn repo is transformers CLIP format (NOT open_clip) -> CLIPModel.get_image_features.
+    "tinyclip-8m":    {"type": "tf-clip", "id": "wkcn/TinyCLIP-ViT-8M-16-Text-3M-YFCC15M", "ondevice": "export"},
 }
 
 
@@ -128,6 +133,27 @@ def load_encoder(spec):
                 with autocast():
                     o = m(pixel_values=px)
                 e = o.pooler_output if getattr(o, "pooler_output", None) is not None else o.last_hidden_state[:, 0]
+                out.append(e.float().cpu())
+            return torch.cat(out)
+        return enc, params, None, spec["id"]
+    elif t == "tf-clip":  # transformers-format CLIP (e.g. TinyCLIP wkcn) -> projected image features
+        from transformers import CLIPModel, CLIPImageProcessor
+        m = CLIPModel.from_pretrained(spec["id"]).to(dev).eval()
+        proc = CLIPImageProcessor.from_pretrained(spec["id"])
+        params = (sum(p.numel() for p in m.vision_model.parameters())
+                  + sum(p.numel() for p in m.visual_projection.parameters()))
+
+        @torch.no_grad()
+        def enc(paths, batch=128):
+            # get_image_features returns a ModelOutput on this old TinyCLIP ckpt (no .float()), so go
+            # via vision_model.pooler_output -> visual_projection (the standard CLIP image-feature path).
+            out = []
+            for s in range(0, len(paths), batch):
+                imgs = [Image.open(p).convert("RGB") for p in paths[s:s + batch]]
+                px = proc(images=imgs, return_tensors="pt")["pixel_values"].to(dev)
+                with autocast():
+                    pooled = m.vision_model(pixel_values=px).pooler_output
+                    e = m.visual_projection(pooled)
                 out.append(e.float().cpu())
             return torch.cat(out)
         return enc, params, None, spec["id"]

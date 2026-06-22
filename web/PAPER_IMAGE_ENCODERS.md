@@ -4,7 +4,7 @@ Branch `paper-image-encoders-headadapt` (from `paper-encoders`). Image-side mirr
 head-adaptation (Ext①): freeze a vision encoder E, train a small head `img_h'_E` that maps E's image
 embeddings into the **frozen SigLIP2-So400m 1024-bit code space** (the anchor that built `index.bin`). This
 quantifies **on-device image indexing**: can a phone hash a NEW photo with a small/mobile encoder into the
-SAME code space as the shipped index? Anchors / index / text side UNCHANGED. Commit SHA: **`ac56101`** (Tier-1 core deliverable; EVA02 row appended in a follow-up if it completes).
+SAME code space as the shipped index? Anchors / index / text side UNCHANGED.
 
 ## Method (mirror of headadapt_train.py)
 - Anchor = `ft113 img_h(SigLIP2 image emb)` (frozen — the exact head behind `index.bin`).
@@ -18,50 +18,61 @@ SAME code space as the shipped index? Anchors / index / text side UNCHANGED. Com
   (phone photos coexisting with the shipped index); **(c)** code fidelity = per-image Hamming(E,SigLIP2) +
   top-10 overlap. Ceiling = the shipped SigLIP2-So400m server (EN 81.24 / KO 71.08).
 
-## Results — `paper/image_encoders_headadapt.csv`
+## Results — `paper/image_encoders_headadapt.csv` (10 encoders, sorted by params)
 
-| encoder | params | dim | family | on-device | **server EN R@10** | KO R@10 | offline EN R@10 | mixed R@10 | code-overlap | Ham/1024 | enc img/s |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| **siglip2-base** | 92.9M | 768 | CLIP, VL+multiling | TJS | **77.98** (−3.3) | 66.84 | 70.18 | 77.78 | 0.649 | 177 | 85 |
-| **mobileclip2-s2** | 35.8M | 512 | mobile CLIP | TJS/WebGPU | **76.18** (−1.8) | 64.28 | 67.04 | 77.44 | 0.623 | 184 | 29 |
-| **mobileclip2-s0** | 11.4M | 512 | mobile CLIP | TJS/WebGPU | **70.52** | 59.32 | 61.78 | 74.68 | 0.565 | 36 | 36 |
-| dinov2-base | 86.6M | 768 | image-only SSL | TJS | 65.00 | 53.12 | 55.68 | 71.16 | 0.501 | 222 | 81 |
-| dinov2-small | 22.1M | 384 | image-only SSL | TJS | 61.38 | 49.78 | 52.70 | 69.90 | 0.475 | 231 | 93 |
+| encoder | params | dim | family | on-device | **server EN R@10** | KO R@10 | offline EN R@10 | mixed R@10 | overlap | Ham/1024 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **openvision-ti16** | 5.6M | 192 | CLIP VL | export | 61.20 | 50.66 | 51.44 | 68.28 | 0.460 | 234.8 |
+| **tinyclip-8m** | 8.3M | 512 | CLIP VL (distill) | export | 61.60 | 50.68 | 53.24 | 69.10 | 0.476 | 227.0 |
+| **mobileclip2-s0** | 11.4M | 512 | mobile CLIP | TJS/WebGPU | 70.52 | 59.32 | 61.78 | 74.68 | 0.565 | 202.3 |
+| **openvision-s16** | 21.8M | 384 | CLIP VL | export | 71.38 | 59.40 | 62.78 | 74.84 | 0.560 | 204.6 |
+| dinov2-small | 22.1M | 384 | image-only SSL | TJS | 61.38 | 49.78 | 52.70 | 69.90 | 0.475 | 230.9 |
+| **mobileclip2-s2** | 35.8M | 512 | mobile CLIP | TJS/WebGPU | **76.18** | 64.28 | 67.04 | 77.44 | 0.623 | 184.0 |
+| dinov2-base | 86.6M | 768 | image-only SSL | TJS | 65.00 | 53.12 | 55.68 | 71.16 | 0.501 | 222.1 |
+| siglip2-base | 92.9M | 768 | CLIP VL+multiling | TJS | 77.98 | 66.84 | 70.18 | 77.78 | 0.649 | 176.7 |
+| pe-core-b16 | 93.7M | 1024 | VL (Meta PE) | export | 76.14 | 64.30 | 67.90 | 76.72 | 0.626 | 183.4 |
+| mobileclip2-s4 | 321.8M | 768 | mobile CLIP | export | 77.62 | 66.72 | 69.86 | 77.30 | 0.658 | 172.5 |
 
-(ceiling SigLIP2-So400m server EN/KO = 81.24 / 71.08; int8 MB ≈ params; "deltas" vs the 81.24 ceiling.)
+(ceiling SigLIP2-So400m server EN/KO = 81.24 / 71.08; int8 MB ≈ params; deltas below are vs the 81.24 ceiling.)
 
 ## Findings (for the new §"On-device image indexing")
-1. **Vision-language alignment ≫ size.** mobileclip2-**s0 (11.4M, VL) 70.5 BEATS dinov2-base (86.6M,
-   image-only SSL) 65.0** — a 7.6× smaller VL-aligned encoder beats a large image-only one. The 1024-bit code
-   space is *language-aligned* (it was built to match text); CLIP/SigLIP-family encoders project into it
-   cleanly, image-only SSL (DINOv2) cannot, regardless of size. **This is the "which encoders work" answer.**
-2. **Same-family ≈ ceiling.** siglip2-base reproduces the shipped code space to **−3.3pt** (77.98 vs 81.24):
-   a phone can index new photos near-losslessly with the same family.
-3. **Best on-device = mobileclip2-s2** (76.18, **35.8M, WebGPU + plhery ONNX ready**) — within −1.8pt of the
-   far-larger siglip2-base at 2.6× fewer params; mobileclip2-s0 (70.5, **11.4M**) for extreme-small. (Strictly
-   highest-R@10 on-device is siglip2-base 77.98, but it is 2.6× larger and not WebGPU-optimized.)
-4. **Coexistence works.** Mixed gallery (half shipped SigLIP2 codes + half head-adapted E codes) stays strong
-   — siglip2-base 77.78, mobileclip2-s2 77.44, even dinov2-small 69.9 — so phone-added photos retrieve fine
-   alongside the shipped index.
-5. **Offline-query (e5 text) tracks server-query** (~−6pt), and **code fidelity is approximate** (overlap
-   0.47–0.65, Hamming 177–231/1024): img_h'_E does NOT byte-reproduce the SigLIP2 code, but the codes are
-   *retrieval-equivalent enough* (R@10 within a few pt for VL encoders). It's adaptation, not bit-copying.
+1. **Vision-language alignment ≫ size — the dominant axis.** mobileclip2-**s0 (11.4M, VL) 70.5 BEATS
+   dinov2-base (86.6M, image-only SSL) 65.0** (7.6× smaller, +5.5pt). At the extreme-small end, VL encoders
+   (openvision-ti16 5.6M=61.2, tinyclip-8m 8.3M=61.6) **match dinov2-small (22.1M SSL) 61.4 at 3–4× fewer
+   params**. The 1024-bit code space is *language-aligned*; CLIP/SigLIP-family encoders project into it,
+   image-only SSL cannot, regardless of size. **This is the "which encoders work" answer.**
+2. **Mobile-distilled VL is the most param-efficient.** MobileCLIP2 dominates per-param: s2 (35.8M) **76.2**
+   ≈ pe-core-b16 (93.7M, 76.1) and matches siglip2-base-class accuracy at a fraction of the cost.
+3. **Returns flatten past ~36M.** s2 (35.8M) 76.2 ≈ pe-core-b16 (93.7M) 76.1; mobileclip2-s4 (321.8M) 77.6 ≈
+   siglip2-base (92.9M) 78.0 — i.e. 9× more params buys ≤+1.5pt. The knee is ~36M → **mobileclip2-s2 is the
+   sweet spot**; the residual gap to the 81.24 ceiling is a family/scale limit, not a size limit.
+4. **Same-family ≈ ceiling.** siglip2-base reproduces the shipped code space to −3.3pt (77.98 vs 81.24): a
+   phone can index new photos near-losslessly with the same family.
+5. **Coexistence + approximate fidelity.** Mixed gallery (half shipped SigLIP2 + half head-adapted E) stays
+   strong for every encoder (68.3–77.8), so phone-added photos retrieve fine alongside the shipped index.
+   Code fidelity is *approximate* (overlap 0.46–0.66, Hamming 173–235/1024) and tracks VL-alignment — it's
+   retrieval-equivalent adaptation, not bit-copying. Offline-query (e5 text) tracks server-query (~−6–10pt).
 
-## On-device export + parity (the deployment artifact)
+## Best on-device → export + parity (the deployment artifact)
+**Recommended on-device deploy = mobileclip2-s2** (76.18, **35.8M, WebGPU**; sweet-spot per finding 3).
 Like the text side (transformers.js e5 q8 + custom `txt_h.onnx`), only the tiny custom head needs exporting;
-the vision tower runs via transformers.js/ONNX (TJS/WebGPU q8 — turnkey for siglip/dinov2/mobileclip2).
-Exported `img_h'_E` fp32 ONNX (`web/export_imgh_onnx.py`), Python↔ONNX **parity verified**:
-- `web/static/onnx/img_h_mobileclip2-s2.onnx` (2.3 MB) — onnxruntime vs torch max|Δ|=1.0e-7, **pack Hamming=0** ✓
-- `web/static/onnx/img_h_siglip2-base.onnx` (2.7 MB) — max|Δ|=1.3e-7, **pack Hamming=0** ✓
-(ONNX live on DGX `web/static/onnx/`, gitignored like `txt_h.onnx`; regenerate via `export_imgh_onnx.py --enc`.)
-**Recommended on-device deploy: mobileclip2-s2** (vision via plhery/mobileclip2-onnx WebGPU + img_h_mobileclip2-s2.onnx).
-Phone-encode latency = a follow-up (add image-encode timing to the perf panel).
+the vision tower runs via ONNX (WebGPU/WASM). Exported & parity-verified:
+- `img_h'` fp32 ONNX (`web/export_imgh_onnx.py`): `img_h_mobileclip2-s2.onnx` (2.3 MB), pack Hamming=0, max|Δ|~1e-7.
+- **Vision tower** MobileCLIP2-S2 → ONNX (`web/export_vis_onnx.py`, exported myself — plhery/mobileclip2-onnx
+  turned out to be a mis-committed venv, unusable): `vis_mobileclip2-s2.onnx` (**fp32 143.7 MB, the faithful
+  path**; input 256², mean=0/std=1, dim 512). torch-vs-ORT max|Δ|=2.4e-4, full chain Hamming=1/4096; **JS
+  (ort-node, same core as ort-web wasm) vs python chain Hamming=0/2048 — byte-identical**. int8 dynamic quant
+  drifts ~35% of bits on this conv-heavy FastViT arch (latency-only); fp16 auto-convert hits a Cast-node bug.
+  (ONNX live on DGX `web/static/onnx/`, gitignored like `txt_h.onnx`.)
+Phone image-encode latency is measured by the Task-B perf panel (branch `web-perf-panel`, `?perf=1&img=1`).
 
-## Honest scope notes
-- **Tier-1 core delivered** (5 encoders spanning 11–93M, VL vs image-only). EVA02-B16 (Tier-2 VL ref) is
-  running/appended. **OpenVision & TinyCLIP are NOT in this open_clip build's registry** (OpenVision needs a
-  custom hf-hub config; TinyCLIP model name unregistered) → skipped; the 5-encoder core already spans the same
-  size×family axes, so the curve is complete without them.
-- Negative results (image-only SSL −15–20pt) are the contribution: they map the boundary of which encoders can
-  index on-device. This demonstrates **on-device indexing feasibility**, not just compression.
+## Honest scope notes (loaders / gotchas)
+- **All 10 candidates loaded** — the earlier "loading failed" set is resolved: **OpenVision** Ti/16 (5.6M) &
+  S/16 (21.8M) load via open_clip `hf-hub:UCSC-VLAA/...`; **TinyCLIP-8M** loads via **transformers
+  `CLIPModel`** (the wkcn repo is HF-CLIP format, NOT open_clip) using `vision_model.pooler_output →
+  visual_projection` (its `get_image_features` returns a ModelOutput, not a tensor — the `.float()` bug);
+  **PE-Core-B-16** via open_clip `meta` (EVA02 substitute — EVA02 is GB10-slow); **MobileCLIP2-S4** (321.8M)
+  finished within a 35-min timebox.
+- Negative results (image-only SSL −15–20pt) are the contribution: they map the boundary of which encoders
+  can index on-device. Demonstrates **on-device indexing feasibility**, not just compression.
 - TRAIN_N=30000 subset (head-adapt converges on a subset, as in the NLLB/MetaCLIP2 experiments).
