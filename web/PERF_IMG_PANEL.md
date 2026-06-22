@@ -13,20 +13,38 @@ Per photo, two stages (mirrors the paper's image-indexing path), plus CPU prep s
 - `prep` (Canvas resize/crop/÷255) is recorded but excluded from vis/head.
 
 Panel shows last + running **median / p90** (mobile latency has a heavy tail), plus env: EP
-(WebGPU/WASM), input size, embedding dim, ONNX MB, cold-load ms. Reset / Copy (JSON) reuse the text
+(WASM/WebGPU), input size, embedding dim, ONNX MB, cold-load ms. Reset / Copy (JSON) reuse the text
 panel's controls; `Copy` emits both the text and `image` blocks.
 
+## `image.n=0` on phone — diagnosis & fix (ort-web verified)
+First phone run logged `image.n=0, records:[], coldload:{}`. Reproduced the **real ort-web** path in
+headless Chromium (the original parity was ort-**node** — different EP). Findings:
+- The model is **NOT** the problem: `vis_mobileclip2-s2.onnx` runs fine in ort-web — **WASM** session
+  1.1s / **run 0.5s** / out [1,512] ✓; WebGPU works too but **first run ≈ 35 s** (shader compile).
+- Root causes were operational: (1) panel **defaulted to WebGPU** on phones (navigator.gpu present) →
+  the 35 s first-run compile *looks frozen*; (2) the 143 MB model was fetched **only on button click**
+  — if clicked after airplane mode it fetched offline and **failed silently** → n=0.
+
+Fixes (image panel only; text/search/index/anchors untouched):
+- **Default EP = WASM** (predictable ~0.5 s/img; verified). WebGPU is opt-in via `?imgep=webgpu`
+  (its compile then lands in the unrecorded warmup).
+- **Eager preload while online**: on panel mount (`?img=1` + `navigator.onLine`) the vision+head ONNX
+  and ort-web are fetched immediately; status shows **"✓ 준비완료 · EP wasm — 이제 비행기모드 OK"**
+  so the model is in memory (and SW-cached) *before* airplane mode.
+- **Bundled same-origin samples** `/samples/0..7.jpg` (no remote-thumb CORS canvas taint, no file
+  picker): one-tap "샘플 ×8". Missing files skip gracefully.
+- **Failures are surfaced** in the status line (`❌ 로딩 실패: …`) — never a silent n=0.
+Headless re-verify (fixed): eager preload → "준비완료 EP wasm"; "샘플 ×8" → **n=8, median vis 388.8 /
+head 0.3 / total 389.1 ms (WASM)**, cold 1741 ms, no errors.
+
 ## Phone procedure
-1. Open the demo with **`?perf=1&img=1`** (WebGPU auto-selected if available; force with `&imgep=wasm`
-   or `&imgep=webgpu`).
-2. **Online, once:** tap **"+ 사진 인코딩"** (or "샘플 ×8") — this lazy-loads the vision+head ONNX
-   (≈144 MB fp32, cached by the service worker) and warms up (WebGPU shader compile / WASM JIT; the
-   warmup pass is **not** recorded).
-3. Switch to **airplane mode** (proves on-device).
-4. Tap **"+ 사진 인코딩"**, pick K photos from the gallery → each is encoded; the panel accumulates
-   `vis / head / total` median·p90.
-5. Tap **Copy** → paste the JSON back. Headline sentence: *"phone indexes a new photo in ≈ X ms
-   (median, WebGPU)"*.
+1. Open **`?perf=1&img=1`** **online** (WiFi — one-time 143 MB fp32 vision download). The panel
+   **auto-starts caching**; wait for **"✓ 준비완료 · EP wasm — 이제 비행기모드 OK"** in the image
+   section. (WebGPU instead: add `&imgep=webgpu` — expect a long first-run compile.)
+2. Switch to **airplane mode** (proves on-device; panel `online:false`).
+3. Tap **"샘플 ×8"** (bundled images) or **"+ 사진 인코딩"** (gallery photos, 10–20). The panel
+   accumulates `vis / head / total` median·p90 — the model is already in memory, so no network needed.
+4. Tap **Copy** → paste the JSON back. Headline: *"phone indexes a new photo in ≈ X ms (median, WASM)"*.
 
 Measure both EPs by reloading with `&imgep=webgpu` then `&imgep=wasm`.
 

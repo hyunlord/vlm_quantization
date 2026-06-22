@@ -4,3 +4,4 @@ static/thumbs/
 static/onnx/
 __pycache__/
 *.pyc
+static/samples/
