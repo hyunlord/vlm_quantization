@@ -205,11 +205,15 @@ initChips();
 initModeToggle();
 
 // perf: dynamic-import the panel ONLY when ?perf=1 (normal UX never fetches perf.js)
+const IMG_ON = new URLSearchParams(location.search).get("img") === "1";
 if (PERF_ON) {
   import("./perf.js").then((m) => {
     PERF = m.PERF; PERF.mount();
     PERF.setEnv({ bits: State.bits, n: State.n });
     if (_coldIndexMs != null) PERF.setCold({ index_ms: _coldIndexMs });   // flush if index already done
+    // on-device image-indexing latency panel (separate module + UI; text path untouched)
+    if (IMG_ON) import("./perf_img.js").then((im) => im.initImgPanel(PERF))
+      .catch((e) => console.warn("perf img panel load failed", e));
   }).catch((e) => console.warn("perf panel load failed", e));
 }
 

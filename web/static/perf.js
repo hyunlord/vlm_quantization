@@ -33,10 +33,17 @@ class Perf {
     this.env = {};                 // ep, simd, threads + filled from navigator on mount
     this.cold = {};                // {index_ms, encoder_ms, sw_controlled}
     this.el = null;
+    // ---- image-indexing path (perf_img.js, ?img=1) — measures cost to hash a NEW photo:
+    // vis = MobileCLIP2-S2 vision ONNX; imgh = img_h' fp32 ONNX + packBits. No search (indexing). ----
+    this.imgRecords = [];          // {vis, imgh, total, ep, ts, online}
+    this.imgEnv = {};              // {ep, dim, onnx_mb, input}
+    this.imgCold = {};             // {load_ms}
   }
 
   setEnv(e) { Object.assign(this.env, e); this.render(); }
   setCold(c) { Object.assign(this.cold, c); this.render(); }
+  setImgEnv(e) { Object.assign(this.imgEnv, e); this.render(); }
+  setImgCold(c) { Object.assign(this.imgCold, c); this.render(); }
 
   record(r) {
     r.ts = Date.now();
@@ -45,7 +52,14 @@ class Perf {
     this.render();
   }
 
-  reset() { this.records = []; this.render(); }
+  recordImg(r) {
+    r.ts = Date.now();
+    r.online = navigator.onLine;
+    this.imgRecords.push(r);
+    this.render();
+  }
+
+  reset() { this.records = []; this.imgRecords = []; this.render(); }
 
   envSnapshot() {
     return {
@@ -68,6 +82,17 @@ class Perf {
         total: statsFor(this.records, "total"),
       },
       records: this.records,
+      image: {
+        env: { ...this.imgEnv, onLine: navigator.onLine },
+        coldload: this.imgCold,
+        n: this.imgRecords.length,
+        stats: {
+          vis: statsFor(this.imgRecords, "vis"),
+          imgh: statsFor(this.imgRecords, "imgh"),
+          total: statsFor(this.imgRecords, "total"),
+        },
+        records: this.imgRecords,
+      },
     };
   }
 
@@ -88,6 +113,13 @@ class Perf {
       '<div id="pfLast" style="color:#8b94a7">no query yet</div>' +
       '<div id="pfMed" style="margin-top:4px"></div>' +
       '<div id="pfEnv" style="margin-top:5px;color:#8b94a7;font-size:10px;word-break:break-word"></div>' +
+      '<div id="pfImgSec" style="display:none;margin-top:8px;padding-top:6px;border-top:1px solid #2a3247">' +
+      '<div style="font-weight:700;color:#36d399;margin-bottom:3px">on-device image index · <span id="pfImgN">0</span> img</div>' +
+      '<div id="pfImgLast" style="color:#8b94a7">no image yet</div>' +
+      '<div id="pfImgMed" style="margin-top:3px"></div>' +
+      '<div id="pfImgEnv" style="margin-top:4px;color:#8b94a7;font-size:10px;word-break:break-word"></div>' +
+      '<div id="pfImgUI" style="margin-top:5px"></div>' +
+      "</div>" +
       '<div style="margin-top:6px;display:flex;gap:6px">' +
       '<button id="pfReset" style="flex:1;font:inherit;padding:4px;border:1px solid #2a3247;border-radius:6px;background:#141821;color:#e7ebf3;cursor:pointer">Reset</button>' +
       '<button id="pfCopy" style="flex:1;font:inherit;padding:4px;border:1px solid #2a3247;border-radius:6px;background:#141821;color:#e7ebf3;cursor:pointer">Copy</button>' +
@@ -131,6 +163,34 @@ class Perf {
       `${e.simd != null ? ` simd:${e.simd ? 1 : 0}` : ""}${e.threads != null ? ` thr:${e.threads}` : ""}` +
       ` · hc:${e.hardwareConcurrency ?? "?"} · online:<b style="color:${e.onLine ? "#f0a73b" : "#36d399"}">${e.onLine}</b>` +
       ` · ${e.bits || "?"}b/${(e.n || 0).toLocaleString()}${cold}`;
+
+    // ---- image-indexing section (revealed by perf_img.js when ?img=1) ----
+    const sec = q("#pfImgSec");
+    if (sec && (this.imgRecords.length || Object.keys(this.imgEnv).length)) {
+      sec.style.display = "block";
+      q("#pfImgN").textContent = String(this.imgRecords.length);
+      const li = this.imgRecords[this.imgRecords.length - 1];
+      q("#pfImgLast").innerHTML = li
+        ? `last: vis <b>${fmt(li.vis)}</b> · head <b>${fmt(li.imgh)}</b> · <b style="color:#36d399">tot ${fmt(li.total)}</b> ms`
+        : "no image yet";
+      const is = this.snapshot().image.stats;
+      q("#pfImgMed").innerHTML =
+        `median vis ${fmt(is.vis.median)} · head ${fmt(is.imgh.median)} · <b>tot ${fmt(is.total.median)}</b><br>` +
+        `<span style="color:#8b94a7">p90 vis ${fmt(is.vis.p90)} · head ${fmt(is.imgh.p90)} · tot ${fmt(is.total.p90)}</span>`;
+      const ie = this.imgEnv;
+      const icold = this.imgCold.load_ms != null ? ` · cold ${fmt(this.imgCold.load_ms)} ms` : "";
+      q("#pfImgEnv").innerHTML =
+        `EP <b style="color:#5b9dff">${ie.ep || "?"}</b> · ${ie.model || "vis"} ${ie.input || "?"}px` +
+        ` · ${ie.dim || "?"}d · onnx ${ie.onnx_mb ?? "?"}MB${icold}`;
+    }
+  }
+
+  // perf_img.js calls this to reveal the image section and get its UI container.
+  imgContainer() {
+    if (!this.el) this.mount();
+    const sec = this.el.querySelector("#pfImgSec");
+    if (sec) sec.style.display = "block";
+    return this.el.querySelector("#pfImgUI");
   }
 }
 
