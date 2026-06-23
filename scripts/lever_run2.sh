@@ -5,7 +5,7 @@
 set -u
 cd /home/hyunlord/github/vlm_quantization
 PY=.venv/bin/python
-export EPOCHS=15 BITS=64,128,256,512,1024 CSV=/tmp/lever_all.csv
+export EPOCHS=15 BITS=64,128,256,512,1024 CSV=/tmp/lever_all2.csv
 run(){ echo "### $*"; env "$@" $PY /tmp/lever_sweep.py 2>&1 \
   | grep -v "UserWarning\|queued_call\|capability\|Minimum and Maximum\|^    "; }
 for SEED in 0 1; do
