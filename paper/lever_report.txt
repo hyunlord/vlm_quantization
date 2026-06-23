@@ -1,0 +1,106 @@
+source: /tmp/lmerge.csv  (115 rows, 2 seeds)
+
+EN T2I R@10 (seed-mean) + Delta vs baseline (bn-infonce@15)
+config                            64b   128b   256b   512b  1024b   | dR@10 vs bn-infonce@15
+--------------------------------------------------------------------------------------------
+bn/infonce                      68.01 75.10 78.10 79.66 80.73   | +0.00 +0.00 +0.00 +0.00 +0.00
+bn/hardneg                       4.95  6.26  8.38 10.33 10.96   | -63.06 -68.84 -69.72 -69.33 -69.77
+bn/hmargin(m0.05)               61.64 72.51 77.10 79.86 81.42   | -6.37 -2.59 -1.00 +0.20 +0.69
+bn/hmargin(m0.1)                61.64 72.51 77.10 79.86 81.42   | -6.37 -2.59 -1.00 +0.20 +0.69
+bn/hmargin(m0.2)                61.64 72.51 77.10 79.86 81.42   | -6.37 -2.59 -1.00 +0.20 +0.69
+bn/infonce(aux0.0)              67.73 75.18 78.49 80.05 80.86   | -0.28 +0.08 +0.39 +0.39 +0.13
+bn/infonce@25ep                 67.46 74.92 78.18 80.12 80.88   | -0.55 -0.18 +0.08 +0.46 +0.15
+bn/infonce(aux4.0)              68.46 74.68 77.82 79.50 80.24   | +0.45 -0.42 -0.28 -0.16 -0.49
+bn/infonce_hardneg(w1.0)        67.48 74.86 77.90 79.34 80.60   | -0.53 -0.24 -0.20 -0.32 -0.13
+bn/infonce_hmargin(m0.1)(w10.0)  67.56 75.06 78.12 79.64 80.61   | -0.45 -0.04 +0.02 -0.02 -0.12
+ln/infonce                      68.42 75.06 78.30 79.68 80.20   | +0.41 -0.04 +0.20 +0.02 -0.53
+none/infonce(aux0.0)            68.50 74.96 78.28 79.72 80.56   | +0.49 -0.14 +0.18 +0.06 -0.17
+none/infonce                    68.10 74.76 78.08 79.64 80.24   | +0.09 -0.34 -0.02 -0.02 -0.49
+none/infonce_hmargin(m0.1)(w10.0)  68.02 74.56 77.98 79.62 80.46   | +0.01 -0.54 -0.12 -0.04 -0.27
+none_scale/infonce              67.88 74.92 77.84 79.42 80.26   | -0.13 -0.18 -0.26 -0.24 -0.47
+rotation/infonce                67.34 74.44 77.38 79.40 80.20   | -0.67 -0.66 -0.72 -0.26 -0.53
+
+KO T2I R@10 (seed-mean)
+config                            64b   128b   256b   512b  1024b   | dR@10 vs bn-infonce@15
+--------------------------------------------------------------------------------------------
+bn/infonce                      47.43 55.71 60.04 62.07 63.33
+bn/hardneg                       4.06  4.94  6.14  7.52  7.88
+bn/hmargin(m0.05)               40.76 51.82 58.93 62.40 64.56
+bn/hmargin(m0.1)                40.76 51.82 58.93 62.40 64.56
+bn/hmargin(m0.2)                40.76 51.82 58.93 62.40 64.56
+bn/infonce(aux0.0)              47.32 55.69 59.75 62.54 63.65
+bn/infonce@25ep                 47.20 54.86 59.56 61.30 62.74
+bn/infonce(aux4.0)              47.22 54.60 59.04 61.42 62.88
+bn/infonce_hardneg(w1.0)        47.92 55.46 60.14 62.44 63.24
+bn/infonce_hmargin(m0.1)(w10.0)  47.39 55.65 60.08 62.16 63.32
+ln/infonce                      47.48 55.48 59.54 62.56 63.46
+none/infonce(aux0.0)            47.30 55.92 59.68 62.62 63.90
+none/infonce                    47.78 55.98 60.42 62.32 63.48
+none/infonce_hmargin(m0.1)(w10.0)  48.14 55.80 60.24 62.36 63.42
+none_scale/infonce              47.92 56.04 60.26 62.62 63.86
+rotation/infonce                48.02 54.70 59.40 61.66 62.40
+
+Realized test hmargin (bits) @1024 — Lever A mechanism check
+  bn/infonce                     hmargin   -12.11 ±  59.97  naninf 0
+  bn/hardneg                     hmargin   -33.35 ±  83.84  naninf 0
+  bn/hmargin(m0.05)              hmargin    -3.42 ±  59.91  naninf 0
+  bn/hmargin(m0.1)               hmargin    -3.42 ±  59.91  naninf 0
+  bn/hmargin(m0.2)               hmargin    -3.42 ±  59.91  naninf 0
+  bn/infonce(aux0.0)             hmargin   -11.78 ±  59.92  naninf 0
+  bn/infonce@25ep                hmargin   -12.18 ±  60.91  naninf 0
+  bn/infonce(aux4.0)             hmargin   -13.14 ±  59.77  naninf 0
+  bn/infonce_hardneg(w1.0)       hmargin   -12.41 ±  60.15  naninf 0
+  bn/infonce_hmargin(m0.1)(w10.0) hmargin   -12.09 ±  59.96  naninf 0
+  ln/infonce                     hmargin   -12.51 ±  59.80  naninf 0
+  none/infonce(aux0.0)           hmargin   -11.92 ±  59.54  naninf 0
+  none/infonce                   hmargin   -12.46 ±  59.68  naninf 0
+  none/infonce_hmargin(m0.1)(w10.0) hmargin   -12.39 ±  59.70  naninf 0
+  none_scale/infonce             hmargin   -12.41 ±  59.75  naninf 0
+  rotation/infonce               hmargin   -13.31 ±  59.84  naninf 0
+
+seed noise (max-min EN T2I R@10) @1024b:
+  bn/infonce                     0.22  (n=2)
+  bn/hardneg                     0.68  (n=2)
+  bn/hmargin(m0.05)              0.00  (n=2)
+  bn/hmargin(m0.1)               0.00  (n=2)
+  bn/hmargin(m0.2)               0.00  (n=2)
+  bn/infonce(aux0.0)             0.32  (n=2)
+  bn/infonce@25ep                (1 seed)
+  bn/infonce(aux4.0)             (1 seed)
+  bn/infonce_hardneg(w1.0)       (1 seed)
+  bn/infonce_hmargin(m0.1)(w10.0) 0.18  (n=2)
+  ln/infonce                     (1 seed)
+  none/infonce(aux0.0)           (1 seed)
+  none/infonce                   (1 seed)
+  none/infonce_hmargin(m0.1)(w10.0) (1 seed)
+  none_scale/infonce             (1 seed)
+  rotation/infonce               (1 seed)
+
+Fairness validation (baseline convergence):
+  64b: bn-infonce@25 67.46 vs @15 68.01  (d -0.55)
+  128b: bn-infonce@25 74.92 vs @15 75.10  (d -0.18)
+  256b: bn-infonce@25 78.18 vs @15 78.10  (d +0.08)
+  512b: bn-infonce@25 80.12 vs @15 79.66  (d +0.46)
+  1024b: bn-infonce@25 80.88 vs @15 80.73  (d +0.15)
+  -> if |d|>0.5pt, 15 epochs under-trains the baseline; re-run gate at 25.
+
+=== GATE (EN T2I R@10, dR@10 vs bn-infonce@15) ===
+  bn/hardneg                     best -63.06pt @64b  bits>=+1.0: 0  -> red
+  bn/hmargin(m0.05)              best +0.69pt @1024b  bits>=+1.0: 0  -> red
+  bn/hmargin(m0.1)               best +0.69pt @1024b  bits>=+1.0: 0  -> red
+  bn/hmargin(m0.2)               best +0.69pt @1024b  bits>=+1.0: 0  -> red
+  bn/infonce(aux0.0)             best +0.39pt @256b  bits>=+1.0: 0  -> red
+  bn/infonce@25ep                best +0.46pt @512b  bits>=+1.0: 0  -> red
+  bn/infonce(aux4.0)             best +0.45pt @64b  bits>=+1.0: 0  -> red
+  bn/infonce_hardneg(w1.0)       best -0.13pt @1024b  bits>=+1.0: 0  -> red
+  bn/infonce_hmargin(m0.1)(w10.0) best +0.02pt @256b  bits>=+1.0: 0  -> red
+  ln/infonce                     best +0.41pt @64b  bits>=+1.0: 0  -> red
+  none/infonce(aux0.0)           best +0.49pt @64b  bits>=+1.0: 0  -> red
+  none/infonce                   best +0.09pt @64b  bits>=+1.0: 0  -> red
+  none/infonce_hmargin(m0.1)(w10.0) best +0.01pt @64b  bits>=+1.0: 0  -> red
+  none_scale/infonce             best -0.13pt @64b  bits>=+1.0: 0  -> red
+  rotation/infonce               best -0.26pt @512b  bits>=+1.0: 0  -> red
+
+Composition-response (aux weight effect) @1024b EN T2I:
+  bn: aux0.0=80.86 aux1.0=80.73 aux4.0=80.24  spread 0.62pt (RESPONDS>=0.5)
+  none: aux0.0=80.56 aux1.0=80.24  spread 0.32pt (inert)

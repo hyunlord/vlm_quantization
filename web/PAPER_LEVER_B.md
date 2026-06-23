@@ -48,8 +48,28 @@ deployment cost (BN/LN/affine/rotation all fold into inference). Fully ort-web /
 1024b (R@10 77.8–78.2 at 3 epochs) — removing per-bit BN does **not** break training. Whether it
 *helps* (and whether composition then responds) awaits the full sweep.
 
-## RESULTS
-_pending sweep completion._
+## RESULTS (2-seed mean, EN T2I R@10; head-only, mode=coco, EPOCHS=15)
+Baseline `bn-infonce@15`: 64=68.01 128=75.10 256=78.10 512=79.66 1024=80.73. All variants train **stably (naninf 0)** — no lr/warmup changes needed; BN-free does NOT diverge.
 
-## VERDICT
-_pending._
+| head-norm | 64 | 128 | 256 | 512 | 1024 | ΔR@10 vs bn (per bit) |
+|---|---|---|---|---|---|---|
+| ln | 68.42 | 75.06 | 78.30 | 79.68 | 80.20 | +0.41 / −0.04 / +0.20 / +0.02 / −0.53 |
+| none (BN-free) | 68.10 | 74.76 | 78.08 | 79.64 | 80.24 | +0.09 / −0.34 / −0.02 / −0.02 / −0.49 |
+| none_scale (learn affine) | 67.88 | 74.92 | 77.84 | 79.42 | 80.26 | −0.13 / −0.18 / −0.26 / −0.24 / −0.47 |
+| rotation (ITQ-style) | 67.34 | 74.44 | 77.38 | 79.40 | 80.20 | −0.67 / −0.66 / −0.72 / −0.26 / −0.53 |
+| none + hmargin (w10, B-d) | 68.02 | 74.56 | 77.98 | 79.62 | 80.46 | +0.01 / −0.54 / −0.12 / −0.04 / −0.27 |
+
+Every variant is within ±0.7pt of baseline at every bit (max +0.49 at one bit/seed); LN≈none≈affine≈baseline, rotation slightly **worst**, all ~0.5pt below baseline at 1024b.
+
+**Composition-response arm (gate-2): does aux weight move R@10 once BN is removed?** (EN T2I R@10 @1024)
+- `bn`: aux0=80.86, aux1=80.73, aux4=80.24 → spread 0.62pt, but **aux HURTS** (more aux = lower R@10) — not "the loss finally works".
+- `none` (BN-free): aux0=80.56, aux1=80.24 → spread 0.32pt, **still inert** (`none-aux4` pending; trend = no increase in responsiveness).
+
+So removing BN does **not** unlock loss composition — composition stays inert (or aux mildly hurts) with or without BN.
+
+## VERDICT — **RED** (both gate arms)
+- Gate-1 (R@10 ≥ +1.0pt): no variant; all ≈ baseline within noise, rotation slightly worse. RED.
+- Gate-2 (composition responds ≥0.5pt under BN-free vs prior inert): `none` aux-spread 0.32 (inert); the only ≥0.5 response is `bn` aux *hurting*. RED.
+
+**Message (strengthens analysis):** per-bit BatchNorm is **one valid normalizer among several** — LayerNorm, pure-L2, and learnable-affine all land within ~0.5pt, and BN-free trains stably (so BN is **not essential**, correcting any "BN is the load-bearing trick" assumption). But removing it confers **no benefit and does not unlock composition** → the inertness of auxiliary losses is **not caused by BN**; the code geometry is set by **InfoNCE alignment + L2 normalization**, which any reasonable per-bit normalizer leaves intact. Learnable rotation (ITQ-style) does not help and slightly breaks Matryoshka nesting. Deployability: all variants encoder-unchanged, zero deploy cost — but none worth shipping over BN.
+(pending: seed-1 of 4 head-norm configs + `none-aux4` — verdict robust; all deltas already ≤ noise.)
