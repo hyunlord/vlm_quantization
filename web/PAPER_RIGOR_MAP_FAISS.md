@@ -2,7 +2,8 @@
 
 Branch `paper-aaai-rigor`, section 1 (core). Desk-reject insurance the hashing literature expects. Eval-only on the
 DEPLOYED ft113 heads (img_h + txt_h, SigLIP2-So400m server path), COCO 5K test (emb_cache). Driver
-`web/rigor_map_faiss.py` (~0.4 min on GB10). **Still pending in §1:** CroVCA-style + ITQ/LSH baselines (separate run).
+`web/rigor_map_faiss.py` (~0.4 min on GB10). Classic baselines (LSH/ITQ) in `web/rigor_baselines.py`.
+**Still pending in §1:** CroVCA-style single-loss head (apples-to-apples) + a public-code baseline (DGCPN/UCCH).
 
 ## mAP@bit table — `paper/rigor_map_bit.csv` (instance, both directions)
 
@@ -40,6 +41,26 @@ prefix-sliced); 1024-bit R@10 ≈ 80 matches the SigLIP2 server ceiling. Knee ~2
 - **mAP@bit complements R@K** and gives the storage/accuracy knee (256 bits ≈ −2pt R@10 vs 1024 at 1/4 storage),
   matching hashing-paper reporting conventions.
 
+## Classic hashing baselines — `paper/rigor_baselines.csv` (same frozen SigLIP2 features, COCO 5K, R@10)
+
+A single shared projection across modalities (SigLIP2 already aligns img/txt). LSH = random hyperplanes (no train);
+ITQ = PCA + iterative quantization fit on 40K pooled train features. Identical eval to ours.
+
+| bit | LSH I2T/T2I | ITQ I2T/T2I | **Ours (ft113) I2T/T2I** |
+|----:|---|---|---|
+| 16   | 0.98 / 0.96   | 1.02 / 1.00   | **32.68 / 32.82** |
+| 64   | 4.12 / 5.64   | 9.32 / 11.92  | **67.34 / 66.86** |
+| 256  | 17.72 / 22.88 | 39.42 / 48.52 | **77.88 / 77.48** |
+| 1024 | 45.90 / 59.36 | 61.54 / 71.26 | **80.32 / 79.92** |
+
+**Reading:** on identical frozen features and eval, our learned head **dominates** classic data-independent (LSH) and
+unsupervised data-dependent (ITQ) hashing at every bit — +19pt over ITQ and +34pt over LSH at 1024 (I2T), and the gap
+widens at low bits (256b: +38pt over ITQ). LSH/ITQ are unsupervised projections that ignore the cross-modal pairing
+signal; our InfoNCE-trained head exploits it. (Minor T2I>I2T asymmetry for LSH/ITQ: text codes are more discriminative
+as queries.) This is the apples-to-apples desk-reject defense. The CroVCA-style single-loss head (expected near-parity
+with ours by the BN-dominance finding) and a public-code baseline remain to fully populate the baseline block.
+
 ## Repro
-`web/rigor_map_faiss.py --out_map paper/rigor_map_bit.csv --out_faiss paper/rigor_faiss_bench.csv` on DGX
-(`.venv/bin/python`, GPU; ft_ko_113.pt heads + emb_cache test; ~0.4 min).
+`web/rigor_map_faiss.py --out_map paper/rigor_map_bit.csv --out_faiss paper/rigor_faiss_bench.csv` and
+`web/rigor_baselines.py --out paper/rigor_baselines.csv` on DGX (`.venv/bin/python`, GPU; ft_ko_113.pt heads +
+emb_cache test / emb_aug pool; ~0.4 + ~5 min).
