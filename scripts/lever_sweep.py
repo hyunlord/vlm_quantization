@@ -270,7 +270,8 @@ def train():
         hm, hmstd = realized_hmargin(ec, ic)  # EN T2I hmargin
         rows.append({
             "tag": TAG, "head_norm": HEAD_NORM, "loss": LOSS, "negsep_w": NEGSEP_W,
-            "hmargin_m": HMARGIN_M, "aux_scale": AUX_SCALE, "seed": SEED, "bit": b,
+            "hmargin_m": HMARGIN_M, "aux_scale": AUX_SCALE, "epochs": EPOCHS,
+            "seed": SEED, "bit": b,
             "en_t2i_r1": en_t2i[1], "en_t2i_r5": en_t2i[5], "en_t2i_r10": en_t2i[10],
             "en_i2t_r1": en_i2t[1], "en_i2t_r5": en_i2t[5], "en_i2t_r10": en_i2t[10],
             "ko_t2i_r1": ko_t2i[1], "ko_t2i_r5": ko_t2i[5], "ko_t2i_r10": ko_t2i[10],
