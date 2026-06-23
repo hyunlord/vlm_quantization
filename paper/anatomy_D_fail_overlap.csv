@@ -1,0 +1,6 @@
+set,count
+fail_all_3paths,752
+fail_any_path,1790
+fail_ceiling,1004
+fail_distillation,1457
+fail_head-adapt,1300

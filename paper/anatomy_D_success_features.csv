@@ -1,0 +1,13 @@
+path,feature,success_mean,fail_mean,n_fail
+ceiling,caplen,10.502,10.0827,1004
+ceiling,pair_cosine,0.1559,0.1118,1004
+ceiling,pair_hamming,216.2235,305.6942,1004
+ceiling,mean_absz,0.025,0.025,1004
+distillation,caplen,10.5137,10.1846,1457
+distillation,pair_cosine,0.135,0.1025,1457
+distillation,pair_hamming,217.8702,298.4516,1457
+distillation,mean_absz,0.025,0.0249,1457
+head-adapt,caplen,10.4992,10.1862,1300
+head-adapt,pair_cosine,,,1300
+head-adapt,pair_hamming,222.48,298.6631,1300
+head-adapt,mean_absz,0.025,0.025,1300
