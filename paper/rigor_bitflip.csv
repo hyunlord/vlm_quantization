@@ -1,0 +1,7 @@
+quant_point,precision,bitflip_pct_img,bitflip_pct_txt,R10_I2T,R10_drop
+encoder-output,fp32,0.0,0.0,80.32,0.0
+encoder-output,fp16,0.004,0.003,80.36,-0.04
+encoder-output,int8,1.014,0.902,80.38,-0.06
+head-output,fp32,0.0,0.0,80.32,0.0
+head-output,fp16,0.0,0.0,80.32,0.0
+head-output,int8,0.817,0.816,80.38,-0.06
