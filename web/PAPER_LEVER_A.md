@@ -48,8 +48,24 @@ reached 1024b R@10 ≈ 79.7 (T2I) / 80.2 (I2T) at only 3 epochs with a widened h
 flagged for scrutiny but NOT a verdict (could be faster convergence to the same ceiling; the full
 25-epoch × 2-seed comparison decides).
 
-## RESULTS
-_pending sweep completion._
+## RESULTS (2-seed mean, EN T2I R@10; head-only, mode=coco, EPOCHS=15)
+Baseline `bn-infonce@15`: 64=68.01 128=75.10 256=78.10 512=79.66 1024=80.73
+(faithful: `bn-infonce@25` = 80.88@1024, vs deployed 80.3; `aux0`=pure-InfoNCE ≈ baseline → aux terms inert, reconfirmed).
 
-## VERDICT
-_pending._
+| variant | 64 | 128 | 256 | 512 | 1024 | ΔR@10 vs baseline (per bit) |
+|---|---|---|---|---|---|---|
+| hardneg (pure) | 4.95 | 6.26 | 8.38 | 10.33 | 10.96 | −63 / −69 / −70 / −69 / −70 |
+| hmargin (m=.05/.1/.2, identical) | 61.64 | 72.51 | 77.10 | 79.86 | **81.42** | **−6.37 / −2.59 / −1.00 / +0.20 / +0.69** |
+| infonce+hmargin (w10) | 67.56 | 75.06 | 78.12 | 79.64 | 80.61 | −0.45 / −0.04 / +0.02 / −0.02 / −0.12 |
+| infonce+hardneg (w1) | 67.48 | 74.86 | 77.90 | 79.34 | 80.60 | −0.53 / −0.24 / −0.20 / −0.32 / −0.13 |
+
+**Mechanism check (realized hmargin, bits @1024):** baseline −12.1 → pure hmargin **−3.4** (separation genuinely widened); hardneg −33 (collapsed). The loss *does* what it claims — the margin widens — yet R@10 does not rise.
+
+**Secondary (not the gate):** pure hmargin is a **high-bit top-1 sharpener / low-bit recall-killer**: R@1@1024 42.76→**47.0 (+4.2)**, KO R@10@1024 63.33→**64.56 (+1.23)**, but R@10@64 67.58→61.9 (**−5.7**), KO@64 −6.7. With scarce bits it over-separates the single hardest negative at the cost of broad recall; with abundant bits it sharpens the top rank. A capacity-dependent precision/recall re-trade, not a uniform gain. `infonce+hmargin` is inert (InfoNCE subsumes the margin term).
+
+margin insensitivity: m∈{.05,.1,.2} give identical results — `∂/∂θ relu(m−gap) = −∂gap/∂θ` for active pairs, so m only sets the (here fully-active) threshold. Seed noise ≤0.32pt @1024.
+
+## VERDICT — **RED** (primary R@10 gate)
+No variant reaches +1.0pt R@10; best is hmargin +0.69 @1024 (and −1 to −6 at the lower 3 bits), inside/under noise vs the stricter @25 baseline (+0.54). The mechanism fires (separation widens) but R@10 does not follow.
+**Message (strengthens analysis):** *InfoNCE is already negative-separation-optimal for R@10.* A binary-specific margin loss only re-trades top-1 vs recall along the bit-budget axis. Deployability: training-loss-only, encoder/head unchanged → the **R@1/high-bit sharpening is a free, deployable side-effect** worth a paragraph, but not a CVPR method on the stated R@10 gate.
+(pending: seed-1 of 3 combined configs — verdict robust; deltas already negative.)
