@@ -42,3 +42,11 @@ Reproduce: `.venv/bin/python scripts/anatomy_extract.py && scripts/anatomy_plot.
 5. **Median Hamming separation gap (nearest-wrong − pair) orders with R@10**: ceiling −11 > head-adapt −20 > distillation −26 (C3) — the one aggregate that matches the ranking.
 6. **Multilingual strength is set by code-distance-to-anchor, not script**: Latin sw/te/quz fall in the weak tail while Cyrillic ru is among the strongest; the curve is continuous in pair-Hamming (E1).
 7. **int8 quantization is nearly lossless at the bit level** (≤1.5% flip on any bit; ~0.9% mean) (E3).
+
+## D-deep (follow-up figures D5/D6)
+- **D5 flip_vs_absz**: flip-fraction vs ceiling, binned by pre-sign |z| decile. For BOTH paths it **decays monotonically with |z|** — distillation 0.437 (smallest-|z| decile) → 0.001 (largest); head-adapt 0.459 → 0.008. head-adapt flips more than distillation at *every* decile. CSV `anatomy_Ddeep_flip_vs_absz.csv`.
+- **D6 gap_success_fail**: per-query separation gap (nearest-wrong − pair) split by R@10 success/failure. Success median ≈ +2 (ceiling) / −7 (distill) / −6 (head-adapt); **failure median ≈ −81 / −78 / −73** (the paired image is ~75–87 bits *farther* than the nearest wrong one). Failure counts: ceiling 1004, distillation 1457, head-adapt 1300. CSV `anatomy_Ddeep_gap.csv`.
+
+### Notable (D-deep)
+8. **Sign flips are boundary-concentrated, not "confident"** — for both distillation and head-adapt the flip rate collapses toward 0 as |z| grows (≤1% at the top |z| decile). This *refines/contradicts* the earlier "distillation confidently maps to a different sign" framing: the divergence from the ceiling code lives at small margins, not at high-confidence bits. head-adapt simply has a uniformly higher boundary-flip rate.
+9. **The success/failure boundary is the separation gap, and it is bimodal-by-outcome** — within each path the gap is near-0 for hits and ≈ −80 for misses (a clean split), and head-adapt wins largely by having *fewer* such large-negative-gap queries than distillation (1300 vs 1457), not by a different success-mode gap.
