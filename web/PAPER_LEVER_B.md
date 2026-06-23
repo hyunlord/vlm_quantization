@@ -62,14 +62,14 @@ Baseline `bn-infonce@15`: 64=68.01 128=75.10 256=78.10 512=79.66 1024=80.73. All
 Every variant is within ±0.7pt of baseline at every bit (max +0.49 at one bit/seed); LN≈none≈affine≈baseline, rotation slightly **worst**, all ~0.5pt below baseline at 1024b.
 
 **Composition-response arm (gate-2): does aux weight move R@10 once BN is removed?** (EN T2I R@10 @1024)
-- `bn`: aux0=80.86, aux1=80.73, aux4=80.24 → spread 0.62pt, but **aux HURTS** (more aux = lower R@10) — not "the loss finally works".
-- `none` (BN-free): aux0=80.56, aux1=80.24 → spread 0.32pt, **still inert** (`none-aux4` pending; trend = no increase in responsiveness).
+- `bn`: aux0=80.86, aux1=80.73, aux4=80.25 → spread 0.61pt, but **aux HURTS** (more aux = lower R@10) — not "the loss finally works".
+- `none` (BN-free): aux0=80.66, aux1=80.54, aux4=80.00 → spread 0.66pt — also **aux HURTS, slightly MORE** than under BN (aux4: none 80.00 < bn 80.25).
 
-So removing BN does **not** unlock loss composition — composition stays inert (or aux mildly hurts) with or without BN.
+So removing BN does **not** unlock beneficial composition — the aux terms (ortho/quant/balance/cons/lcs) are at best neutral, at worst harmful at 1024b, *with or without* BN, and BN if anything **buffers** the harm.
 
 ## VERDICT — **RED** (both gate arms)
 - Gate-1 (R@10 ≥ +1.0pt): no variant; all ≈ baseline within noise, rotation slightly worse. RED.
-- Gate-2 (composition responds ≥0.5pt under BN-free vs prior inert): `none` aux-spread 0.32 (inert); the only ≥0.5 response is `bn` aux *hurting*. RED.
+- Gate-2 (does BN-free unlock *beneficial* composition?): no. Both bn and none "respond" ≥0.5pt to aux weight but in the **negative** direction (aux hurts), none more than bn. The "BN suppresses a useful loss" hypothesis is refuted. RED.
 
 **Message (strengthens analysis):** per-bit BatchNorm is **one valid normalizer among several** — LayerNorm, pure-L2, and learnable-affine all land within ~0.5pt, and BN-free trains stably (so BN is **not essential**, correcting any "BN is the load-bearing trick" assumption). But removing it confers **no benefit and does not unlock composition** → the inertness of auxiliary losses is **not caused by BN**; the code geometry is set by **InfoNCE alignment + L2 normalization**, which any reasonable per-bit normalizer leaves intact. Learnable rotation (ITQ-style) does not help and slightly breaks Matryoshka nesting. Deployability: all variants encoder-unchanged, zero deploy cost — but none worth shipping over BN.
-(pending: seed-1 of 4 head-norm configs + `none-aux4` — verdict robust; all deltas already ≤ noise.)
+Final: 2 seeds complete (165-row sweep, composition arm bn+none × aux{0,1,4}); RED confirmed.
