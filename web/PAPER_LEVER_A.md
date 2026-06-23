@@ -68,4 +68,4 @@ margin insensitivity: m∈{.05,.1,.2} give identical results — `∂/∂θ relu
 ## VERDICT — **RED** (primary R@10 gate)
 No variant reaches +1.0pt R@10; best is hmargin +0.69 @1024 (and −1 to −6 at the lower 3 bits), inside/under noise vs the stricter @25 baseline (+0.54). The mechanism fires (separation widens) but R@10 does not follow.
 **Message (strengthens analysis):** *InfoNCE is already negative-separation-optimal for R@10.* A binary-specific margin loss only re-trades top-1 vs recall along the bit-budget axis. Deployability: training-loss-only, encoder/head unchanged → the **R@1/high-bit sharpening is a free, deployable side-effect** worth a paragraph, but not a CVPR method on the stated R@10 gate.
-(pending: seed-1 of 3 combined configs — verdict robust; deltas already negative.)
+Final: 2 seeds complete (165-row sweep); all deltas confirmed RED.
