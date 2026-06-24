@@ -78,8 +78,12 @@ def main():
         sys.exit(1)
     url = f"http://localhost:{port}/"
     handler = http.server.SimpleHTTPRequestHandler
-    httpd = socketserver.ThreadingTCPServer(("127.0.0.1", port), handler)
-    httpd.daemon_threads = True
+
+    class Server(socketserver.ThreadingTCPServer):
+        allow_reuse_address = True   # SO_REUSEADDR: TIME_WAIT 포트 재바인드 허용
+        daemon_threads = True
+
+    httpd = Server(("127.0.0.1", port), handler)
     print("\n" + "-" * 60)
     print(f"🌐 서버 시작: {url}")
     print("-" * 60)
