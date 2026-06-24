@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign vs Continuous Retrieval</title>
+  <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f8f9fa;
+      color: #212529;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      padding: 14px 24px;
+    }
+    header h1 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #343a40;
+      line-height: 1.4;
+    }
+    header p.subtitle {
+      font-size: 0.82rem;
+      color: #6c757d;
+      margin-top: 3px;
+    }
+
+    .controls {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      padding: 12px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: center;
+    }
+
+    .ctrl-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .ctrl-group label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6c757d;
+    }
+
+    select {
+      font-size: 0.85rem;
+      padding: 5px 10px;
+      border: 1px solid #ced4da;
+      border-radius: 6px;
+      background: #fff;
+      color: #212529;
+      cursor: pointer;
+      max-width: 420px;
+    }
+    select:focus { outline: 2px solid #4c9be8; outline-offset: 1px; }
+
+    .badge {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 99px;
+      vertical-align: middle;
+      margin-left: 6px;
+    }
+    .badge-success { background: #d1fae5; color: #065f46; }
+    .badge-fail    { background: #fee2e2; color: #991b1b; }
+
+    .seg-buttons {
+      display: flex;
+      gap: 0;
+      border: 1px solid #ced4da;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .seg-btn {
+      padding: 5px 14px;
+      font-size: 0.85rem;
+      border: none;
+      background: #fff;
+      color: #495057;
+      cursor: pointer;
+      border-right: 1px solid #ced4da;
+      transition: background 0.12s;
+    }
+    .seg-btn:last-child { border-right: none; }
+    .seg-btn.active {
+      background: #4c9be8;
+      color: #fff;
+      font-weight: 600;
+    }
+    .seg-btn:hover:not(.active) { background: #e9ecef; }
+
+    .path-tabs {
+      display: flex;
+      gap: 0;
+      border: 1px solid #ced4da;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .path-tab {
+      padding: 5px 14px;
+      font-size: 0.85rem;
+      border: none;
+      background: #fff;
+      color: #495057;
+      cursor: pointer;
+      border-right: 1px solid #ced4da;
+      transition: background 0.12s;
+    }
+    .path-tab:last-child { border-right: none; }
+    .path-tab.active {
+      background: #6c5ce7;
+      color: #fff;
+      font-weight: 600;
+    }
+    .path-tab:hover:not(.active) { background: #e9ecef; }
+
+    main {
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .rank-panel {
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .rank-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: #f1f3f5;
+      border-bottom: 1px solid #dee2e6;
+    }
+    .rank-panel-header h2 {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #343a40;
+    }
+    .gold-rank-badge {
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 99px;
+    }
+    .gold-rank-top { background: #d1fae5; color: #065f46; }
+    .gold-rank-mid { background: #fef3c7; color: #92400e; }
+    .gold-rank-bot { background: #fee2e2; color: #991b1b; }
+
+    .rank-lists {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+    }
+    .rank-col {
+      overflow: auto;
+    }
+    .rank-col:first-child {
+      border-right: 1px solid #dee2e6;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+    thead th {
+      background: #f8f9fa;
+      padding: 7px 10px;
+      text-align: left;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #6c757d;
+      border-bottom: 1px solid #dee2e6;
+      white-space: nowrap;
+    }
+    tbody tr { border-bottom: 1px solid #f1f3f5; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f8f9fa; }
+    tbody td {
+      padding: 6px 10px;
+      vertical-align: middle;
+    }
+
+    tr.gold-row {
+      background: #fffbeb !important;
+    }
+    tr.gold-row td { color: #92400e; }
+    tr.gold-row .rank-num { font-weight: 700; color: #d97706; }
+
+    .rank-num {
+      font-weight: 600;
+      color: #6c757d;
+      font-variant-numeric: tabular-nums;
+    }
+    .gallery-idx {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.75rem;
+      color: #495057;
+    }
+    .score-val {
+      font-variant-numeric: tabular-nums;
+      color: #1a73e8;
+    }
+    .ham-val {
+      font-variant-numeric: tabular-nums;
+      color: #6c5ce7;
+    }
+    .gold-star {
+      color: #d97706;
+      font-size: 0.9rem;
+    }
+
+    .scatter-panel {
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .scatter-panel-header {
+      padding: 10px 16px;
+      background: #f1f3f5;
+      border-bottom: 1px solid #dee2e6;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #343a40;
+    }
+    .scatter-panel-subtext {
+      font-size: 0.75rem;
+      color: #6c757d;
+      font-weight: 400;
+      margin-left: 8px;
+    }
+    #scatter-plot {
+      width: 100%;
+      height: 380px;
+    }
+
+    .error-msg {
+      padding: 40px;
+      text-align: center;
+      color: #991b1b;
+      font-size: 0.9rem;
+    }
+
+    .note-bar {
+      font-size: 0.75rem;
+      color: #6c757d;
+      padding: 8px 24px;
+      border-top: 1px solid #dee2e6;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Sign-vs-continuous retrieval</h1>
+  <p class="subtitle">
+    Same query ranked by continuous score (z·z, higher = nearer) vs Hamming distance (lower = nearer).
+    See what binarization reorders. <strong>gold</strong> = paired correct image.
+  </p>
+</header>
+
+<div class="controls">
+  <div class="ctrl-group">
+    <label>Query</label>
+    <select id="query-select"></select>
+  </div>
+  <div class="ctrl-group">
+    <label>Path</label>
+    <div class="path-tabs" id="path-tabs"></div>
+  </div>
+  <div class="ctrl-group">
+    <label>Bits</label>
+    <div class="seg-buttons" id="bit-buttons"></div>
+  </div>
+</div>
+
+<main>
+  <div class="rank-panel" id="rank-panel">
+    <div class="rank-panel-header">
+      <h2 id="rank-panel-title">Ranked lists</h2>
+      <div id="rank-gold-badges" style="display:flex;gap:8px;"></div>
+    </div>
+    <div class="rank-lists">
+      <div class="rank-col" id="cont-col">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Gallery</th>
+              <th>Score ↓rank</th>
+              <th>Ham</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="cont-tbody"></tbody>
+        </table>
+      </div>
+      <div class="rank-col" id="ham-col">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Gallery</th>
+              <th>Ham ↓rank</th>
+              <th>Score</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="ham-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="scatter-panel">
+    <div class="scatter-panel-header">
+      Score vs Hamming
+      <span class="scatter-panel-subtext">union of both top-15 lists · gold enlarged</span>
+    </div>
+    <div id="scatter-plot"></div>
+  </div>
+</main>
+
+<div class="note-bar" id="note-bar"></div>
+
+<script>
+(async () => {
+  // ── Load data ──────────────────────────────────────────────────────────────
+  let DATA;
+  try {
+    const resp = await fetch('data/sign_info.json');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    DATA = await resp.json();
+  } catch (e) {
+    document.querySelector('main').innerHTML =
+      `<div class="error-msg">Failed to load data/sign_info.json: ${e.message}<br>
+       Serve from viz/ with: <code>python -m http.server</code></div>`;
+    return;
+  }
+
+  document.getElementById('note-bar').textContent = DATA.note || '';
+
+  const BITS  = DATA.bits.map(String);   // ["64","256","1024"]
+  const PATHS = ['ceiling', 'distillation', 'head-adapt'];
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  let selQuery = 0;
+  let selPath  = 'ceiling';
+  let selBit   = '256';
+
+  // ── Build query dropdown ───────────────────────────────────────────────────
+  const qSel = document.getElementById('query-select');
+  DATA.queries.forEach((q, i) => {
+    const opt = document.createElement('option');
+    const badge = q.success ? '✓' : '✗';
+    opt.value = i;
+    opt.textContent = `Q${q.qid}  ${badge}  ${q.caption}`;
+    qSel.appendChild(opt);
+  });
+  qSel.addEventListener('change', () => { selQuery = +qSel.value; render(); });
+
+  // ── Build path tabs ────────────────────────────────────────────────────────
+  const pathTabs = document.getElementById('path-tabs');
+  PATHS.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'path-tab' + (p === selPath ? ' active' : '');
+    btn.textContent = p;
+    btn.dataset.path = p;
+    btn.addEventListener('click', () => {
+      selPath = p;
+      pathTabs.querySelectorAll('.path-tab').forEach(b =>
+        b.classList.toggle('active', b.dataset.path === p));
+      render();
+    });
+    pathTabs.appendChild(btn);
+  });
+
+  // ── Build bit buttons ──────────────────────────────────────────────────────
+  const bitBtns = document.getElementById('bit-buttons');
+  BITS.forEach(b => {
+    const btn = document.createElement('button');
+    btn.className = 'seg-btn' + (b === selBit ? ' active' : '');
+    btn.textContent = b + '-bit';
+    btn.dataset.bit = b;
+    btn.addEventListener('click', () => {
+      selBit = b;
+      bitBtns.querySelectorAll('.seg-btn').forEach(bb =>
+        bb.classList.toggle('active', bb.dataset.bit === b));
+      render();
+    });
+    bitBtns.appendChild(btn);
+  });
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function goldRankClass(rank) {
+    if (rank <= 3)  return 'gold-rank-top';
+    if (rank <= 10) return 'gold-rank-mid';
+    return 'gold-rank-bot';
+  }
+
+  function buildTableRows(tbody, rows, rankKey) {
+    // rankKey: 'score' for cont (sort by score desc), 'ham' for ham (sort by ham asc)
+    tbody.innerHTML = '';
+    rows.forEach((item, idx) => {
+      const tr = document.createElement('tr');
+      if (item.gold) tr.classList.add('gold-row');
+      const rank = idx + 1;
+      const isCont = (rankKey === 'score');
+      tr.innerHTML = `
+        <td class="rank-num">${rank}</td>
+        <td class="gallery-idx">${item.g}</td>
+        <td class="${isCont ? 'score-val' : 'ham-val'}">${isCont ? item.score.toFixed(4) : item.ham}</td>
+        <td class="${isCont ? 'ham-val' : 'score-val'}">${isCont ? item.ham : item.score.toFixed(4)}</td>
+        <td>${item.gold ? '<span class="gold-star" title="gold">★</span>' : ''}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function render() {
+    const q   = DATA.queries[selQuery];
+    const obj = q.paths[selPath][selBit];
+
+    // ── Rank panel header ──────────────────────────────────────────────────
+    document.getElementById('rank-panel-title').textContent =
+      `Q${q.qid} · ${selPath} · ${selBit}-bit`;
+
+    const badgesEl = document.getElementById('rank-gold-badges');
+    const cr = obj.gold_cont_rank;
+    const hr = obj.gold_ham_rank;
+    badgesEl.innerHTML = `
+      <span class="gold-rank-badge ${goldRankClass(cr)}" title="Gold rank in continuous list">
+        Continuous gold: #${cr}
+      </span>
+      <span class="gold-rank-badge ${goldRankClass(hr)}" title="Gold rank in Hamming list">
+        Hamming gold: #${hr}
+      </span>
+    `;
+
+    // ── Tables ─────────────────────────────────────────────────────────────
+    buildTableRows(
+      document.getElementById('cont-tbody'),
+      obj.cont_top,
+      'score'
+    );
+    buildTableRows(
+      document.getElementById('ham-tbody'),
+      obj.ham_top,
+      'ham'
+    );
+
+    // ── Scatter ────────────────────────────────────────────────────────────
+    // Build union of both top-15 lists, keyed by gallery idx
+    const union = new Map();
+    obj.cont_top.forEach(it => union.set(it.g, { ...it }));
+    obj.ham_top.forEach(it => {
+      if (!union.has(it.g)) union.set(it.g, { ...it });
+    });
+
+    const normal = [], gold = [];
+    union.forEach(it => {
+      if (it.gold) gold.push(it);
+      else normal.push(it);
+    });
+
+    const normalTrace = {
+      x: normal.map(it => it.score),
+      y: normal.map(it => it.ham),
+      mode: 'markers',
+      type: 'scatter',
+      name: 'gallery',
+      text: normal.map(it => `g=${it.g}<br>score=${it.score.toFixed(4)}<br>ham=${it.ham}`),
+      hovertemplate: '%{text}<extra></extra>',
+      marker: {
+        size: 7,
+        color: '#adb5bd',
+        line: { width: 0.5, color: '#868e96' }
+      }
+    };
+
+    const goldTrace = {
+      x: gold.map(it => it.score),
+      y: gold.map(it => it.ham),
+      mode: 'markers',
+      type: 'scatter',
+      name: 'gold',
+      text: gold.map(it => `g=${it.g}  ★ gold<br>score=${it.score.toFixed(4)}<br>ham=${it.ham}`),
+      hovertemplate: '%{text}<extra></extra>',
+      marker: {
+        size: 16,
+        symbol: 'star',
+        color: '#f59e0b',
+        line: { width: 1.5, color: '#d97706' }
+      }
+    };
+
+    const layout = {
+      margin: { t: 16, r: 20, b: 56, l: 56 },
+      paper_bgcolor: '#fff',
+      plot_bgcolor: '#fff',
+      xaxis: {
+        title: { text: 'Continuous score (z·z, higher = nearer)', font: { size: 11 } },
+        zeroline: false,
+        gridcolor: '#f1f3f5',
+        tickfont: { size: 10 }
+      },
+      yaxis: {
+        title: { text: 'Hamming distance (lower = nearer)', font: { size: 11 } },
+        zeroline: false,
+        gridcolor: '#f1f3f5',
+        tickfont: { size: 10 },
+        autorange: 'reversed'   // smaller Hamming = better, put at top
+      },
+      legend: {
+        x: 0.01, y: 0.99,
+        bgcolor: 'rgba(255,255,255,0.85)',
+        bordercolor: '#dee2e6',
+        borderwidth: 1,
+        font: { size: 11 }
+      },
+      annotations: (() => {
+        const ann = [];
+        // Annotate gold point if it exists
+        gold.forEach(it => {
+          ann.push({
+            x: it.score, y: it.ham,
+            xref: 'x', yref: 'y',
+            text: `★ gold<br>cont#${cr} ham#${hr}`,
+            showarrow: true,
+            arrowhead: 2,
+            arrowsize: 0.8,
+            arrowcolor: '#d97706',
+            ax: 30, ay: -30,
+            font: { size: 10, color: '#92400e' },
+            bgcolor: 'rgba(255,251,235,0.9)',
+            bordercolor: '#d97706',
+            borderwidth: 1,
+            borderpad: 3
+          });
+        });
+        return ann;
+      })()
+    };
+
+    const config = {
+      responsive: true,
+      displayModeBar: true,
+      displaylogo: false,
+      modeBarButtonsToRemove: ['select2d','lasso2d','autoScale2d']
+    };
+
+    Plotly.react('scatter-plot', [normalTrace, goldTrace], layout, config);
+  }
+
+  // ── Initial render ─────────────────────────────────────────────────────────
+  render();
+})();
+</script>
+</body>
+</html>

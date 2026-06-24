@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Embedding &amp; Code Space — 2D Projections</title>
+  <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f8f9fa;
+      color: #212529;
+    }
+
+    header {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      padding: 14px 24px;
+    }
+    header h1 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #343a40;
+      margin-bottom: 3px;
+    }
+    header p {
+      font-size: 12px;
+      color: #6c757d;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 18px;
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      padding: 10px 24px;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .control-group label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #495057;
+      white-space: nowrap;
+    }
+
+    .btn-group {
+      display: flex;
+      border: 1px solid #ced4da;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .btn-group button {
+      background: #fff;
+      border: none;
+      border-right: 1px solid #ced4da;
+      padding: 5px 13px;
+      font-size: 12px;
+      cursor: pointer;
+      color: #495057;
+      transition: background 0.12s, color 0.12s;
+    }
+    .btn-group button:last-child { border-right: none; }
+    .btn-group button.active {
+      background: #0d6efd;
+      color: #fff;
+    }
+    .btn-group button:hover:not(.active) { background: #f1f3f5; }
+
+    .vis-btn {
+      background: #fff;
+      border: 1px solid #ced4da;
+      border-radius: 5px;
+      padding: 5px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      color: #495057;
+      transition: background 0.12s;
+    }
+    .vis-btn:hover { background: #f1f3f5; }
+
+    #proj-group {
+      /* hidden when not applicable */
+    }
+
+    #status {
+      font-size: 12px;
+      color: #868e96;
+      margin-left: auto;
+    }
+
+    #chart {
+      width: 100%;
+      height: calc(100vh - 110px);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Embedding &amp; code space — precomputed 2D (PCA / UMAP)</h1>
+  <p>Toggle space / projection; color by modality-path or language. Points are precomputed — no in-browser projection.</p>
+</header>
+
+<div class="controls">
+  <!-- Space selector -->
+  <div class="control-group">
+    <label>Space</label>
+    <div class="btn-group" id="space-btns">
+      <button class="active" data-space="siglip">SigLIP embedding</button>
+      <button data-space="code">Code space</button>
+      <button data-space="langs">Languages</button>
+    </div>
+  </div>
+
+  <!-- Projection toggle (SigLIP only) -->
+  <div class="control-group" id="proj-group">
+    <label>Projection</label>
+    <div class="btn-group" id="proj-btns">
+      <button class="active" data-proj="pca">PCA</button>
+      <button data-proj="umap">UMAP</button>
+    </div>
+  </div>
+
+  <!-- Show / hide all -->
+  <div class="control-group">
+    <button class="vis-btn" id="btn-show-all">Show all</button>
+    <button class="vis-btn" id="btn-hide-all">Hide all</button>
+  </div>
+
+  <span id="status">Loading data…</span>
+</div>
+
+<div id="chart"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ── palette ── */
+  const MODALITY_COLORS = {
+    image:        '#4c78a8',
+    ceiling:      '#f58518',
+    distillation: '#54a24b',
+  };
+
+  /* 20-class colormap for languages (tab20-ish) */
+  const LANG_PALETTE = [
+    '#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f',
+    '#edc948','#b07aa1','#ff9da7','#9c755f','#bab0ac',
+    '#499894','#86bcb6','#d4a6c8','#8cd17d','#b6992d',
+    '#e9c46a','#a44a3f','#c77dff','#5c6bc0','#26a69a',
+  ];
+
+  /* ── state ── */
+  let DATA = null;
+  let currentSpace = 'siglip';
+  let currentProj  = 'pca';
+
+  /* ── fetch ── */
+  const statusEl = document.getElementById('status');
+
+  fetch('data/embedding_2d.json')
+    .then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    })
+    .then(d => {
+      DATA = d;
+      statusEl.textContent = 'Ready';
+      render();
+    })
+    .catch(err => {
+      statusEl.textContent = `Error: ${err.message}`;
+      console.error(err);
+    });
+
+  /* ── controls wiring ── */
+  document.getElementById('space-btns').addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    currentSpace = btn.dataset.space;
+    document.querySelectorAll('#space-btns button').forEach(b => b.classList.toggle('active', b === btn));
+    const projGroup = document.getElementById('proj-group');
+    projGroup.style.display = (currentSpace === 'siglip') ? '' : 'none';
+    if (DATA) render();
+  });
+
+  document.getElementById('proj-btns').addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    currentProj = btn.dataset.proj;
+    document.querySelectorAll('#proj-btns button').forEach(b => b.classList.toggle('active', b === btn));
+    if (DATA) render();
+  });
+
+  document.getElementById('btn-show-all').addEventListener('click', () => {
+    Plotly.restyle('chart', { visible: true });
+  });
+
+  document.getElementById('btn-hide-all').addEventListener('click', () => {
+    Plotly.restyle('chart', { visible: 'legendonly' });
+  });
+
+  /* ── render ── */
+  function render() {
+    if (!DATA) return;
+
+    let traces;
+    let title;
+
+    if (currentSpace === 'siglip') {
+      const coords = DATA.siglip[currentProj];   // 2100 × [x,y]
+      const labels = DATA.siglip.label;           // 2100 × str
+      title = `SigLIP embedding — ${currentProj.toUpperCase()}`;
+      traces = buildModalityTraces(coords, labels);
+
+    } else if (currentSpace === 'code') {
+      const coords = DATA.code.umap;
+      const labels = DATA.code.label;
+      title = 'Code space — UMAP';
+      traces = buildModalityTraces(coords, labels);
+
+    } else {  /* langs */
+      const coords = DATA.langs.umap;
+      const langs  = DATA.langs.lang;
+      title = 'Languages — UMAP';
+      traces = buildLangTraces(coords, langs);
+    }
+
+    const layout = {
+      title: { text: title, font: { size: 13, color: '#343a40' }, x: 0.01 },
+      paper_bgcolor: '#f8f9fa',
+      plot_bgcolor:  '#ffffff',
+      margin: { t: 42, r: 20, b: 42, l: 52 },
+      xaxis: { title: 'dim 1', zeroline: false, gridcolor: '#e9ecef' },
+      yaxis: { title: 'dim 2', zeroline: false, gridcolor: '#e9ecef' },
+      legend: {
+        itemsizing: 'constant',
+        font: { size: 12 },
+        bgcolor: 'rgba(255,255,255,0.85)',
+        bordercolor: '#dee2e6',
+        borderwidth: 1,
+      },
+      hovermode: 'closest',
+    };
+
+    const config = {
+      responsive: true,
+      displayModeBar: true,
+      modeBarButtonsToRemove: ['select2d', 'lasso2d'],
+    };
+
+    Plotly.react('chart', traces, layout, config);
+  }
+
+  /* Build one scattergl trace per modality class */
+  function buildModalityTraces(coords, labels) {
+    const classes = ['image', 'ceiling', 'distillation'];
+    return classes.map(cls => {
+      const xs = [], ys = [], texts = [];
+      labels.forEach((lbl, i) => {
+        if (lbl === cls) {
+          xs.push(coords[i][0]);
+          ys.push(coords[i][1]);
+          texts.push(`<b>${lbl}</b><br>index ${i}`);
+        }
+      });
+      return {
+        type: 'scattergl',
+        mode: 'markers',
+        name: cls,
+        x: xs,
+        y: ys,
+        text: texts,
+        hovertemplate: '%{text}<extra></extra>',
+        marker: {
+          color: MODALITY_COLORS[cls] || '#999',
+          size: 5,
+          opacity: 0.75,
+        },
+      };
+    });
+  }
+
+  /* Build one scattergl trace per language */
+  function buildLangTraces(coords, langs) {
+    /* collect unique langs preserving first-appearance order */
+    const seen = [];
+    langs.forEach(l => { if (!seen.includes(l)) seen.push(l); });
+    seen.sort();   /* alphabetical */
+
+    return seen.map((lang, li) => {
+      const xs = [], ys = [], texts = [];
+      langs.forEach((l, i) => {
+        if (l === lang) {
+          xs.push(coords[i][0]);
+          ys.push(coords[i][1]);
+          texts.push(`<b>${lang}</b><br>index ${i}`);
+        }
+      });
+      return {
+        type: 'scattergl',
+        mode: 'markers',
+        name: lang,
+        x: xs,
+        y: ys,
+        text: texts,
+        hovertemplate: '%{text}<extra></extra>',
+        marker: {
+          color: LANG_PALETTE[li % LANG_PALETTE.length],
+          size: 5,
+          opacity: 0.75,
+        },
+      };
+    });
+  }
+
+})();
+</script>
+</body>
+</html>

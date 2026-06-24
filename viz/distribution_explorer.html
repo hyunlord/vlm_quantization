@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Distribution Explorer</title>
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #f8f9fa; color: #212529; }
+
+  header {
+    background: #fff;
+    border-bottom: 1px solid #dee2e6;
+    padding: 10px 20px;
+    font-size: 13px;
+    color: #495057;
+    line-height: 1.4;
+  }
+
+  #app { display: flex; height: calc(100vh - 41px); }
+
+  /* ── sidebar ── */
+  #sidebar {
+    width: 210px;
+    min-width: 210px;
+    background: #fff;
+    border-right: 1px solid #dee2e6;
+    padding: 16px 14px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .ctrl-group label.group-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #868e96;
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  /* BatchNorm toggle */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+  }
+  .toggle-switch {
+    position: relative;
+    width: 44px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: #ced4da;
+    border-radius: 22px;
+    transition: background 0.2s;
+  }
+  .toggle-slider:before {
+    content: '';
+    position: absolute;
+    width: 16px; height: 16px;
+    left: 3px; top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+  }
+  .toggle-switch input:checked + .toggle-slider { background: #339af0; }
+  .toggle-switch input:checked + .toggle-slider:before { transform: translateX(22px); }
+  #bn-state-label { font-weight: 500; min-width: 48px; }
+
+  /* path checkboxes */
+  .path-list { display: flex; flex-direction: column; gap: 6px; }
+  .path-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .path-item input[type=checkbox] { accent-color: var(--c); width: 14px; height: 14px; cursor: pointer; }
+  .path-swatch {
+    width: 14px; height: 3px;
+    border-radius: 2px;
+    background: var(--c);
+    flex-shrink: 0;
+  }
+
+  /* heatmap path selector */
+  select#heatmap-path {
+    width: 100%;
+    font-size: 13px;
+    padding: 4px 6px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: #fff;
+    color: #212529;
+    cursor: pointer;
+  }
+
+  /* tab bar */
+  #tab-bar {
+    display: flex;
+    background: #fff;
+    border-bottom: 1px solid #dee2e6;
+    gap: 0;
+    padding: 0 16px;
+  }
+  .tab-btn {
+    padding: 9px 18px;
+    font-size: 13px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: #868e96;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .tab-btn.active {
+    color: #212529;
+    border-bottom-color: #339af0;
+    font-weight: 500;
+  }
+  .tab-btn:hover:not(.active) { color: #495057; }
+
+  /* main content */
+  #main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  #panels { flex: 1; position: relative; overflow: hidden; }
+
+  .panel {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+  }
+  .panel.active { display: flex; }
+
+  .panel-title {
+    padding: 10px 16px 4px;
+    font-size: 12px;
+    color: #868e96;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    flex-shrink: 0;
+  }
+
+  .plotly-container {
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* loading / error */
+  #loading {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8f9fa;
+    font-size: 14px;
+    color: #868e96;
+    z-index: 100;
+  }
+  #error-msg {
+    display: none;
+    position: fixed;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    background: #fff5f5;
+    font-size: 14px;
+    color: #c92a2a;
+    padding: 20px;
+    text-align: center;
+    z-index: 100;
+  }
+</style>
+</head>
+<body>
+
+<div id="loading">Loading data&hellip;</div>
+<div id="error-msg"></div>
+
+<header>
+  Code distribution explorer &mdash; |z|, per-bit balance, bit-bit correlation; toggle BatchNorm on/off and overlay paths.
+</header>
+
+<div id="app">
+  <!-- sidebar -->
+  <aside id="sidebar">
+
+    <div class="ctrl-group">
+      <label class="group-label">BatchNorm</label>
+      <div class="toggle-row">
+        <label class="toggle-switch">
+          <input type="checkbox" id="bn-toggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+        <span id="bn-state-label">ON</span>
+      </div>
+    </div>
+
+    <div class="ctrl-group">
+      <label class="group-label">Paths</label>
+      <div class="path-list" id="path-list"></div>
+    </div>
+
+    <div class="ctrl-group" id="heatmap-ctrl">
+      <label class="group-label" for="heatmap-path">Heatmap path</label>
+      <select id="heatmap-path"></select>
+    </div>
+
+  </aside>
+
+  <!-- main -->
+  <div id="main">
+    <div id="tab-bar">
+      <button class="tab-btn active" data-panel="hist">|z| histogram</button>
+      <button class="tab-btn" data-panel="balance">Per-bit balance</button>
+      <button class="tab-btn" data-panel="heatmap">Bit-bit correlation</button>
+    </div>
+
+    <div id="panels">
+      <div class="panel active" id="panel-hist">
+        <div class="panel-title">Distribution of |z| (pre-sign activations) — overlaid paths</div>
+        <div class="plotly-container" id="plot-hist"></div>
+      </div>
+
+      <div class="panel" id="panel-balance">
+        <div class="panel-title">Per-bit +1 fraction (1024 bits) — should cluster near 0.5 for balanced codes</div>
+        <div class="plotly-container" id="plot-balance"></div>
+      </div>
+
+      <div class="panel" id="panel-heatmap">
+        <div class="panel-title">64×64 block-averaged bit-bit correlation matrix</div>
+        <div class="plotly-container" id="plot-heatmap"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── palette ──────────────────────────────────────────────────────────────────
+const PATH_KEYS = ['image', 'ceiling', 'distillation', 'head-adapt'];
+const PATH_LABELS = {
+  'image':       'image',
+  'ceiling':     'ceiling',
+  'distillation':'distillation',
+  'head-adapt':  'head-adapt',
+};
+const COLORS = {
+  'image':       '#339af0',
+  'ceiling':     '#f76707',
+  'distillation':'#2f9e44',
+  'head-adapt':  '#ae3ec9',
+};
+
+// ── state ─────────────────────────────────────────────────────────────────────
+let DATA = null;
+let bnOn = true;                          // true = 'bn', false = 'nobn'
+let selectedPaths = new Set(PATH_KEYS);   // all on by default
+let heatmapPath = 'image';
+let activePanel = 'hist';
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+function bnKey() { return bnOn ? 'bn' : 'nobn'; }
+
+function pathData(pathKey) {
+  return DATA.paths[pathKey][bnKey()];
+}
+
+// Build histogram traces for the per-bit balance panel:
+// We render a histogram-of-values (step) from the 1024 bit_pos_frac values.
+function balanceBins(values) {
+  const nBins = 40;
+  const lo = 0, hi = 1;
+  const step = (hi - lo) / nBins;
+  const counts = new Array(nBins).fill(0);
+  for (const v of values) {
+    const idx = Math.min(Math.floor((v - lo) / step), nBins - 1);
+    counts[idx]++;
+  }
+  const x = Array.from({length: nBins}, (_, i) => lo + (i + 0.5) * step);
+  return {x, y: counts};
+}
+
+// ── render functions ──────────────────────────────────────────────────────────
+
+function renderHist() {
+  const traces = [];
+  for (const pk of PATH_KEYS) {
+    if (!selectedPaths.has(pk)) continue;
+    const d = pathData(pk);
+    traces.push({
+      x: d.absz_hist.x,
+      y: d.absz_hist.y,
+      type: 'scatter',
+      mode: 'lines',
+      name: PATH_LABELS[pk],
+      line: { color: COLORS[pk], width: 2, shape: 'hvh' },
+      hovertemplate: `<b>${PATH_LABELS[pk]}</b><br>|z| = %{x:.3f}<br>count = %{y:,}<extra></extra>`,
+    });
+  }
+
+  const layout = {
+    margin: {l: 56, r: 20, t: 24, b: 52},
+    xaxis: {
+      title: {text: '|z|', font: {size: 12}},
+      showgrid: true, gridcolor: '#e9ecef', zeroline: false,
+    },
+    yaxis: {
+      title: {text: 'count', font: {size: 12}},
+      showgrid: true, gridcolor: '#e9ecef',
+    },
+    plot_bgcolor: '#fff',
+    paper_bgcolor: '#fff',
+    legend: {orientation: 'h', x: 0.5, xanchor: 'center', y: 1.08},
+    hovermode: 'x unified',
+    font: {family: 'system-ui, -apple-system, sans-serif', size: 12},
+  };
+
+  Plotly.react('plot-hist', traces, layout, {responsive: true});
+}
+
+function renderBalance() {
+  const traces = [];
+  for (const pk of PATH_KEYS) {
+    if (!selectedPaths.has(pk)) continue;
+    const d = pathData(pk);
+    const {x, y} = balanceBins(d.bit_pos_frac);
+    traces.push({
+      x, y,
+      type: 'scatter',
+      mode: 'lines',
+      name: PATH_LABELS[pk],
+      line: {color: COLORS[pk], width: 2, shape: 'hvh'},
+      fill: 'tozeroy',
+      fillcolor: COLORS[pk] + '22',
+      hovertemplate: `<b>${PATH_LABELS[pk]}</b><br>frac = %{x:.3f}<br>bits = %{y}<extra></extra>`,
+    });
+  }
+
+  // vertical line at 0.5
+  const shapes = [{
+    type: 'line',
+    x0: 0.5, x1: 0.5,
+    y0: 0, y1: 1,
+    yref: 'paper',
+    line: {color: '#868e96', width: 1.5, dash: 'dash'},
+  }];
+
+  const layout = {
+    margin: {l: 56, r: 20, t: 24, b: 52},
+    xaxis: {
+      title: {text: 'fraction of +1', font: {size: 12}},
+      range: [0, 1],
+      showgrid: true, gridcolor: '#e9ecef', zeroline: false,
+    },
+    yaxis: {
+      title: {text: 'number of bits', font: {size: 12}},
+      showgrid: true, gridcolor: '#e9ecef',
+    },
+    shapes,
+    annotations: [{
+      x: 0.5, y: 1, yref: 'paper',
+      text: '0.5', showarrow: false,
+      xanchor: 'left', xshift: 5,
+      font: {size: 11, color: '#868e96'},
+    }],
+    plot_bgcolor: '#fff',
+    paper_bgcolor: '#fff',
+    legend: {orientation: 'h', x: 0.5, xanchor: 'center', y: 1.08},
+    hovermode: 'x unified',
+    font: {family: 'system-ui, -apple-system, sans-serif', size: 12},
+  };
+
+  Plotly.react('plot-balance', traces, layout, {responsive: true});
+}
+
+function renderHeatmap() {
+  const d = pathData(heatmapPath);
+  const corr = d.corr;  // 64×64
+
+  // axis tick labels: block indices 0–63
+  const labels = Array.from({length: 64}, (_, i) => i);
+
+  const trace = {
+    z: corr,
+    type: 'heatmap',
+    colorscale: 'RdBu',
+    reversescale: true,   // RdBu: blue=neg, red=pos after reverse
+    zmin: -0.3,
+    zmax:  0.3,
+    zmid:  0,
+    x: labels,
+    y: labels,
+    colorbar: {
+      title: {text: 'correlation', side: 'right', font: {size: 11}},
+      thickness: 14,
+      len: 0.85,
+      tickfont: {size: 10},
+    },
+    hovertemplate: 'block %{x} × %{y}<br>corr = %{z:.4f}<extra></extra>',
+  };
+
+  const layout = {
+    margin: {l: 52, r: 80, t: 24, b: 52},
+    xaxis: {
+      title: {text: 'bit block', font: {size: 12}},
+      showgrid: false, zeroline: false,
+      dtick: 8,
+    },
+    yaxis: {
+      title: {text: 'bit block', font: {size: 12}},
+      showgrid: false, zeroline: false,
+      dtick: 8,
+      autorange: 'reversed',
+    },
+    plot_bgcolor: '#fff',
+    paper_bgcolor: '#fff',
+    font: {family: 'system-ui, -apple-system, sans-serif', size: 12},
+  };
+
+  Plotly.react('plot-heatmap', [trace], layout, {responsive: true});
+}
+
+function renderActive() {
+  if (activePanel === 'hist')    renderHist();
+  if (activePanel === 'balance') renderBalance();
+  if (activePanel === 'heatmap') renderHeatmap();
+}
+
+function renderAll() {
+  renderHist();
+  renderBalance();
+  renderHeatmap();
+}
+
+// ── UI setup ──────────────────────────────────────────────────────────────────
+
+function buildSidebar() {
+  // path checkboxes
+  const list = document.getElementById('path-list');
+  list.innerHTML = '';
+  for (const pk of PATH_KEYS) {
+    const item = document.createElement('label');
+    item.className = 'path-item';
+    item.style.setProperty('--c', COLORS[pk]);
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = selectedPaths.has(pk);
+    cb.style.setProperty('--c', COLORS[pk]);
+    cb.addEventListener('change', () => {
+      if (cb.checked) selectedPaths.add(pk);
+      else selectedPaths.delete(pk);
+      renderActive();
+    });
+
+    const swatch = document.createElement('span');
+    swatch.className = 'path-swatch';
+
+    const lbl = document.createElement('span');
+    lbl.textContent = PATH_LABELS[pk];
+
+    item.appendChild(cb);
+    item.appendChild(swatch);
+    item.appendChild(lbl);
+    list.appendChild(item);
+  }
+
+  // heatmap path dropdown
+  const sel = document.getElementById('heatmap-path');
+  sel.innerHTML = '';
+  for (const pk of PATH_KEYS) {
+    const opt = document.createElement('option');
+    opt.value = pk;
+    opt.textContent = PATH_LABELS[pk];
+    if (pk === heatmapPath) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  sel.addEventListener('change', () => {
+    heatmapPath = sel.value;
+    if (activePanel === 'heatmap') renderHeatmap();
+  });
+}
+
+function bindControls() {
+  // BN toggle
+  const bnToggle = document.getElementById('bn-toggle');
+  const bnLabel  = document.getElementById('bn-state-label');
+  bnToggle.addEventListener('change', () => {
+    bnOn = bnToggle.checked;
+    bnLabel.textContent = bnOn ? 'ON' : 'OFF';
+    renderAll();
+  });
+
+  // tab buttons
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      activePanel = btn.dataset.panel;
+      document.getElementById('panel-' + activePanel).classList.add('active');
+
+      // show/hide heatmap path selector only when relevant
+      document.getElementById('heatmap-ctrl').style.display =
+        activePanel === 'heatmap' ? '' : 'none';
+
+      renderActive();
+    });
+  });
+
+  // hide heatmap selector on non-heatmap tabs initially
+  document.getElementById('heatmap-ctrl').style.display = 'none';
+}
+
+// ── bootstrap ─────────────────────────────────────────────────────────────────
+
+fetch('data/distributions.json')
+  .then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.url}`);
+    return r.json();
+  })
+  .then(data => {
+    DATA = data;
+
+    // validate expected keys
+    const requiredPaths = ['image', 'ceiling', 'distillation', 'head-adapt'];
+    for (const pk of requiredPaths) {
+      if (!DATA.paths[pk]) throw new Error(`Missing path key: "${pk}"`);
+      for (const bk of ['bn', 'nobn']) {
+        const s = DATA.paths[pk][bk];
+        if (!s) throw new Error(`Missing ${pk}.${bk}`);
+        if (!s.absz_hist || !s.bit_pos_frac || !s.corr)
+          throw new Error(`Missing stat fields under ${pk}.${bk}`);
+      }
+    }
+
+    document.getElementById('loading').style.display = 'none';
+    buildSidebar();
+    bindControls();
+    renderAll();
+  })
+  .catch(err => {
+    document.getElementById('loading').style.display = 'none';
+    const el = document.getElementById('error-msg');
+    el.style.display = 'flex';
+    el.textContent = 'Failed to load data: ' + err.message +
+      '. Make sure you are serving from viz/ (e.g. python -m http.server) and data/distributions.json exists.';
+    console.error(err);
+  });
+</script>
+</body>
+</html>

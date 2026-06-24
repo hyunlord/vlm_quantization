@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>1-bit hashing — anatomy dashboard</title>
+<style>
+ body{font:15px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;max-width:860px;margin:40px auto;padding:0 20px;color:#222}
+ h1{font-size:22px} h2{font-size:15px;margin:0 0 4px} a{color:#1a5fb4;text-decoration:none} a:hover{text-decoration:underline}
+ .card{display:block;border:1px solid #ddd;border-radius:10px;padding:14px 16px;margin:10px 0;transition:.1s}
+ .card:hover{border-color:#1a5fb4;background:#f7faff} .desc{color:#555;font-size:13px;margin-top:3px}
+ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px} .note{color:#777;font-size:12px;margin-top:18px}
+</style></head><body>
+<h1>Current-pipeline anatomy — interactive</h1>
+<p class="desc">Exploratory views of what the frozen-SigLIP2 → Matryoshka head → 1024-bit sign code actually does,
+across three text paths (ceiling / distillation / head-adapt). Drag sliders, toggle paths, hover.
+Math: <a href="../docs/FORMULATION.md">docs/FORMULATION.md</a>. Data: <code>viz/data/*.json</code> (regenerate via <code>scripts/viz_data.py</code>).</p>
+
+<a class="card" href="forward_stages.html"><h2>1 · forward_stages</h2><div class="desc">One sample's 1024-d vector at each stage e→s(sliced)→BN→L2 z→sign. Path + sample slider; overlay paths. Where the distribution narrows/standardizes.</div></a>
+<a class="card" href="distribution_explorer.html"><h2>2 · distribution_explorer</h2><div class="desc">|z| histogram, per-bit +1 balance, 64×64 bit-bit correlation. Toggle <b>BatchNorm on/off</b> and overlay paths.</div></a>
+<a class="card" href="sign_information_loss.html"><h2>3 · sign_information_loss</h2><div class="desc">Same query ranked by continuous z·z vs Hamming, gold highlighted, bit slider 64/256/1024. What binarization reorders.</div></a>
+<a class="card" href="embedding_space.html"><h2>4 · embedding_space</h2><div class="desc">Precomputed PCA/UMAP of SigLIP embedding, code space, and 12 languages. Toggle space/projection; color by modality-path / language.</div></a>
+<a class="card" href="retrieval_anatomy.html"><h2>5 · retrieval_anatomy</h2><div class="desc">Per query: Hamming-to-gallery histogram with gold vs nearest-wrong markers (negative separation), and a 32×32 grid of which bits differ from the correct image.</div></a>
+
+<p class="note">Serve locally (not file://, the pages fetch JSON):<br>
+<code>cd viz &amp;&amp; python -m http.server 8800</code> → open <code>http://localhost:8800/</code><br>
+Exploratory only — distributions shown as-is; interpretation is for joint discussion.</p>
+</body></html>

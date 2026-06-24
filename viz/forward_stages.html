@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Forward-pass Stage Distributions</title>
+  <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f8f9fa; color: #222; }
+
+    header {
+      background: #fff;
+      border-bottom: 1px solid #dde;
+      padding: 10px 20px;
+      font-size: 13px;
+      color: #444;
+      line-height: 1.5;
+    }
+    header strong { color: #111; }
+
+    #controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 18px;
+      padding: 12px 20px;
+      background: #fff;
+      border-bottom: 1px solid #dde;
+    }
+    .ctrl-group {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+    }
+    .ctrl-group label { font-weight: 600; color: #333; white-space: nowrap; }
+    select, input[type=range] { font-size: 13px; }
+    select {
+      border: 1px solid #bbc;
+      border-radius: 4px;
+      padding: 3px 7px;
+      background: #fff;
+      cursor: pointer;
+    }
+    input[type=range] { width: 120px; cursor: pointer; }
+    #sample-display { font-size: 12px; color: #555; min-width: 90px; }
+
+    #overlay-row {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 8px 20px;
+      background: #f0f2f5;
+      border-bottom: 1px solid #dde;
+      font-size: 13px;
+      flex-wrap: wrap;
+    }
+    #overlay-row label { font-weight: 600; color: #333; }
+    #overlay-stage-group { display: flex; align-items: center; gap: 7px; }
+    #overlay-stage-group.hidden { display: none; }
+
+    #info-bar {
+      padding: 7px 20px;
+      background: #eef2ff;
+      border-bottom: 1px solid #dde;
+      font-size: 13px;
+      color: #334;
+      min-height: 30px;
+    }
+
+    #plot-area {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 0;
+      height: calc(100vh - 140px);
+      min-height: 500px;
+    }
+    .plot-cell {
+      background: #fff;
+      border: 1px solid #e0e2e8;
+      position: relative;
+    }
+    .plot-cell-title {
+      position: absolute;
+      top: 6px;
+      left: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #555;
+      z-index: 10;
+      pointer-events: none;
+      background: rgba(255,255,255,0.85);
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    .plotly-div { width: 100%; height: 100%; }
+
+    #loading {
+      position: fixed;
+      inset: 0;
+      background: rgba(248,249,250,0.92);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      color: #555;
+      z-index: 999;
+    }
+    #error-msg {
+      position: fixed;
+      inset: 0;
+      background: rgba(248,249,250,0.96);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: #c00;
+      z-index: 999;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      padding: 30px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<div id="loading">Loading forward_stages.json...</div>
+<div id="error-msg"></div>
+
+<header>
+  <strong>Forward-pass stage distributions</strong>
+  &nbsp;e &rarr; s (sliced) &rarr; BN &rarr; L2 z &rarr; sign.
+  Explore where the distribution narrows / standardizes.
+</header>
+
+<div id="controls">
+  <div class="ctrl-group">
+    <label for="path-sel">Path:</label>
+    <select id="path-sel">
+      <option value="image">image</option>
+      <option value="ceiling">ceiling</option>
+      <option value="distillation">distillation</option>
+      <option value="head-adapt">head-adapt</option>
+    </select>
+  </div>
+  <div class="ctrl-group">
+    <label for="sample-slider">Sample slot:</label>
+    <input type="range" id="sample-slider" min="0" max="11" value="0" step="1">
+    <span id="sample-display">slot 0 (idx &mdash;)</span>
+  </div>
+</div>
+
+<div id="overlay-row">
+  <div class="ctrl-group">
+    <label>
+      <input type="checkbox" id="overlay-chk">
+      &nbsp;Overlay all 4 paths (same sample slot &amp; stage)
+    </label>
+  </div>
+  <div id="overlay-stage-group" class="hidden ctrl-group">
+    <label for="overlay-stage-sel">Stage:</label>
+    <select id="overlay-stage-sel">
+      <option value="sliced">sliced</option>
+      <option value="bn">bn</option>
+      <option value="z">z</option>
+      <option value="absz">|z|</option>
+    </select>
+  </div>
+</div>
+
+<div id="info-bar">Loading&hellip;</div>
+
+<div id="plot-area">
+  <div class="plot-cell">
+    <div class="plot-cell-title" id="title-sliced">sliced &mdash; raw W&middot;e slice (pre-BN)</div>
+    <div class="plotly-div" id="plot-sliced"></div>
+  </div>
+  <div class="plot-cell">
+    <div class="plot-cell-title" id="title-bn">bn &mdash; after per-bit BatchNorm</div>
+    <div class="plotly-div" id="plot-bn"></div>
+  </div>
+  <div class="plot-cell">
+    <div class="plot-cell-title" id="title-z">z &mdash; after L2-normalize (pre-sign)</div>
+    <div class="plotly-div" id="plot-z"></div>
+  </div>
+  <div class="plot-cell">
+    <div class="plot-cell-title" id="title-absz">|z| &mdash; absolute value of z</div>
+    <div class="plotly-div" id="plot-absz"></div>
+  </div>
+</div>
+
+<script>
+// ─── constants ───────────────────────────────────────────────────────────────
+const PATH_COLORS = {
+  'image':       '#1f77b4',
+  'ceiling':     '#ff7f0e',
+  'distillation':'#2ca02c',
+  'head-adapt':  '#d62728'
+};
+const NBINS = 60;
+
+// ─── state ───────────────────────────────────────────────────────────────────
+let DATA = null;
+let plotsReady = false;
+
+// ─── DOM refs ────────────────────────────────────────────────────────────────
+const pathSel        = document.getElementById('path-sel');
+const sampleSlider   = document.getElementById('sample-slider');
+const sampleDisplay  = document.getElementById('sample-display');
+const overlayChk     = document.getElementById('overlay-chk');
+const overlayStageGrp= document.getElementById('overlay-stage-group');
+const overlayStageSel= document.getElementById('overlay-stage-sel');
+const infoBar        = document.getElementById('info-bar');
+const loadingDiv     = document.getElementById('loading');
+const errorDiv       = document.getElementById('error-msg');
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+function getVec(pathKey, slotIdx, stage) {
+  const samples = DATA.paths[pathKey].samples;
+  const s = samples[slotIdx];
+  if (stage === 'absz') return s.z.map(Math.abs);
+  return s[stage];
+}
+
+function getSampleIdx(pathKey, slotIdx) {
+  return DATA.paths[pathKey].samples[slotIdx].idx;
+}
+
+function countPositive(z) {
+  return z.filter(v => v > 0).length;
+}
+
+function vline(x, color) {
+  return {
+    type: 'line',
+    x0: x, x1: x,
+    y0: 0, y1: 1,
+    yref: 'paper',
+    line: { color: color, width: 1.5, dash: 'dot' }
+  };
+}
+
+function histTrace(vec, name, color, opacity) {
+  return {
+    x: vec,
+    type: 'histogram',
+    nbinsx: NBINS,
+    name: name,
+    marker: { color: color, opacity: opacity === undefined ? 0.75 : opacity },
+    hovertemplate: 'value: %{x:.4f}<br>count: %{y}<extra>' + name + '</extra>'
+  };
+}
+
+function baseLayout(title, shapes) {
+  return {
+    margin: { t: 36, r: 14, b: 44, l: 50 },
+    title: { text: title, font: { size: 12 }, x: 0.5 },
+    xaxis: { title: { text: 'value', font: { size: 11 } }, zeroline: false },
+    yaxis: { title: { text: 'count', font: { size: 11 } } },
+    barmode: 'overlay',
+    legend: { font: { size: 11 }, orientation: 'h', y: -0.18 },
+    shapes: shapes || [],
+    paper_bgcolor: '#fff',
+    plot_bgcolor: '#fafbfc',
+    font: { family: 'Segoe UI, Arial, sans-serif', size: 11 }
+  };
+}
+
+const PLOT_CONFIG = { responsive: true, displayModeBar: false };
+
+// ─── render functions ─────────────────────────────────────────────────────────
+
+function renderSinglePath() {
+  const pathKey  = pathSel.value;
+  const slotIdx  = parseInt(sampleSlider.value, 10);
+  const color    = PATH_COLORS[pathKey];
+  const sIdx     = getSampleIdx(pathKey, slotIdx);
+
+  const vecSliced = getVec(pathKey, slotIdx, 'sliced');
+  const vecBn     = getVec(pathKey, slotIdx, 'bn');
+  const vecZ      = getVec(pathKey, slotIdx, 'z');
+  const vecAbsZ   = getVec(pathKey, slotIdx, 'absz');
+
+  const posCount  = countPositive(vecZ);
+  const negCount  = vecZ.length - posCount;
+
+  // info bar
+  infoBar.innerHTML =
+    `Path: <strong>${pathKey}</strong> &nbsp;|&nbsp; ` +
+    `Sample slot ${slotIdx} (idx ${sIdx}) &nbsp;|&nbsp; ` +
+    `sign(z): <strong>${posCount} &times; +1</strong>, <strong>${negCount} &times; &minus;1</strong> ` +
+    `(balance ${(posCount / vecZ.length * 100).toFixed(1)}% positive)`;
+
+  const trS = histTrace(vecSliced, pathKey, color);
+  const trBn= histTrace(vecBn,     pathKey, color);
+  const trZ = histTrace(vecZ,      pathKey, color);
+  const trAZ= histTrace(vecAbsZ,   pathKey, color);
+
+  const shapeZero = vline(0, '#e55');
+
+  if (!plotsReady) {
+    Plotly.newPlot('plot-sliced', [trS],  baseLayout('sliced', []),         PLOT_CONFIG);
+    Plotly.newPlot('plot-bn',     [trBn], baseLayout('bn',     [shapeZero]),PLOT_CONFIG);
+    Plotly.newPlot('plot-z',      [trZ],  baseLayout('z',      [shapeZero]),PLOT_CONFIG);
+    Plotly.newPlot('plot-absz',   [trAZ], baseLayout('|z|',    []),         PLOT_CONFIG);
+    plotsReady = true;
+  } else {
+    Plotly.react('plot-sliced', [trS],  baseLayout('sliced', []),         PLOT_CONFIG);
+    Plotly.react('plot-bn',     [trBn], baseLayout('bn',     [shapeZero]),PLOT_CONFIG);
+    Plotly.react('plot-z',      [trZ],  baseLayout('z',      [shapeZero]),PLOT_CONFIG);
+    Plotly.react('plot-absz',   [trAZ], baseLayout('|z|',    []),         PLOT_CONFIG);
+  }
+}
+
+function renderOverlay() {
+  const stage   = overlayStageSel.value;
+  const slotIdx = parseInt(sampleSlider.value, 10);
+  const pathKeys= Object.keys(DATA.paths); // image, ceiling, distillation, head-adapt
+
+  // info bar — show bit balance for each path on chosen stage (z or absz only meaningful)
+  let infoFrags = pathKeys.map(pk => {
+    const vecZ = getVec(pk, slotIdx, 'z');
+    const pos  = countPositive(vecZ);
+    return `<span style="color:${PATH_COLORS[pk]}">${pk}</span>: ${pos}+/${vecZ.length - pos}&minus;`;
+  });
+  const stageLabel = stage === 'absz' ? '|z|' : stage;
+  infoBar.innerHTML =
+    `Overlay mode &mdash; stage: <strong>${stageLabel}</strong>, slot ${slotIdx} &nbsp;|&nbsp; ` +
+    `sign(z) balance: ${infoFrags.join(' &nbsp; ')}`;
+
+  const shapeZero = vline(0, '#e55');
+  const needsZero = (stage === 'z' || stage === 'bn');
+
+  const traces = pathKeys.map(pk => {
+    const vec = getVec(pk, slotIdx, stage);
+    return histTrace(vec, pk, PATH_COLORS[pk], 0.45);
+  });
+
+  const layout = baseLayout(stageLabel, needsZero ? [shapeZero] : []);
+  // In overlay we use all 4 panels to show single stage across paths
+  // Panel 1: overlay, panels 2-4: per-path (redundant but keeps grid alive)
+  // Actually: spec says "single panel" — we'll use all 4 panels together as one big view
+  // by stacking them the sensible way: show overlay in top-left, rest blank-ish
+  // Re-reading spec: overlay shows 4 paths' dist for chosen stage — use ONE panel logically
+  // but we have 4 plot divs. Let's put the overlay in ALL 4 with different opacity views,
+  // or use just the 4 combined in the single top-left and show per-path in the others.
+  // Cleanest: show the full overlay (all 4 paths) in the top-left panel,
+  // and show each individual path in the other 3 panels.
+  const pathLayouts = pathKeys.map((pk, i) => ({
+    traces: [histTrace(getVec(pk, slotIdx, stage), pk, PATH_COLORS[pk], 0.7)],
+    layout: baseLayout(`${stageLabel} — ${pk}`, needsZero ? [shapeZero] : [])
+  }));
+
+  if (!plotsReady) {
+    Plotly.newPlot('plot-sliced', traces, { ...layout, title: { text: `${stageLabel} — all paths`, font:{size:12}, x:0.5 } }, PLOT_CONFIG);
+    Plotly.newPlot('plot-bn',     pathLayouts[0].traces, pathLayouts[0].layout, PLOT_CONFIG);
+    Plotly.newPlot('plot-z',      pathLayouts[1].traces, pathLayouts[1].layout, PLOT_CONFIG);
+    Plotly.newPlot('plot-absz',   pathLayouts[2] ? pathLayouts[2].traces : [], pathLayouts[2] ? pathLayouts[2].layout : baseLayout(''), PLOT_CONFIG);
+    plotsReady = true;
+  } else {
+    Plotly.react('plot-sliced', traces, { ...layout, title: { text: `${stageLabel} — all paths overlaid`, font:{size:12}, x:0.5 } }, PLOT_CONFIG);
+    Plotly.react('plot-bn',     pathLayouts[0].traces, pathLayouts[0].layout, PLOT_CONFIG);
+    Plotly.react('plot-z',      pathLayouts[1].traces, pathLayouts[1].layout, PLOT_CONFIG);
+    Plotly.react('plot-absz',   pathLayouts[2].traces, pathLayouts[2].layout, PLOT_CONFIG);
+  }
+
+  // update cell titles
+  document.getElementById('title-sliced').textContent = `${stageLabel} — all 4 paths overlaid`;
+  document.getElementById('title-bn').textContent     = `${stageLabel} — image`;
+  document.getElementById('title-z').textContent      = `${stageLabel} — ceiling`;
+  document.getElementById('title-absz').textContent   = `${stageLabel} — distillation`;
+}
+
+function restorePanelTitles() {
+  document.getElementById('title-sliced').textContent = 'sliced — raw W·e slice (pre-BN)';
+  document.getElementById('title-bn').textContent     = 'bn — after per-bit BatchNorm';
+  document.getElementById('title-z').textContent      = 'z — after L2-normalize (pre-sign)';
+  document.getElementById('title-absz').textContent   = '|z| — absolute value of z';
+}
+
+function render() {
+  if (!DATA) return;
+  if (overlayChk.checked) {
+    renderOverlay();
+  } else {
+    restorePanelTitles();
+    renderSinglePath();
+  }
+}
+
+// ─── event listeners ──────────────────────────────────────────────────────────
+
+pathSel.addEventListener('change', render);
+
+sampleSlider.addEventListener('input', () => {
+  const slotIdx = parseInt(sampleSlider.value, 10);
+  const pathKey = pathSel.value;
+  const sIdx = DATA ? getSampleIdx(pathKey, slotIdx) : '—';
+  sampleDisplay.textContent = `slot ${slotIdx} (idx ${sIdx})`;
+  render();
+});
+
+overlayChk.addEventListener('change', () => {
+  if (overlayChk.checked) {
+    overlayStageGrp.classList.remove('hidden');
+    pathSel.closest('.ctrl-group').style.opacity = '0.4';
+    pathSel.disabled = true;
+  } else {
+    overlayStageGrp.classList.add('hidden');
+    pathSel.closest('.ctrl-group').style.opacity = '1';
+    pathSel.disabled = false;
+  }
+  render();
+});
+
+overlayStageSel.addEventListener('change', render);
+
+// ─── load data ────────────────────────────────────────────────────────────────
+
+fetch('data/forward_stages.json')
+  .then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.url}`);
+    return r.json();
+  })
+  .then(data => {
+    DATA = data;
+    loadingDiv.style.display = 'none';
+
+    // populate sample slider max
+    const nSamples = DATA.paths['image'].samples.length;
+    sampleSlider.max = nSamples - 1;
+
+    // initial sample display
+    const slotIdx = parseInt(sampleSlider.value, 10);
+    const sIdx = getSampleIdx(pathSel.value, slotIdx);
+    sampleDisplay.textContent = `slot ${slotIdx} (idx ${sIdx})`;
+
+    render();
+  })
+  .catch(err => {
+    loadingDiv.style.display = 'none';
+    errorDiv.style.display = 'flex';
+    errorDiv.innerHTML =
+      `<strong>Failed to load data/forward_stages.json</strong><br>` +
+      `<code>${err.message}</code><br>` +
+      `<span style="font-size:12px;color:#666">Serve from the viz/ directory: <code>python -m http.server 8080</code> then open <code>http://localhost:8080/forward_stages.html</code></span>`;
+  });
+</script>
+</body>
+</html>
