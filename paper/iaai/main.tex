@@ -308,12 +308,118 @@ OpenVision-Ti16        & 5.6   & 61.2  \\
 \end{table}
 
 \section{Analysis: Why Binarization, Not Dimension, Is the Cost}
-\emph{(Main-track companion --- to be written.)} Continuous dimension reduction is nearly free while
-sign binarization is the dominant low-bit loss; recoverable in part by asymmetric search.
+\label{sec:binarization}
+Deployment lives at low bit-rates, so it matters \emph{what} costs accuracy there. We isolate the
+binarization step from the dimensionality of the code. For the nested head we compare, at each bit
+length $b$, three scores on the \emph{same} learned representation: the pre-sign continuous score
+$\mathbf{z}_q\!\cdot\!\mathbf{z}_g$ (the ceiling before binarization), the deployed Hamming score
+$\mathbf{b}_q\!\cdot\!\mathbf{b}_g$, and an \emph{asymmetric} score
+$\mathbf{z}_q\!\cdot\!\mathbf{b}_g$ (continuous query against the stored 1-bit gallery).
 
-\section{Failure Modes Unique to Cross-Modal/Multilingual Hashing}
-\emph{(To be written.)} Distillation's cross-modal binary-parity collapse; non-Latin script
-degradation traced to the text tower.
+\begin{table}[t]
+\centering\small
+\begin{tabular}{lcccc}
+\toprule
+bits & continuous & Hamming & asym. & sign loss \\
+\midrule
+64   & 80.42 & 66.52 & 74.70 & $+13.90$ \\
+128  & 80.36 & 74.10 & 77.94 & $+6.26$ \\
+256  & 80.48 & 77.60 & 79.38 & $+2.88$ \\
+512  & 80.54 & 79.18 & 80.24 & $+1.36$ \\
+1024 & 80.52 & 79.92 & 80.54 & $+0.60$ \\
+\bottomrule
+\end{tabular}
+\caption{COCO 5K R@10, nested head (ceiling text path). The continuous ceiling is flat in bits
+($\approx$80.4--80.5); the sign loss (continuous$-$Hamming) shrinks from $13.9$ at 64-bit to $0.6$ at
+1024-bit. \src{paper/signloss\_quant.csv (branch analysis-signloss-outlier)}}
+\label{tab:signloss}
+\end{table}
+
+\textbf{Continuous quality is bit-flat; the loss is the sign.} Table~\ref{tab:signloss} shows the
+continuous ceiling is essentially constant across bit length ($\approx$80.5), so reducing the code
+\emph{dimension} costs almost nothing for continuous scoring. The entire low-bit deficit is the sign
+operation: the sign loss is $+13.9$ R@10 at 64-bit but only $+0.6$ at 1024-bit---negligible at the
+deployed width. \emph{Binarization, not dimensionality, is the low-bit cost, and only in the low-bit
+(small-index, on-device) regime.}
+
+The mechanism is that the sign weights every coordinate equally, so low-variance coordinates that
+contribute $\approx$0 to a magnitude-weighted continuous dot product instead inject pure noise into
+the Hamming distance. On raw frozen embeddings (no head), a PCA sweep makes this explicit: continuous
+R@10 is monotone and tolerant of added dimensions, whereas the 1-bit score \emph{peaks at an
+intermediate dimension and then degrades} as low-variance dimensions are added---e.g.\ for SigLIP2
+the 1-bit R@10 is 48.7 at 256-d but 4.2 at the full 1152-d, while continuous stays $\approx$80. The
+same continuous-tolerant / sign-has-an-optimal-dimension pattern holds across three frozen backbones
+(SigLIP2-So400m, SigLIP2-base, AltCLIP), so it is not an artifact of one
+model.\footnote{Scope: this is a statement about \emph{coding} (sign vs.\ continuous), not about the
+embedding being intrinsically low-dimensional. Raw retrieval needs $\sim$256 PCA dimensions; the
+much tighter low-dimensional concentration of the trained head is a property of the learned
+projection, which we do not claim as a result here.
+\src{paper/gapB\_dim\_sweep.csv (branch analysis-gapB)}}
+
+\textbf{Asymmetric search recovers half the low-bit loss for free.} Keeping the query continuous while
+the gallery stays 1-bit (no change to the stored index, no retraining) recovers about half of the
+low-bit sign loss: at 64-bit the asymmetric score reaches 74.7 vs.\ 66.5 Hamming ($+8.2$ of the
+$13.9$ lost; Table~\ref{tab:signloss}). This is a deployment-friendly knob exactly where it matters
+(small on-device indices), and is inert at 1024-bit where the sign loss is already negligible.
+
+\section{What Governs Learned Binary Cross-Modal Retrieval}
+\label{sec:governs}
+Our central analytical contribution is a \emph{negative-space map}: a sweep of pre-binarization
+proxies and shallow loss/architecture levers that, in this frozen-feature cross-modal regime, all
+fail to beat a plain recipe---a normalized projection trained with InfoNCE. We present the failures
+as evidence for what governs code quality, not as tuning anecdotes.
+
+\textbf{A decisive observation: lower on every proxy, yet better retrieval.} Two text paths into the
+frozen code space---a distillation head (trained to match the SigLIP2 text embedding) and a
+head-adapt head (trained end-to-end with InfoNCE)---let us separate ``proximity to a target'' from
+``separation from negatives''. The head-adapt path is \emph{lower} than distillation on every
+proximity proxy---cosine-to-target, binary parity, neighbor Jaccard, directional
+alignment---yet it retrieves \emph{better} (Table~\ref{tab:proxies}). Retrieval is therefore governed
+by contrastive negative-separation, which InfoNCE optimizes directly, not by how closely the code
+reproduces any target geometry.
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{lcccc}
+\toprule
+path (1024-bit) & parity\% & Jacc@10 & diralign & R@10 \\
+\midrule
+distillation & 86.91 & 0.548 & 0.264 & 70.86 \\
+head-adapt   & 81.64 & 0.483 & 0.263 & \textbf{74.00} \\
+\bottomrule
+\end{tabular}
+\caption{Head-adapt is lower than distillation on all proximity proxies but higher in R@10.
+\src{paper/pillar2\_hamming\_predictors.csv, paper/rigor\_parity.csv (branch paper-aaai-rigor)}}
+\label{tab:proxies}
+\end{table}
+
+\textbf{No shallow lever beats the simple recipe.} Across eleven gates (full table in the appendix,
+Table~\ref{tab:gates}) the pattern is uniform. (i)~\emph{Predictors}: cosine, parity, margin
+($\overline{|z|}$ is pinned $\approx$0.025 by BatchNorm$+$L2 and varies only in numerical noise),
+neighbor-Jaccard, directional alignment, and code/upstream effective-rank all fail to predict R@10
+(best non-tautological predictor is cosine, $\rho\!=\!0.79$; rank/eff-dim $\rho\!=\!0.38/0.12$).
+(ii)~\emph{Losses}: adding a negative-separation term (Lever~A) only re-trades top-1 against recall
+(R@1 $+4.2$, R@10 $-5.7$ at 64-bit), and loss-composition/curriculum (v1, v2) are inert
+($\le$0.2~pt); InfoNCE is already R@10-optimal. (iii)~\emph{Architecture}: a BN-free head (Lever~B)
+trains stably with no benefit---BatchNorm is convenient but \emph{not} essential, consistent with
+prior single-loss hashing; and residual / multiscale / UNet-style heads do not beat plain
+prefix-slicing (skip exchange beats depth-only by $+5.9$ R@10 but still trails the baseline by
+$-8.9$). The single green result is dynamic (coarse-to-fine) bit allocation, which matches 1024-bit
+R@10 at $\sim$15\% of the bit-operations---but this is an \emph{established} adaptive-retrieval
+technique and a system/efficiency win (gallery storage is unchanged), not a new method. We conclude
+that \emph{a plain normalized projection trained with InfoNCE is near-optimal in this frozen regime};
+BatchNorm and loss/architecture engineering are inert levers. This optimality claim is scoped to the
+frozen-feature setting; we do not claim it for end-to-end-trained encoders.
+
+\textbf{Multilingual failure mode.} Binarization itself is script-uniform: non-Latin codes do not
+degrade more than Latin ones under the sign step. The per-language deficit instead traces to the
+upstream text tower---weak languages are weak in the float ceiling too---which is why an offline
+multilingual encoder \emph{beats} the SigLIP2 server path on its weakest scripts (\S3.2). We
+explicitly \emph{downgrade} a tempting ``low text-embedding effective-dimension causes weak
+languages'' story: it holds only for the extreme tail (mi, te, quz), and across all 36 languages
+effective-dimension does not predict R@10 ($\rho\!=\!0.38$), so it is a tail observation, not a
+general law.\footnote{\src{paper/rank\_predictor.csv (branch paper-rank-governs); STATE\_OF\_PROJECT
+gate table}}
 
 \section{Related Work}
 \emph{(To be written.)} OrthoHash \cite{orthohash} and HashCoder/CroVCA \cite{crovca} establish
@@ -324,6 +430,40 @@ without quoting an unverified future-work sentence.}
 \section{Conclusion}
 \emph{(To be written.)} A deployed, backend-free 1-bit multilingual image search system; honest
 scope (does not beat float multilingual SoTA), measured costs, and reproducible numbers.
+
+\appendix
+\section{Negative-space gate table}
+Table~\ref{tab:gates} lists the eleven gates summarized in \S\ref{sec:governs}. ``RED'' = no gain over
+the InfoNCE$+$L2 baseline (1024-bit R@10 $\approx$80.3; green bar $=+1.0$~pt); ``inert'' $=\le$0.2~pt.
+Each row is clone-verifiable at the cited branch (see STATE\_OF\_PROJECT). Gates 1--5 are our
+``5-way negative'': proximity/alignment proxies of the kind that motivate single-loss alignment
+objectives, here shown not to predict cross-modal binary R@10.
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{llp{3.4cm}}
+\toprule
+\# & gate (verdict) & one-line \\
+\midrule
+1 & cosine pred.\ (RED) & best non-taut.\ predictor, $\rho{=}0.79$ \\
+2 & parity pred.\ (RED) & parity\% anti-correlates with R@10 \\
+3 & margin pred.\ (RED) & $\overline{|z|}$ pinned $\approx$0.025 by BN+L2 \\
+4 & neighbor pred.\ (RED) & Jaccard@10 does not predict R@10 \\
+5 & diralign pred.\ (RED) & directional alignment flat \\
+6 & rank/eff-dim (RED) & code $\rho{=}0.12$, upstream $\rho{=}0.38$ \\
+7 & Lever A negsep loss (RED) & re-trades R@1$\uparrow$/R@10$\downarrow$ \\
+8 & Lever B BN-free head (inert) & BN convenient, not essential \\
+9 & residual coding (inert) & $\approx$baseline ($-1.6$ @1024) \\
+10 & multiscale/UNet head (RED) & skip$>$depth ($+5.9$) but $<$base ($-8.9$) \\
+11 & Lever D dynamic bits (GREEN) & 1024-bit R@10 at $\sim$15\% bit-ops; \emph{established technique}, system win \\
+\bottomrule
+\end{tabular}
+\caption{Eleven-gate negative-space map. Sources: predictors 1--6 \texttt{pillar2\_hamming\_predictors.csv},
+\texttt{rank\_predictor.csv} (paper-pillar2-hamming, paper-rank-governs); levers 7,8,11
+(paper-lever-\{negsep,arch,dynbit\}); 9--10 \texttt{head\_multiscale.csv} (paper-head-multiscale).
+Verdicts match STATE\_OF\_PROJECT.}
+\label{tab:gates}
+\end{table}
 
 \begin{thebibliography}{9}
 \bibitem{orthohash} Hoe, J.T.; et al. One Loss for All: Deep Hashing with a Single Cosine Similarity
