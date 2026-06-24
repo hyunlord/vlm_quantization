@@ -1,0 +1,4 @@
+method,R10,recall@10_vs_exact,latency_ms_per_query,index_mem_MB
+IndexBinaryFlat(exact),80.32,100.0,0.033,0.64
+"IndexBinaryIVF(nlist64,nprobe8)",79.72,98.11,0.0054,0.64
+numpy_brute_Hamming(client),80.44,99.23,1.7304,0.64

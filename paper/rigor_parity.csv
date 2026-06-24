@@ -1,0 +1,4 @@
+path,cosine_to_true,binary_parity_pct,cont_R10,bin_R10
+ceiling(true SigLIP-text),1.0,100.0,81.58,79.92
+distillation(e5→SigLIP-text),0.8664,86.91,67.92,70.86
+head-adapt(e5→txt_h'),nan,81.64,nan,74.0

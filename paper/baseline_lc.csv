@@ -1,0 +1,21 @@
+path,model,variant,lang,R10,mAP10
+server(ft113 1bit),SigLIP2-so400m,orig,EN,79.98,53.39
+float(cosine),SigLIP2-so400m,orig,EN,81.46,59.81
+naive-sign(no head),SigLIP2-so400m,orig,EN,70.54,46.83
+server(ft113 1bit),SigLIP2-so400m,lower,EN,81.24,55.15
+float(cosine),SigLIP2-so400m,lower,EN,83.58,62.71
+naive-sign(no head),SigLIP2-so400m,lower,EN,72.62,48.95
+server(ft113 1bit),SigLIP2-so400m,orig,KO,70.98,42.56
+float(cosine),SigLIP2-so400m,orig,KO,66.12,42.05
+naive-sign(no head),SigLIP2-so400m,orig,KO,52.08,30.4
+server(ft113 1bit),SigLIP2-so400m,lower,KO,71.04,42.62
+float(cosine),SigLIP2-so400m,lower,KO,66.26,42.15
+naive-sign(no head),SigLIP2-so400m,lower,KO,52.18,30.5
+offline e5-small,e5-small,native,EN,74.0,44.84
+offline e5-small,e5-small,lower,EN,74.24,44.59
+offline e5-small,e5-small,native,KO,66.2,36.28
+offline e5-small,e5-small,lower,KO,66.2,36.26
+offline MiniLM,MiniLM,native,EN,78.16,49.68
+offline MiniLM,MiniLM,lower,EN,78.26,49.6
+offline MiniLM,MiniLM,native,KO,65.44,37.24
+offline MiniLM,MiniLM,lower,KO,65.46,37.23

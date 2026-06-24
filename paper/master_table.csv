@@ -1,0 +1,12 @@
+backbone,family,params_M,text_path,recipe,bits,bytes_per_img,deployable_browser,coco_en_R10,coco_ko_R10,coco_en_mAP10,xm3600_avg36_R10,source_csv
+SigLIP2-So400m+ft113,SigLIP2-so400m,707.8,server,ft113-full,1024,128,N,81.24,71.04,55.15,70.3,"coco_lc_full,multiling_server_lc"
+SigLIP2-So400m float (ceiling),SigLIP2-so400m,707.8,server,float-ceiling,-,-,N,83.58,66.26,62.71,74.46,"coco_lc_full,german_sanity"
+SigLIP2-So400m naive-sign,SigLIP2-so400m,707.8,server,naive(no head),1152,144,N,72.62,52.18,48.95,,coco_lc_full
+SigLIP2-So400m+ft113 -> e5-small,e5/XLM-R,117.7,offline,head-adapt(clean),1024,128,Y,74.0,66.2,44.84,34.07,"baseline_lc,multiling.json"
+SigLIP2-So400m+ft113 -> MiniLM,paraphrase/XLM-R,117.7,offline,head-adapt(clean),1024,128,Y,78.16,65.44,49.68,53.92,"baseline_lc,multiling.json"
+SigLIP2-base+head,SigLIP2-base,,server,clean-EN,1024,128,N,79.0,56.7,,,encoders_baselines_lc(backbones)
+AltCLIP-m18+head,AltCLIP-XLMR,,server,clean-EN(native),1024,128,N,77.96,70.52,,,backbones
+NLLB-CLIP+head,NLLB-CLIP,,server,clean-EN+ko(native),1024,128,N,66.78,60.62,36.45,51.45,nllb_hashing
+NLLB-CLIP float (ceiling),NLLB-CLIP,,server,float-ceiling,-,-,N,78.68,71.72,54.24,86.06,nllb_hashing
+MetaCLIP2+head,MetaCLIP2-worldwide,,server,clean-EN+ko(native),1024,128,N,71.86,64.88,43.15,52.01,metaclip2_hashing
+MetaCLIP2 float (ceiling),MetaCLIP2-worldwide,,server,float-ceiling,-,-,N,78.92,68.94,56.25,79.62,metaclip2_hashing

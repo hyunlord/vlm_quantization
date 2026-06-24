@@ -1,0 +1,17 @@
+target,dtype,variant,bitflips_per_1024,top10_overlap,EN_R10,KO_R10,note
+head,fp32,orig,0.0,1.0,79.92,71.08,baseline
+head,fp16,orig,0.12,0.998,79.98,71.08,
+head,bf16,orig,0.95,0.99,79.94,71.0,
+head,int8,orig,18.97,0.929,79.7,70.52,
+emb,fp16,orig,0.02,1.0,79.92,71.06,storage-cast
+emb,bf16,orig,0.18,0.997,79.92,71.04,storage-cast
+emb,int8,orig,5.45,0.966,79.84,70.84,storage-cast
+text_tower,bf16,orig,1.52,,79.92,,"so400m tower bf16 vs fp32 backbone, head fp32 (EN)"
+head,fp32,lower,0.0,1.0,81.24,71.08,baseline
+head,fp16,lower,0.12,0.998,81.24,71.08,
+head,bf16,lower,0.95,0.99,81.26,71.0,
+head,int8,lower,18.75,0.93,81.04,70.52,
+emb,fp16,lower,0.02,1.0,81.24,71.06,storage-cast
+emb,bf16,lower,0.18,0.997,81.24,71.04,storage-cast
+emb,int8,lower,5.55,0.965,81.2,70.84,storage-cast
+text_tower,bf16,lower,2.23,,81.24,,"so400m tower bf16 vs fp32 backbone, head fp32 (EN)"
