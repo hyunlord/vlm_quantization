@@ -1,36 +1,40 @@
-% IAAI/AAAI submission --- Sections 2 (System) + 3 (Main Results).
-% NOTE ON TEMPLATE: the official AAAI Author Kit (aaai24.sty/aaai24.bst) is not vendored in this
-% repo, so this file uses a self-contained two-column article class that approximates the AAAI
-% two-column layout and compiles cleanly anywhere (tectonic / pdflatex x2, 0 undefined).
-% For camera-ready, replace the preamble with \documentclass[letterpaper]{article}\usepackage{aaai24}
-% and move the title/author block into \title{}/\author{}; the body below is template-agnostic.
-%
-% NUMBER PROVENANCE: every quantitative claim is drawn from a clone-verified CSV in paper/ on
-% branch paper-writeup (CSVs imported from paper-metaclip-master / paper-aaai-rigor /
-% paper-image-encoders-headadapt). Each table/figure caption names its source CSV. Unverified
-% or extrapolated figures are marked [VERIFY].
-\documentclass[10pt,twocolumn]{article}
-\usepackage[T1]{fontenc}
-\usepackage[utf8]{inputenc}
-\usepackage{times}
+% IAAI/AAAI-2026 submission. Official AAAI 2026 style (aaai2026.sty/.bst, anonymous submission mode).
+% Style files: official AAAI 2026 Author Kit (https://aaai.org/authorkit26/) / community-unified mirror
+% github.com/lizhemin15/AAAI-2026-Latex-Unified. TODO: when the AAAI-27 kit ships, swap aaai2026.sty/.bst.
+% Build: pdflatex main && bibtex main && pdflatex main && pdflatex main   (tectonic main.tex also works).
+% Blind mode: [submission] anonymizes (current default, fits both single-blind IAAI and double-blind Main);
+%   for camera-ready use \usepackage{aaai2026} (no option) and fill \author{}/\affiliations{}.
+% NUMBER PROVENANCE: every quantitative claim is from a clone-verified CSV in paper/ on branch
+% paper-writeup; each table/figure caption names its source CSV. Unverified items are marked [VERIFY].
+\documentclass[letterpaper]{article} % DO NOT CHANGE THIS
+\usepackage[submission]{aaai2026}    % anonymous submission; camera-ready: \usepackage{aaai2026}
+\usepackage{times}    % DO NOT CHANGE THIS
+\usepackage{helvet}   % DO NOT CHANGE THIS
+\usepackage{courier}  % DO NOT CHANGE THIS
+\usepackage[hyphens]{url} % DO NOT CHANGE THIS
+\usepackage{graphicx} % DO NOT CHANGE THIS
+\usepackage{natbib}   % DO NOT CHANGE THIS
+\usepackage{caption}  % DO NOT CHANGE THIS
+\frenchspacing        % DO NOT CHANGE THIS
+\setcounter{secnumdepth}{0} % no section numbers (AAAI default)
+% Additional packages (permitted; hyperref/geometry/float/fontenc are forbidden by the AAAI kit):
 \usepackage{amsmath,amssymb}
-\usepackage{graphicx}
 \usepackage{booktabs}
-\usepackage{microtype}
 \usepackage{tikz}
 \usetikzlibrary{positioning}
-\usepackage{pgfplots}
-\pgfplotsset{compat=1.18}
-\usepackage[hidelinks]{hyperref}
-\usepackage[margin=0.75in,columnsep=0.25in]{geometry}
-\setlength{\parindent}{1em}
+\graphicspath{{figs/}}
 \newcommand{\src}[1]{\footnotesize\textit{Source: #1.}}
 \newcommand{\verify}[1]{\textbf{[VERIFY: #1]}}
 
-\title{\vspace{-2em}\bfseries A Deployed 1-Bit Cross-Modal Hashing System:\\
+\pdfinfo{
+/Title (A Deployed 1-Bit Cross-Modal Hashing System)
+/Author (Anonymous Submission)
+}
+
+\title{A Deployed 1-Bit Cross-Modal Hashing System:\\
 Browser-Native Multilingual Image Search at 128 Bytes per Image}
-\author{Anonymous (IAAI track)\\ \small \texttt{paper-writeup} branch}
-\date{}
+\author{Anonymous Submission}
+\affiliations{Paper under review --- author and affiliation withheld for anonymity.}
 
 \begin{document}
 \maketitle
@@ -162,19 +166,9 @@ $2\times$ storage and 4096-bit does not improve further. 1024-bit (128~B) is the
 
 \begin{figure}[t]
 \centering
-\begin{tikzpicture}
-\begin{axis}[width=\columnwidth,height=4.2cm,xmode=log,log basis x=2,
-  xlabel={code length (bits)},ylabel={COCO EN R@10},
-  xtick={8,32,128,512,2048},xticklabels={8,32,128,512,2048},
-  ymin=0,ymax=90,grid=both,tick label style={font=\scriptsize},
-  label style={font=\scriptsize},legend style={font=\scriptsize,at={(0.98,0.05)},anchor=south east}]
-\addplot[mark=*,thick] coordinates
- {(8,14.26)(16,34.46)(32,54.5)(64,68.02)(128,75.54)(256,78.44)(512,79.74)(1024,80.64)(2048,81.36)(4096,81.08)};
-\addlegendentry{ours 1-bit (EN)}
-\draw[dashed] (axis cs:1024,0) -- (axis cs:1024,80.64);
-\end{axis}
-\end{tikzpicture}
-\caption{Bit-rate sweep, COCO EN, lowercased. \src{paper/bits\_extreme\_lc.csv (lower rows)}}
+\includegraphics[width=\columnwidth]{fig_bits.pdf}
+\caption{Bit-rate sweep, COCO (lowercased). 1024-bit (128~B) is the deployed sweet spot; 2048-bit
+adds $+0.7$ R@10 for $2\times$ storage. \src{paper/bits\_extreme\_lc.csv}}
 \label{fig:bits}
 \end{figure}
 
@@ -188,6 +182,7 @@ ceiling. The multilingual text tower, not the binarization, is the bottleneck on
 
 \begin{table}[t]
 \centering\small
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{lcc}
 \toprule
 configuration & XM3600 avg-36 R@10 & deployable \\
@@ -196,11 +191,21 @@ float ceiling (SigLIP2)        & 74.46 & no \\
 \textbf{server (ours, 1-bit)}  & \textbf{70.30} & no \\
 offline MiniLM (ours, 1-bit)   & 53.92 & \textbf{browser} \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \caption{XM3600 36-language average. Offline beats server on \{hi, te, th, mi\}.
 \src{paper/multiling\_server\_lc.csv, paper/master\_table.csv}}
 \label{tab:multiling}
 \end{table}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{fig_multiling.pdf}
+\caption{XM3600 per-language R@10 (36 languages, sorted by server score): float ceiling, our 1-bit
+server path, and the offline browser encoder. On four low-resource non-Latin languages
+(hi, te, th, mi) the offline encoder beats the server path---the text tower, not binarization, is the
+bottleneck there. \src{paper/multiling\_server\_lc.csv}}
+\label{fig:multiling}
+\end{figure*}
 
 \subsection{Baselines}
 Table~\ref{tab:baselines} compares the learned head against ITQ and LSH applied to the
@@ -265,26 +270,7 @@ frozen SigLIP2 code space; the anchor (full SigLIP2 image tower) is R@10 81.24. 
 is vision--language pretraining, not parameter count: MobileCLIP2-S0 (11.4~M, VL-pretrained) reaches
 70.52, beating the larger image-only-SSL DINOv2-base (86.6~M, 65.0). MobileCLIP2-S2 (35.8~M) is the
 practical sweet spot at 76.18---near the 92.9~M SigLIP2-base (77.98) at a fraction of the size and
-latency (Fig.~\ref{fig:enc}).
-
-\begin{figure}[t]
-\centering
-\begin{tikzpicture}
-\begin{axis}[width=\columnwidth,height=4.2cm,xmode=log,
-  xlabel={params (M)},ylabel={on-device R@10},
-  ymin=58,ymax=82,grid=both,tick label style={font=\scriptsize},label style={font=\scriptsize},
-  nodes near coords,every node near coord/.style={font=\tiny},point meta=explicit symbolic]
-\addplot[only marks,mark=*] coordinates {
- (11.4,70.52)[S0] (35.8,76.18)[S2] (321.8,77.62)[S4]
- (92.9,77.98)[base] (86.6,65.0)[dino-b] (22.1,61.38)[dino-s]
- (5.6,61.2)[ov-ti] (21.8,71.38)[ov-s] (93.7,76.14)[pe-b] (8.3,61.6)[tiny] };
-\draw[dashed] (axis cs:5,81.24) -- (axis cs:330,81.24) node[right,font=\tiny]{anchor};
-\end{axis}
-\end{tikzpicture}
-\caption{On-device image-indexing R@10 vs.\ encoder size (EN, server-side eval). VL-pretrained small
-encoders beat larger image-only-SSL ones. \src{paper/image\_encoders\_headadapt.csv}}
-\label{fig:enc}
-\end{figure}
+latency (Table~\ref{tab:encoders}).
 
 \begin{table}[t]
 \centering\small
@@ -337,7 +323,17 @@ bits & continuous & Hamming & asym. & sign loss \\
 \label{tab:signloss}
 \end{table}
 
-\textbf{Continuous quality is bit-flat; the loss is the sign.} Table~\ref{tab:signloss} shows the
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_signloss.pdf}
+\caption{Continuous vs.\ Hamming vs.\ asymmetric R@10 by bit length (nested head, ceiling path). The
+shaded band is the sign loss; it is large at 64-bit and vanishes by 1024-bit, and asymmetric search
+recovers about half of it. \src{paper/signloss\_quant.csv}}
+\label{fig:signloss}
+\end{figure}
+
+\textbf{Continuous quality is bit-flat; the loss is the sign.} Table~\ref{tab:signloss} (and
+Fig.~\ref{fig:signloss}) shows the
 continuous ceiling is essentially constant across bit length ($\approx$80.5), so reducing the code
 \emph{dimension} costs almost nothing for continuous scoring. The entire low-bit deficit is the sign
 operation: the sign loss is $+13.9$ R@10 at 64-bit but only $+0.6$ at 1024-bit---negligible at the
@@ -395,7 +391,16 @@ head-adapt   & 81.64 & 0.483 & 0.263 & \textbf{74.00} \\
 \label{tab:proxies}
 \end{table}
 
-\textbf{No shallow lever beats the simple recipe.} Across eleven gates (full table in the appendix,
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_gates.pdf}
+\caption{The eleven-gate negative-space map. No pre-binarization proxy predicts code quality and no
+shallow loss/architecture lever beats the InfoNCE$+$L2 baseline; the only green result (dynamic bits)
+is an established efficiency technique. Verdicts match the appendix table and STATE\_OF\_PROJECT.}
+\label{fig:gates}
+\end{figure}
+
+\textbf{No shallow lever beats the simple recipe.} Across eleven gates (Fig.~\ref{fig:gates}; full table in the appendix,
 Table~\ref{tab:gates}) the pattern is uniform. (i)~\emph{Predictors}: cosine, parity, margin
 ($\overline{|z|}$ is pinned $\approx$0.025 by BatchNorm$+$L2 and varies only in numerical noise),
 neighbor-Jaccard, directional alignment, and code/upstream effective-rank all fail to predict R@10
@@ -500,6 +505,7 @@ objectives, here shown not to predict cross-modal binary R@10.
 
 \begin{table}[t]
 \centering\small
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{llp{3.4cm}}
 \toprule
 \# & gate (verdict) & one-line \\
@@ -516,7 +522,7 @@ objectives, here shown not to predict cross-modal binary R@10.
 10 & multiscale/UNet head (RED) & skip$>$depth ($+5.9$) but $<$base ($-8.9$) \\
 11 & Lever D dynamic bits (GREEN) & 1024-bit R@10 at $\sim$15\% bit-ops; \emph{established technique}, system win \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \caption{Eleven-gate negative-space map. Sources: predictors 1--6 \texttt{pillar2\_hamming\_predictors.csv},
 \texttt{rank\_predictor.csv} (paper-pillar2-hamming, paper-rank-governs); levers 7,8,11
 (paper-lever-\{negsep,arch,dynbit\}); 9--10 \texttt{head\_multiscale.csv} (paper-head-multiscale).
@@ -524,7 +530,7 @@ Verdicts match STATE\_OF\_PROJECT.}
 \label{tab:gates}
 \end{table}
 
-\bibliographystyle{plain}
+% aaai2026.sty already sets \bibliographystyle{aaai2026}; do not add one here.
 \bibliography{refs}
 
 \end{document}
