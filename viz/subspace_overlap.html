@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Subspace Overlap Analysis</title>
+  <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f8f9fa;
+      color: #212529;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      padding: 14px 24px;
+    }
+    header h1 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #343a40;
+      line-height: 1.4;
+    }
+    header p.subtitle {
+      font-size: 0.82rem;
+      color: #6c757d;
+      margin-top: 4px;
+      line-height: 1.6;
+    }
+    header p.subtitle span.def {
+      display: inline-block;
+      margin-right: 14px;
+      white-space: nowrap;
+    }
+    header p.subtitle code {
+      font-size: 0.79rem;
+      background: #f1f3f5;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    /* ── Korean explainer ── */
+    .explainer {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+    }
+    .explainer summary {
+      padding: 10px 24px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #495057;
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      user-select: none;
+    }
+    .explainer summary::-webkit-details-marker { display: none; }
+    .explainer summary::before {
+      content: '▶';
+      font-size: 0.65rem;
+      color: #adb5bd;
+      transition: transform 0.15s;
+    }
+    .explainer[open] summary::before { transform: rotate(90deg); }
+    .explainer summary:hover { background: #f8f9fa; }
+    .explainer-body {
+      padding: 0 24px 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px 28px;
+    }
+    .exp-block h3 {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #343a40;
+      margin-bottom: 5px;
+    }
+    .exp-block p {
+      font-size: 0.8rem;
+      color: #495057;
+      line-height: 1.65;
+    }
+    .exp-block p em {
+      color: #868e96;
+      font-style: normal;
+    }
+    @media (max-width: 680px) {
+      .explainer-body { grid-template-columns: 1fr; }
+    }
+
+    /* ── Controls ── */
+    .controls {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      padding: 11px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: center;
+    }
+    .ctrl-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .ctrl-group label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6c757d;
+    }
+    .path-tabs {
+      display: flex;
+      gap: 0;
+      border: 1px solid #ced4da;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .path-tab {
+      padding: 5px 16px;
+      font-size: 0.85rem;
+      border: none;
+      background: #fff;
+      color: #495057;
+      cursor: pointer;
+      border-right: 1px solid #ced4da;
+      transition: background 0.12s;
+    }
+    .path-tab:last-child { border-right: none; }
+    .path-tab.active {
+      background: #4c9be8;
+      color: #fff;
+      font-weight: 600;
+    }
+    .path-tab:hover:not(.active) { background: #e9ecef; }
+
+    /* k-slider group */
+    .ctrl-group input[type="range"] {
+      width: 160px;
+      accent-color: #4c9be8;
+      cursor: pointer;
+    }
+    .ctrl-group .slider-label {
+      font-size: 0.8rem;
+      color: #343a40;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Main grid ── */
+    main {
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .panel {
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 9px 16px;
+      background: #f1f3f5;
+      border-bottom: 1px solid #dee2e6;
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .panel-header h2 {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #343a40;
+    }
+    .panel-header p {
+      font-size: 0.77rem;
+      color: #868e96;
+    }
+    .panel-body {
+      padding: 4px 6px 8px;
+    }
+
+    .note-footer {
+      padding: 6px 16px 10px;
+      font-size: 0.75rem;
+      color: #868e96;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Subspace Overlap Analysis</h1>
+  <p class="subtitle">
+    <span class="def"><strong>overlap</strong> = mean cos² of principal angles between top-k PCA subspaces (1=identical, 0=orthogonal)</span>
+    <span class="def"><strong>random baseline</strong> = expected overlap for random subspaces of same dimensionality</span>
+    &nbsp;·&nbsp; Tests whether the low-dim retrieval subspace is shared across modalities and languages.
+  </p>
+</header>
+
+<!-- Korean explainer -->
+<details class="explainer" open>
+  <summary>한국어 해설 (Korean explainer)</summary>
+  <div class="explainer-body">
+    <div class="exp-block">
+      <h3>📊 무엇을 보는가</h3>
+      <p>
+        검색에 쓰이는 저차원 부분공간이 모달(이미지↔텍스트) 간, 언어 간 '공유'되는지 측정합니다. 이미지-only PCA 부분공간과 텍스트-only PCA 부분공간의 주각(principal angle) 겹침(cos² 평균; 1=동일, 0=직교)과, 두 모달을 이미지/텍스트/결합 basis에 투영했을 때의 R@10을 봅니다.
+      </p>
+    </div>
+    <div class="exp-block">
+      <h3>🔍 어떻게 읽나</h3>
+      <p>
+        Panel1: 겹침이 random(점선)보다 한참 위면 공유가 있는 것. Panel2: 어느 basis가 검색을 잘 살리나 — 텍스트 basis가 결합과 비슷하고 이미지 basis는 손해. Panel3: 언어별 텍스트 부분공간이 영어/이미지와 얼마나 겹치나(k=64).
+      </p>
+    </div>
+    <div class="exp-block">
+      <h3>👀 주목점</h3>
+      <p>
+        이미지·텍스트는 부분적으로 공유(@64 ≈0.40, random ~0.06의 6-8배; @256 ~0.6)하나 동일하진 않습니다. ★비대칭: 교차모달 검색 신호는 '텍스트 주성분 부분공간'에 훨씬 더 정렬됩니다(텍스트 basis R@10 ≈ 결합 ≫ 이미지 basis; so400m@64 66.6 vs 27.7) → 이미지의 고분산 방향은 검색 방향이 아님. 언어들은 영어와 텍스트 부분공간을 강하게 공유(중앙값 0.67)하며 이미지와의 공유(0.33)보다 큼. 약한 언어(te 0.13)는 공유가 낮습니다 → 약함 = 공통 부분공간에 못 들어감.
+      </p>
+    </div>
+    <div class="exp-block">
+      <h3>🔗 연결</h3>
+      <p>
+        Section3('소수 차원이 무엇인가')의 답: 저차원 구조는 모달·언어 공통 부분공간으로 <em>일부</em> 실재합니다(저차원 집중 서사 중 그나마 견고한 부분). 단 모달 간은 비대칭(텍스트 주도)이고 언어 간은 강함. 3 backbone 일관. dim_vs_recall/spectrum_explorer와 함께 보세요. 탐색용 — 단정 대신 수치로.
+      </p>
+    </div>
+  </div>
+</details>
+
+<!-- Controls -->
+<div class="controls">
+  <div class="ctrl-group">
+    <label>Backbone (Panels 1 &amp; 2)</label>
+    <div class="path-tabs" id="backboneTabs">
+      <button class="path-tab active" data-backbone="so400m">so400m</button>
+      <button class="path-tab" data-backbone="siglip2-base">siglip2-base</button>
+      <button class="path-tab" data-backbone="altclip-m18">altclip-m18</button>
+    </div>
+  </div>
+  <div class="ctrl-group">
+    <label>k for Panel 3</label>
+    <input type="range" id="kSlider" min="0" max="7" step="1" value="5" />
+    <span class="slider-label" id="kLabel">k = 64</span>
+  </div>
+</div>
+
+<main>
+  <!-- Panel 1: Cross-modal subspace overlap vs k -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Cross-Modal Subspace Overlap vs k</h2>
+      <p>img_txt_overlap vs random baseline — overlap ≈ 6–8× random; partial (~0.40 @64), not identical</p>
+    </div>
+    <div class="panel-body">
+      <div id="chartOverlap" style="height:320px;"></div>
+    </div>
+  </div>
+
+  <!-- Panel 2: R@10 by projection basis vs k -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>R@10 by Projection Basis vs k</h2>
+      <p>text-basis ≈ combined ≫ image-basis — retrieval signal aligns with TEXT principal directions</p>
+    </div>
+    <div class="panel-body">
+      <div id="chartBasis" style="height:320px;"></div>
+    </div>
+    <div class="note-footer">
+      ★ Key finding: image high-variance directions are NOT the retrieval directions. The cross-modal retrieval signal is primarily captured by the text PCA subspace, not the image subspace.
+    </div>
+  </div>
+
+  <!-- Panel 3: XM3600 language subspace sharing -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>XM3600 Language Subspace Sharing (so400m)</h2>
+      <p>per-language text subspace overlap vs English (bars) — sorted descending · reference lines: vs image &amp; img_en_overlap</p>
+    </div>
+    <div class="panel-body">
+      <div id="chartLang" style="height:400px;"></div>
+    </div>
+    <div class="note-footer" id="langNote">
+      Languages share a common TEXT subspace (median ~0.67) far more than text shares with image (~0.33). Weak languages (te, mi, quz) share least — weakness = not entering the common subspace.
+    </div>
+  </div>
+</main>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let DATA = null;
+let activeBackbone = 'so400m';
+const KS = [2, 4, 8, 16, 32, 64, 128, 256];
+let activeKidx = 5; // k=64
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function getCrossModal() {
+  return DATA.cross_modal[activeBackbone];
+}
+
+function getLang() {
+  return DATA.lang;
+}
+
+// ── Panel 1: Cross-modal overlap ───────────────────────────────────────────
+function renderOverlap() {
+  const cm = getCrossModal();
+  const ks = cm.ks.map(String);
+
+  const traces = [
+    {
+      x: ks,
+      y: cm.random_overlap,
+      mode: 'lines+markers',
+      name: 'random baseline',
+      line: { color: '#adb5bd', width: 2, dash: 'dash' },
+      marker: { size: 6, color: '#adb5bd' },
+      type: 'scatter',
+      hovertemplate: 'Random<br>k=%{x}: %{y:.4f}<extra></extra>'
+    },
+    {
+      x: ks,
+      y: cm.img_txt_overlap,
+      mode: 'lines+markers',
+      name: 'img↔txt overlap',
+      line: { color: '#4c9be8', width: 2.5 },
+      marker: { size: 7, color: '#4c9be8' },
+      type: 'scatter',
+      hovertemplate: 'img↔txt<br>k=%{x}: %{y:.4f}<extra></extra>'
+    }
+  ];
+
+  // ratio annotation at each k
+  const annotations = cm.ks.map((k, i) => {
+    const ratio = cm.random_overlap[i] > 0
+      ? (cm.img_txt_overlap[i] / cm.random_overlap[i]).toFixed(1) + '×'
+      : '';
+    return {
+      x: String(k),
+      y: cm.img_txt_overlap[i],
+      text: ratio,
+      showarrow: false,
+      yshift: 12,
+      font: { size: 9, color: '#4c9be8' },
+      xanchor: 'center'
+    };
+  });
+
+  const layout = {
+    margin: { t: 18, r: 20, b: 50, l: 60 },
+    annotations,
+    xaxis: {
+      title: { text: 'k (number of PCA components)', font: { size: 12 } },
+      type: 'category',
+      tickfont: { size: 11 }
+    },
+    yaxis: {
+      title: { text: 'mean cos² (subspace overlap)', font: { size: 12 } },
+      tickfont: { size: 11 },
+      range: [-0.02, Math.max(...cm.img_txt_overlap) + 0.05]
+    },
+    legend: { orientation: 'h', x: 0, y: -0.18, font: { size: 11 } },
+    plot_bgcolor: '#fff',
+    paper_bgcolor: '#fff',
+    hovermode: 'x unified'
+  };
+
+  Plotly.react('chartOverlap', traces, layout, { responsive: true, displayModeBar: false });
+}
+
+// ── Panel 2: R@10 by basis ─────────────────────────────────────────────────
+function renderBasis() {
+  const cm = getCrossModal();
+  const ks = cm.ks.map(String);
+
+  const traces = [
+    {
+      x: ks,
+      y: cm.r10_img_subspace,
+      mode: 'lines+markers',
+      name: 'Image basis',
+      line: { color: '#e74c3c', width: 2.5 },
+      marker: { size: 7, color: '#e74c3c' },
+      type: 'scatter',
+      hovertemplate: 'Image basis<br>k=%{x}: %{y:.2f}%<extra></extra>'
+    },
+    {
+      x: ks,
+      y: cm.r10_combined_subspace,
+      mode: 'lines+markers',
+      name: 'Combined basis',
+      line: { color: '#f39c12', width: 2.5, dash: 'dot' },
+      marker: { size: 7, color: '#f39c12' },
+      type: 'scatter',
+      hovertemplate: 'Combined basis<br>k=%{x}: %{y:.2f}%<extra></extra>'
+    },
+    {
+      x: ks,
+      y: cm.r10_txt_subspace,
+      mode: 'lines+markers',
+      name: 'Text basis',
+      line: { color: '#27ae60', width: 2.5 },
+      marker: { size: 7, color: '#27ae60' },
+      type: 'scatter',
+      hovertemplate: 'Text basis<br>k=%{x}: %{y:.2f}%<extra></extra>'
+    }
+  ];
+
+  // annotation at k=64 (idx 5)
+  const k64 = '64';
+  const annotations = [
+    {
+      x: k64,
+      y: cm.r10_txt_subspace[5],
+      text: '★ text ≈ combined',
+      showarrow: true,
+      arrowhead: 2,
+      arrowsize: 0.8,
+      arrowcolor: '#27ae60',
+      ax: 40,
+      ay: -30,
+      font: { size: 10, color: '#27ae60' },
+      bordercolor: '#27ae60',
+      borderwidth: 1,
+      bgcolor: 'rgba(255,255,255,0.85)',
+      borderpad: 3
+    },
+    {
+      x: k64,
+      y: cm.r10_img_subspace[5],
+      text: 'image basis ≪',
+      showarrow: true,
+      arrowhead: 2,
+      arrowsize: 0.8,
+      arrowcolor: '#e74c3c',
+      ax: 50,
+      ay: 20,
+      font: { size: 10, color: '#e74c3c' },
+      bordercolor: '#e74c3c',
+      borderwidth: 1,
+      bgcolor: 'rgba(255,255,255,0.85)',
+      borderpad: 3
+    }
+  ];
+
+  const allVals = [...cm.r10_img_subspace, ...cm.r10_txt_subspace, ...cm.r10_combined_subspace];
+  const layout = {
+    margin: { t: 18, r: 20, b: 50, l: 60 },
+    annotations,
+    xaxis: {
+      title: { text: 'k (number of PCA components)', font: { size: 12 } },
+      type: 'category',
+      tickfont: { size: 11 }
+    },
+    yaxis: {
+      title: { text: 'T2I R@10 (%)', font: { size: 12 } },
+      tickfont: { size: 11 },
+      range: [Math.max(0, Math.min(...allVals) - 2), Math.max(...allVals) + 3]
+    },
+    legend: { orientation: 'h', x: 0, y: -0.18, font: { size: 11 } },
+    plot_bgcolor: '#fff',
+    paper_bgcolor: '#fff',
+    hovermode: 'x unified'
+  };
+
+  Plotly.react('chartBasis', traces, layout, { responsive: true, displayModeBar: false });
+}
+
+// ── Panel 3: Language subspace sharing ────────────────────────────────────
+function renderLang() {
+  const lang = getLang();
+  const kidx = activeKidx;
+  const k = KS[kidx];
+
+  // Build per-lang vs_en at this k, sorted descending
+  const entries = lang.langs.map(l => ({
+    lang: l,
+    vsEn: lang.per_lang[l].vs_en[kidx],
+    vsImg: lang.per_lang[l].vs_img[kidx]
+  }));
+  entries.sort((a, b) => b.vsEn - a.vsEn);
+
+  const langs = entries.map(e => e.lang);
+  const vsEnVals = entries.map(e => e.vsEn);
+  const vsImgVals = entries.map(e => e.vsImg);
+
+  // Color bars: en=strong blue, low langs (vsEn < 0.25) = red, rest = steel blue
+  const barColors = entries.map(e => {
+    if (e.lang === 'en') return '#4c9be8';
+    if (e.vsEn < 0.20) return '#e74c3c';
+    if (e.vsEn < 0.35) return '#f39c12';
+    return '#74b9d4';
+  });
+
+  const imgEnOverlap = lang.img_en_overlap[kidx];
+
+  // Median of vs_en (excluding en itself ≈1.0)
+  const nonEnVals = entries.filter(e => e.lang !== 'en').map(e => e.vsEn).sort((a, b) => a - b);
+  const mid = Math.floor(nonEnVals.length / 2);
+  const medianVsEn = nonEnVals.length % 2 === 0
+    ? (nonEnVals[mid - 1] + nonEnVals[mid]) / 2
+    : nonEnVals[mid];
+
+  // Median of vs_img
+  const vsImgSorted = entries.map(e => e.vsImg).sort((a, b) => a - b);
+  const midImg = Math.floor(vsImgSorted.length / 2);
+  const medianVsImg = vsImgSorted.length % 2 === 0
+    ? (vsImgSorted[midImg - 1] + vsImgSorted[midImg]) / 2
+    : vsImgSorted[midImg];
+
+  const traces = [
+    {
+      x: langs,
+      y: vsEnVals,
+      type: 'bar',
+      name: 'vs English (text subspace)',
+      marker: { color: barColors },
+      hovertemplate: '%{x}<br>vs EN: %{y:.3f}<extra></extra>'
+    },
+    {
+      x: langs,
+      y: vsImgVals,
+      type: 'scatter',
+      mode: 'markers',
+      name: 'vs Image subspace',
+      marker: { color: '#868e96', symbol: 'diamond', size: 6 },
+      hovertemplate: '%{x}<br>vs IMG: %{y:.3f}<extra></extra>'
+    }
+  ];
+
+  const shapes = [
+    // median vs_en line
+    {
+      type: 'line',
+      xref: 'paper', yref: 'y',
+      x0: 0, x1: 1,
+      y0: medianVsEn, y1: medianVsEn,
+      line: { color: '#4c9be8', width: 1.5, dash: 'dot' }
+    },
+    // median vs_img line
+    {
+      type: 'line',
+      xref: 'paper', yref: 'y',
+      x0: 0, x1: 1,
+      y0: medianVsImg, y1: medianVsImg,
+      line: { color: '#868e96', width: 1.5, dash: 'dot' }
+    },
+    // img_en_overlap reference
+    {
+      type: 'line',
+      xref: 'paper', yref: 'y',
+      x0: 0, x1: 1,
+      y0: imgEnOverlap, y1: imgEnOverlap,
+      line: { color: '#e74c3c', width: 1.5, dash: 'longdash' }
+    }
+  ];
+
+  const annotations = [
+    {
+      xref: 'paper', yref: 'y',
+      x: 1.01, y: medianVsEn,
+      text: `med vs_en<br>${medianVsEn.toFixed(3)}`,
+      showarrow: false,
+      xanchor: 'left',
+      font: { size: 9, color: '#4c9be8' }
+    },
+    {
+      xref: 'paper', yref: 'y',
+      x: 1.01, y: medianVsImg,
+      text: `med vs_img<br>${medianVsImg.toFixed(3)}`,
+      showarrow: false,
+      xanchor: 'left',
+      font: { size: 9, color: '#868e96' }
+    },
+    {
+      xref: 'paper', yref: 'y',
+      x: 1.01, y: imgEnOverlap,
+      text: `img↔en<br>${imgEnOverlap.toFixed(3)}`,
+      showarrow: false,
+      xanchor: 'left',
+      font: { size: 9, color: '#e74c3c' }
+    }
+  ];
+
+  const layout = {
+    margin: { t: 18, r: 80, b: 50, l: 52 },
+    shapes,
+    annotations,
+    xaxis: {
+      tickfont: { size: 10 },
+      tickangle: -45
+    },
+    yaxis: {
+      title: { text: `subspace overlap (k=${k})`, font: { size: 12 } },
+      tickfont: { size: 11 },
+      range: [0, 1.05]
+    },
+    legend: { orientation: 'h', x: 0, y: -0.22, font: { size: 11 } },
+    plot_bgcolor: '#fff',
+    paper_bgcolor: '#fff',
+    barmode: 'overlay',
+    hovermode: 'x'
+  };
+
+  Plotly.react('chartLang', traces, layout, { responsive: true, displayModeBar: false });
+
+  document.getElementById('langNote').textContent =
+    `k=${k}: Languages share a common TEXT subspace with English (median ${medianVsEn.toFixed(3)}) far more than text shares with image (median ${medianVsImg.toFixed(3)}). img↔EN overlap = ${imgEnOverlap.toFixed(3)} (red dashed). Weak langs (te, mi, quz) share least — weakness = not entering the common subspace.`;
+}
+
+// ── Master render ──────────────────────────────────────────────────────────
+function renderAll() {
+  renderOverlap();
+  renderBasis();
+  renderLang();
+}
+
+// ── Backbone tabs ──────────────────────────────────────────────────────────
+document.getElementById('backboneTabs').addEventListener('click', e => {
+  const btn = e.target.closest('.path-tab');
+  if (!btn) return;
+  document.querySelectorAll('#backboneTabs .path-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeBackbone = btn.dataset.backbone;
+  renderOverlap();
+  renderBasis();
+});
+
+// ── k slider ──────────────────────────────────────────────────────────────
+document.getElementById('kSlider').addEventListener('input', e => {
+  activeKidx = parseInt(e.target.value, 10);
+  document.getElementById('kLabel').textContent = `k = ${KS[activeKidx]}`;
+  renderLang();
+});
+
+// ── Boot: fetch data ───────────────────────────────────────────────────────
+fetch('data/gapB_subspace.json')
+  .then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.url}`);
+    return r.json();
+  })
+  .then(data => {
+    DATA = data;
+    renderAll();
+  })
+  .catch(err => {
+    document.querySelector('main').innerHTML =
+      `<div style="padding:24px;color:#991b1b;background:#fee2e2;border-radius:8px;">
+        <strong>Failed to load data/gapB_subspace.json</strong><br>
+        Serve with: <code>cd viz &amp;&amp; python -m http.server 8080</code><br>
+        Error: ${err.message}
+      </div>`;
+    console.error(err);
+  });
+</script>
+</body>
+</html>

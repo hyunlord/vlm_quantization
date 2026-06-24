@@ -246,6 +246,61 @@ def head_concentration(name):
     return {"dim": bits, "cont": cont, "sign": sign}
 
 
+def subspace_overlap(Va, Vb, ks):
+    """Mean cos^2 of principal angles between span(Va[:,:k]) and span(Vb[:,:k]).
+    1 = identical subspace, 0 = orthogonal."""
+    out = []
+    for k in ks:
+        M = Va[:, :k].transpose(0, 1) @ Vb[:, :k]      # (k,k)
+        out.append(round(float((M ** 2).sum().item() / k), 4))
+    return out
+
+
+def subspace_analysis(name, bb, lang="en"):
+    """Section 3: is the low-dim retrieval subspace SHARED across modalities? Compare the
+    image-only and text-only PCA subspaces (Grassmann overlap), and cross-project retrieval
+    onto the image-only / text-only top-k subspace vs the combined subspace."""
+    img = bb["img"].to(dev); txt = bb[lang].to(dev); D = bb["D"]
+    mu_i, Vi, _ = pca_fit(img); mu_t, Vt, _ = pca_fit(txt); mu_c, Vc, _ = pca_fit(torch.cat([img, txt], 0))
+    N = img.shape[0]; gold = torch.arange(N, device=dev)
+    ks = [k for k in [2, 4, 8, 16, 32, 64, 128, 256] if k <= D]
+    overlap = subspace_overlap(Vi, Vt, ks)             # image vs text intrinsic subspaces
+    rnd = subspace_overlap(Vi, torch.linalg.qr(torch.randn(D, D, device=dev))[0], ks)  # random baseline
+    # cross-projection R@10 (T2I): project both modalities onto a single basis, top-k, cosine
+    def proj_r10(basis, mu, k):
+        q = l2((txt - mu) @ basis[:, :k]); g = l2((img - mu) @ basis[:, :k])
+        return r_at_k(q @ g.t(), gold)
+    r_img = [proj_r10(Vi, mu_i, k) for k in ks]         # both onto IMAGE subspace
+    r_txt = [proj_r10(Vt, mu_t, k) for k in ks]         # both onto TEXT subspace
+    r_comb = [proj_r10(Vc, mu_c, k) for k in ks]        # both onto COMBINED subspace (ref)
+    print(f"  [SUBSP {name}] img-txt overlap@64={overlap[ks.index(64)] if 64 in ks else overlap[-1]} "
+          f"(rnd {rnd[ks.index(64)] if 64 in ks else rnd[-1]}) | imgsub R@10@64={r_img[ks.index(64)] if 64 in ks else r_img[-1]}",
+          flush=True)
+    return {"backbone": name, "ks": ks, "img_txt_overlap": overlap, "random_overlap": rnd,
+            "r10_img_subspace": r_img, "r10_txt_subspace": r_txt, "r10_combined_subspace": r_comb}
+
+
+def xm_subspace(max_langs=36):
+    """XM3600: do languages share a low-dim text subspace (vs English, vs image)?"""
+    try:
+        xm = torch.load("/tmp/xm_so400m_lc.pt", map_location="cpu")
+    except Exception:
+        xm = torch.load("/tmp/xm_so400m.pt", map_location="cpu")
+    img = xm["img_emb"].float().to(dev); D = img.shape[1]
+    _, Vi, _ = pca_fit(img)
+    langs = list(xm["per_lang"].keys())[:max_langs]
+    _, Ven, _ = pca_fit(xm["per_lang"]["en"]["text_emb"].float().to(dev))
+    ks = [2, 4, 8, 16, 32, 64, 128, 256]
+    per_lang = {}
+    for lg in langs:
+        _, Vl, _ = pca_fit(xm["per_lang"][lg]["text_emb"].float().to(dev))
+        per_lang[lg] = {"vs_en": subspace_overlap(Vl, Ven, ks),
+                        "vs_img": subspace_overlap(Vl, Vi, ks)}
+    print(f"  [SUBSP XM] {len(per_lang)} langs vs en/img", flush=True)
+    return {"ks": ks, "langs": langs, "per_lang": per_lang,
+            "img_en_overlap": subspace_overlap(Vi, Ven, ks)}
+
+
 def xm_lang_saturation():
     """XM3600 so400m: per-language PCA dim-sweep -> saturation point (text->image)."""
     try:
@@ -284,7 +339,7 @@ def main():
     print("backbones:", {k: v["D"] for k, v in bbs.items()}, flush=True)
 
     all_dim_rows, all_bd_rows = [], []
-    recall_payload, bd_payload, spec_payload = {}, {}, {}
+    recall_payload, bd_payload, spec_payload, subsp_payload = {}, {}, {}, {}
     for name, bb in bbs.items():
         dr, bdr, rec, bd = sweep_backbone(name, bb)
         all_dim_rows += dr; all_bd_rows += bdr
@@ -294,6 +349,14 @@ def main():
             recall_payload[name]["HEAD/en"] = head_concentration(name)
         except Exception as e:
             print(f"  HEAD {name} skip:", e)
+        try:
+            subsp_payload[name] = subspace_analysis(name, bb, lang="en")
+        except Exception as e:
+            print(f"  SUBSP {name} skip:", e)
+    try:
+        xm_sub = xm_subspace()
+    except Exception as e:
+        print("XM subspace skip:", e); xm_sub = {}
 
     # XM3600 multilingual saturation
     try:
@@ -336,6 +399,16 @@ def main():
     json.dump({"dims": xm_dims, "langs": list(xm_per_lang.keys()), "per_lang": xm_per_lang,
                "note": "XM3600 so400m (lowercased) text->image PCA dim-sweep; sat_dim = smallest d at >=95% of full-dim R@10."},
               open(os.path.join(OUTv, "gapB_lang_sat.json"), "w"))
+    json.dump({"backbones": list(subsp_payload.keys()), "cross_modal": subsp_payload, "lang": xm_sub,
+               "note": "Shared-subspace test. img_txt_overlap = mean cos^2 principal angles between image-only and text-only top-k PCA subspaces (1=shared,0=orthogonal; random_overlap=baseline). r10_*_subspace = T2I R@10 when both modalities are projected onto the image-only / text-only / combined top-k basis. lang: per-language text subspace overlap vs English and vs image (XM3600)."},
+              open(os.path.join(OUTv, "gapB_subspace.json"), "w"))
+    subrows = []
+    for s in subsp_payload.values():
+        for i, k in enumerate(s["ks"]):
+            subrows.append({"backbone": s["backbone"], "k": k, "img_txt_overlap": s["img_txt_overlap"][i],
+                            "random_overlap": s["random_overlap"][i], "r10_img_subspace": s["r10_img_subspace"][i],
+                            "r10_txt_subspace": s["r10_txt_subspace"][i], "r10_combined_subspace": s["r10_combined_subspace"][i]})
+    write_csv(os.path.join(OUTp, "gapB_subspace.csv"), subrows)
     print("GAPB_DONE -> paper/gapB_*.csv, viz/data/gapB_*.json", flush=True)
 
 

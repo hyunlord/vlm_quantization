@@ -23,10 +23,12 @@ PAGES = [  # (파일, 한글설명)
     ("spectrum_explorer.html", "⑩ Gap B 특이값·유효차원 (분산 vs 검색)"),
     ("pc_contribution.html", "⑪ Gap B PC ablation (분산순 vs 검색기여순)"),
     ("lang_saturation.html", "⑫ Gap B 언어별 포화점 (XM3600 36언어)"),
+    ("subspace_overlap.html", "⑬ Gap B 공유 저차원 부분공간 (모달·언어, Section 3)"),
 ]
 REQ_JSON = ["distributions.json", "forward_stages.json", "sign_info.json",
             "embedding_2d.json", "retrieval_anatomy.json", "signloss.json", "outlier_cases.json",
-            "gapB_dim_recall.json", "gapB_bits_dims.json", "gapB_spectrum.json", "gapB_lang_sat.json"]
+            "gapB_dim_recall.json", "gapB_bits_dims.json", "gapB_spectrum.json", "gapB_lang_sat.json",
+            "gapB_subspace.json"]
 
 
 def check():

@@ -32,6 +32,7 @@ Math: <a href="../docs/FORMULATION.md">docs/FORMULATION.md</a>. Data: <code>viz/
 <a class="card" href="spectrum_explorer.html"><h2>10 · spectrum_explorer · 특이값·유효차원</h2><div class="desc">SV 스펙트럼+누적분산(90%@~240차원), 분산비중 vs 단독PC R@10 비교. PC#0=분산29%지만 단독검색 ~0 → 분산순≠검색순. 검색은 분산형(소수집중 아님).</div></a>
 <a class="card" href="pc_contribution.html"><h2>11 · pc_contribution · PC ablation</h2><div class="desc">PC를 분산순/검색기여순으로 누적하며 R@10 변화(top-k 슬라이더). 두 순서 거의 겹침·256에서 수렴. 단독 PC는 모두 바닥(~0.4%) → 검색정보 분산.</div></a>
 <a class="card" href="lang_saturation.html"><h2>12 · lang_saturation · 언어별 포화점</h2><div class="desc">XM3600 36언어 텍스트→이미지, 언어별 PCA 차원 sweep. saturation 차원은 라틴/비라틴 모두 ~128-256(언어 불변). 차이는 차원 아닌 최종 성능(de~97 vs 일부 비라틴 낮음).</div></a>
+<a class="card" href="subspace_overlap.html"><h2>13 · subspace_overlap · 공유 저차원 부분공간 (Section 3)</h2><div class="desc">이미지↔텍스트, 언어 간 PCA 부분공간 겹침(주각 cos²). 모달 간 부분 공유(@64≈0.40, random의 6-8배)·★비대칭(검색신호는 텍스트 basis에 정렬, 텍스트basis R@10≈결합≫이미지basis). 언어들은 영어와 텍스트 부분공간 강하게 공유(중앙값 0.67), 약한 언어(te 0.13) 낮음.</div></a>
 
 <p class="note">Serve locally (not file://, the pages fetch JSON):<br>
 <code>cd viz &amp;&amp; python -m http.server 8800</code> → open <code>http://localhost:8800/</code><br>
