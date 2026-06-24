@@ -23,6 +23,16 @@ Math: <a href="../docs/FORMULATION.md">docs/FORMULATION.md</a>. Data: <code>viz/
 <a class="card" href="signloss.html"><h2>6 · signloss · A-베팅 GO/NO-GO</h2><div class="desc">연속 vs 비대칭 vs Hamming R@10을 비트별로. sign이 버리는 정보량(=격차): 1024b +0.6pt(NO-GO) vs 64b +13.9pt(GO·저비트). 비대칭검색이 절반 회복(+8.2@64).</div></a>
 <a class="card" href="outlier_gallery.html"><h2>7 · outlier_gallery · 실패 케이스 A/B</h2><div class="desc">실패 쿼리의 정답 vs 검색된 오답 썸네일. 근접오답(라벨한계 후보 A, 실패의 ~64%) vs 고립(q19형 B, ~36%) — 눈으로 의미일치 확인.</div></a>
 
+<h1 style="font-size:18px;margin-top:30px">Gap B — 검색정보 저차원 집중 vs 이진화 손실</h1>
+<p class="desc">frozen 임베딩의 <b>raw PCA 차원 sweep</b> + 학습된 head 비교, 3개 backbone(so400m·siglip2-base·altclip-m18) + XM3600 36언어로 견고성 검증.
+정직한 요약: <b>이진화가 병목(차원 아님)</b>은 견고 ✓ · <b>저차원 집중</b>은 raw에선 ~256차원(¼D)이고 극적 64차원 집중은 <b>head 학습이 만든 것</b>(과장 플래그 ⚠) · <b>검색기여순≠분산순</b>은 PC#0(고분산·무검색)에서만 또렷(약함). 상세: <a href="HANDOFF_gapB.md">HANDOFF_gapB.md</a>.</p>
+
+<a class="card" href="dim_vs_recall.html"><h2>8 · dim_vs_recall · 차원 sweep (★핵심)</h2><div class="desc">연속/sign/sign_mc/비대칭 R@10을 PCA 차원별로 + 학습된 head 곡선 겹침. raw 연속은 ~256차원 포화, head 연속은 d=64에서 천장(≈80.4) → 집중은 head가 만든다. raw sign은 4~12%로 붕괴.</div></a>
+<a class="card" href="bits_vs_dims_heatmap.html"><h2>9 · bits_vs_dims_heatmap · 차원×비트 격자</h2><div class="desc">(차원 d)×(차원당 비트 float/2-bit/1-bit) R@10 히트맵 + 등총비트 등고선. 1-bit은 d≈256 정점 후 붕괴(저분산 차원=잡음). 같은 256-bit: 2bit×128차원(65)>1bit×256차원(49).</div></a>
+<a class="card" href="spectrum_explorer.html"><h2>10 · spectrum_explorer · 특이값·유효차원</h2><div class="desc">SV 스펙트럼+누적분산(90%@~240차원), 분산비중 vs 단독PC R@10 비교. PC#0=분산29%지만 단독검색 ~0 → 분산순≠검색순. 검색은 분산형(소수집중 아님).</div></a>
+<a class="card" href="pc_contribution.html"><h2>11 · pc_contribution · PC ablation</h2><div class="desc">PC를 분산순/검색기여순으로 누적하며 R@10 변화(top-k 슬라이더). 두 순서 거의 겹침·256에서 수렴. 단독 PC는 모두 바닥(~0.4%) → 검색정보 분산.</div></a>
+<a class="card" href="lang_saturation.html"><h2>12 · lang_saturation · 언어별 포화점</h2><div class="desc">XM3600 36언어 텍스트→이미지, 언어별 PCA 차원 sweep. saturation 차원은 라틴/비라틴 모두 ~128-256(언어 불변). 차이는 차원 아닌 최종 성능(de~97 vs 일부 비라틴 낮음).</div></a>
+
 <p class="note">Serve locally (not file://, the pages fetch JSON):<br>
 <code>cd viz &amp;&amp; python -m http.server 8800</code> → open <code>http://localhost:8800/</code><br>
 Exploratory only — distributions shown as-is; interpretation is for joint discussion.</p>

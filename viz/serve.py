@@ -18,9 +18,15 @@ PAGES = [  # (파일, 한글설명)
     ("retrieval_anatomy.html", "⑤ 성공/실패 쿼리 해부"),
     ("signloss.html", "⑥ A-베팅 GO/NO-GO (연속/비대칭/Hamming R@10)"),
     ("outlier_gallery.html", "⑦ 실패 케이스 A/B 썸네일 갤러리"),
+    ("dim_vs_recall.html", "⑧ Gap B ★ 차원 sweep — raw vs 학습 head"),
+    ("bits_vs_dims_heatmap.html", "⑨ Gap B 차원×비트 격자 (이진화 손실 영역)"),
+    ("spectrum_explorer.html", "⑩ Gap B 특이값·유효차원 (분산 vs 검색)"),
+    ("pc_contribution.html", "⑪ Gap B PC ablation (분산순 vs 검색기여순)"),
+    ("lang_saturation.html", "⑫ Gap B 언어별 포화점 (XM3600 36언어)"),
 ]
 REQ_JSON = ["distributions.json", "forward_stages.json", "sign_info.json",
-            "embedding_2d.json", "retrieval_anatomy.json", "signloss.json", "outlier_cases.json"]
+            "embedding_2d.json", "retrieval_anatomy.json", "signloss.json", "outlier_cases.json",
+            "gapB_dim_recall.json", "gapB_bits_dims.json", "gapB_spectrum.json", "gapB_lang_sat.json"]
 
 
 def check():

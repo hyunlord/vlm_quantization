@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bits × Dims Heatmap — R@10 vs Coding</title>
+  <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f8f9fa;
+      color: #212529;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      padding: 14px 24px;
+    }
+    header h1 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #343a40;
+      line-height: 1.4;
+    }
+    header p.subtitle {
+      font-size: 0.82rem;
+      color: #6c757d;
+      margin-top: 4px;
+      line-height: 1.6;
+    }
+    header p.subtitle span.def {
+      display: inline-block;
+      margin-right: 14px;
+      white-space: nowrap;
+    }
+    header p.subtitle code {
+      font-size: 0.79rem;
+      background: #f1f3f5;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    /* ── Korean explainer ── */
+    .explainer {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+    }
+    .explainer summary {
+      padding: 10px 24px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #495057;
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      user-select: none;
+    }
+    .explainer summary::-webkit-details-marker { display: none; }
+    .explainer summary::before {
+      content: '▶';
+      font-size: 0.65rem;
+      color: #adb5bd;
+      transition: transform 0.15s;
+    }
+    .explainer[open] summary::before { transform: rotate(90deg); }
+    .explainer summary:hover { background: #f8f9fa; }
+    .explainer-body {
+      padding: 0 24px 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px 28px;
+    }
+    .exp-block h3 {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #343a40;
+      margin-bottom: 5px;
+    }
+    .exp-block p {
+      font-size: 0.8rem;
+      color: #495057;
+      line-height: 1.65;
+    }
+    .exp-block p em {
+      color: #868e96;
+      font-style: normal;
+    }
+    @media (max-width: 680px) {
+      .explainer-body { grid-template-columns: 1fr; }
+    }
+
+    /* ── Controls ── */
+    .controls {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      padding: 11px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: center;
+    }
+    .ctrl-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .ctrl-group label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6c757d;
+    }
+    .path-tabs {
+      display: flex;
+      gap: 0;
+      border: 1px solid #ced4da;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .path-tab {
+      padding: 5px 16px;
+      font-size: 0.85rem;
+      border: none;
+      background: #fff;
+      color: #495057;
+      cursor: pointer;
+      border-right: 1px solid #ced4da;
+      transition: background 0.12s;
+    }
+    .path-tab:last-child { border-right: none; }
+    .path-tab.active {
+      background: #4c9be8;
+      color: #fff;
+      font-weight: 600;
+    }
+    .path-tab:hover:not(.active) { background: #e9ecef; }
+    .path-tab:disabled {
+      background: #f8f9fa;
+      color: #adb5bd;
+      cursor: not-allowed;
+    }
+
+    /* ── Main grid ── */
+    main {
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .panel {
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 9px 16px;
+      background: #f1f3f5;
+      border-bottom: 1px solid #dee2e6;
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .panel-header h2 {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #343a40;
+    }
+    .panel-header p {
+      font-size: 0.77rem;
+      color: #868e96;
+    }
+    .panel-body {
+      padding: 4px 6px 8px;
+    }
+
+    .note-footer {
+      padding: 6px 16px 10px;
+      font-size: 0.75rem;
+      color: #868e96;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Bits × Dims Heatmap — R@10 by Coding &amp; Dimension</h1>
+  <p class="subtitle">
+    <span class="def"><strong>float</strong> = <code>32 bits/dim</code> continuous</span>
+    <span class="def"><strong>2-bit</strong> = <code>2 bits/dim</code> quantized</span>
+    <span class="def"><strong>1-bit (sign)</strong> = <code>1 bit/dim</code> binary Hamming</span>
+    &nbsp;·&nbsp; Total bits = dim × bits/dim. Same-budget iso-bit contours shown on heatmap.
+  </p>
+</header>
+
+<!-- Korean explainer -->
+<details class="explainer" open>
+  <summary>한국어 해설 (Korean explainer)</summary>
+  <div class="explainer-body">
+    <div class="exp-block">
+      <h3>📊 무엇을 보는가</h3>
+      <p>
+        차원수(d)와 차원당 비트수(float=32 / 2-bit / 1-bit)를 격자로 놓고 R@10을 색으로 봅니다.
+        같은 총비트(d×비트/차원) 예산에서 '차원을 늘릴까 vs 차원당 비트를 늘릴까'를 비교합니다.
+      </p>
+    </div>
+    <div class="exp-block">
+      <h3>🔍 어떻게 읽나</h3>
+      <p>
+        히트맵: 진한 색=낮은 R@10. float(연속)은 차원을 늘려도 안 무너지지만, 1-bit·2-bit는 차원을 너무 늘리면 오히려 무너집니다(저분산 차원이 Hamming/양자화에 잡음을 더함). 등(等)총비트 표시를 따라가면 같은 예산에서 어떤 조합이 유리한지 보입니다. 아래 선그래프: x=총비트, 같은 총비트에서 곡선 높이를 비교.
+      </p>
+    </div>
+    <div class="exp-block">
+      <h3>👀 주목점</h3>
+      <p>
+        ★ 1-bit은 d≈256에서 정점(48.7) 후 d=1152에서 4.2로 붕괴. 2-bit도 d≈128에서 정점(65) 후 붕괴. float은 끝까지 평평(80.6). 같은 256-bit 예산: 2-bit×128차원(65) &gt; 1-bit×256차원(49) &gt; float×8차원(3.6) → 손실의 원인은 '차원 축소'가 아니라 '이진화'이며, 이진화에는 최적 차원이 존재합니다(무작정 비트를 늘리면 손해).
+      </p>
+    </div>
+    <div class="exp-block">
+      <h3>🔗 연결</h3>
+      <p>
+        dim_vs_recall.html(연속은 차원에 관대)과 짝을 이룹니다. 3개 backbone 공통 패턴 → 견고. 실배포 시사: 저비트라면 차원을 무한정 늘리지 말고 정보가 있는 ~128-256차원에 비트를 집중하는 편이 유리할 수 있습니다(탐색용 관찰).
+      </p>
+    </div>
+  </div>
+</details>
+
+<!-- Controls -->
+<div class="controls">
+  <div class="ctrl-group">
+    <label>Backbone</label>
+    <div class="path-tabs" id="backboneTabs">
+      <button class="path-tab active" data-bb="so400m">so400m</button>
+      <button class="path-tab" data-bb="siglip2-base">siglip2-base</button>
+      <button class="path-tab" data-bb="altclip-m18">altclip-m18</button>
+    </div>
+  </div>
+  <div class="ctrl-group">
+    <label>Cut</label>
+    <div class="path-tabs" id="cutTabs">
+      <button class="path-tab active" data-cut="T2I/en">T2I/en</button>
+      <button class="path-tab" data-cut="I2T/en">I2T/en</button>
+      <button class="path-tab" data-cut="T2I/ko" id="tab-T2I-ko">T2I/ko</button>
+      <button class="path-tab" data-cut="I2T/ko" id="tab-I2T-ko">I2T/ko</button>
+    </div>
+  </div>
+</div>
+
+<main>
+  <!-- Panel 1: Heatmap -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Heatmap: R@10 by (Coding × Dimension)</h2>
+      <p>rows = coding (1-bit top → float bottom) · cols = dims · color = R@10 · markers = iso-total-bit contours</p>
+    </div>
+    <div class="panel-body">
+      <div id="chartHeatmap" style="height:340px;"></div>
+    </div>
+    <div class="note-footer" id="heatmapNote">
+      Iso-bit reference lines (▲): cells sharing the same total-bit budget (e.g. 64, 256, 1024 total bits) are marked so you can compare different dim×coding combinations at equal cost.
+    </div>
+  </div>
+
+  <!-- Panel 2: R@10 vs total bits line chart -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>R@10 vs Total Bits (log scale)</h2>
+      <p>at a fixed bit budget, compare coding strategies — hover shows dim &amp; coding</p>
+    </div>
+    <div class="panel-body">
+      <div id="chartLines" style="height:320px;"></div>
+    </div>
+    <div class="note-footer">
+      At ~256 total bits: 2-bit×128 dims ≈ 65 &gt; 1-bit×256 dims ≈ 49 &gt; float×8 dims ≈ 3.6 (so400m T2I/en). The binarization loss region (top-right of heatmap) shows that low-variance high-dim codes inject noise into Hamming distance.
+    </div>
+  </div>
+</main>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let DATA = null;
+let activeBB = 'so400m';
+let activeCut = 'T2I/en';
+
+// Backbones that have ko cuts
+const KO_BACKBONES = new Set(['siglip2-base', 'altclip-m18']);
+
+// Iso-total-bit targets to annotate (approximate matching)
+const ISO_TARGETS = [32, 64, 128, 256, 512, 1024, 2048];
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function getEntry() {
+  return DATA.data[activeBB][activeCut];
+}
+
+function nearestIso(tb) {
+  // Return the iso target this total_bits is closest to (within 20%)
+  for (const t of ISO_TARGETS) {
+    if (Math.abs(tb - t) / t <= 0.20) return t;
+  }
+  return null;
+}
+
+// ── Heatmap ────────────────────────────────────────────────────────────────
+function renderHeatmap() {
+  const e = getEntry();
+  const dims = e.dims;
+  const bpd  = e.bpd;   // ['float','twobit','sign']
+
+  // Row order: 1-bit (top) → 2-bit → float (bottom), so the "collapse" region
+  // is visually in top-right and the "safe" float row is at bottom.
+  const rowOrder = ['sign', 'twobit', 'float'];
+  const rowLabels = { sign: '1-bit (sign)', twobit: '2-bit', float: 'float (32-bit)' };
+
+  // Build z matrix (rows = rowOrder, cols = dims)
+  const zMatrix = rowOrder.map(coding => {
+    const idx = bpd.indexOf(coding);
+    return e.grid[idx];
+  });
+
+  // Build customdata for hover: [coding_label, total_bits, dim]
+  const customdata = rowOrder.map((coding, ri) => {
+    const idx = bpd.indexOf(coding);
+    return dims.map((d, ci) => ({
+      coding: rowLabels[coding],
+      tb: e.total_bits[idx][ci],
+      dim: d,
+      r10: e.grid[idx][ci]
+    }));
+  });
+
+  const heatTrace = {
+    type: 'heatmap',
+    z: zMatrix,
+    x: dims.map(String),
+    y: rowOrder.map(c => rowLabels[c]),
+    colorscale: 'Viridis',
+    zmin: 0,
+    zmax: Math.max(...zMatrix.flat()),
+    colorbar: {
+      title: { text: 'R@10', side: 'right', font: { size: 11 } },
+      thickness: 14,
+      len: 0.9,
+      tickfont: { size: 10 }
+    },
+    hovertemplate:
+      'dim=%{customdata.dim}, %{customdata.coding}<br>' +
+      'total bits=%{customdata.tb}<br>' +
+      'R@10=%{customdata.r10:.2f}<extra></extra>',
+    customdata: customdata
+  };
+
+  // ── Iso-bit scatter markers ────────────────────────────────────────────
+  // For each (coding, dim) cell, check if total_bits is near an ISO_TARGET.
+  // Collect (x, y, label) for those cells.
+  const isoX = [], isoY = [], isoText = [], isoCustom = [];
+
+  // Group cells by iso target to avoid duplicate labels
+  const isoGroups = {};
+
+  rowOrder.forEach((coding, ri) => {
+    const idx = bpd.indexOf(coding);
+    dims.forEach((d, ci) => {
+      const tb = e.total_bits[idx][ci];
+      const target = nearestIso(tb);
+      if (target !== null) {
+        const key = `${target}`;
+        if (!isoGroups[key]) isoGroups[key] = [];
+        isoGroups[key].push({
+          x: String(d),
+          y: rowLabels[coding],
+          tb,
+          r10: e.grid[idx][ci],
+          coding: rowLabels[coding],
+          dim: d
+        });
+      }
+    });
+  });
+
+  const isoTraces = [];
+  const MARKER_COLORS = {
+    32:   '#ff6b6b',
+    64:   '#ffa94d',
+    128:  '#ffe066',
+    256:  '#a9e34b',
+    512:  '#4fc3f7',
+    1024: '#ce93d8',
+    2048: '#ef9a9a'
+  };
+
+  for (const [targetStr, cells] of Object.entries(isoGroups)) {
+    const target = parseInt(targetStr);
+    const color = MARKER_COLORS[target] || '#fff';
+    isoTraces.push({
+      type: 'scatter',
+      mode: 'markers+text',
+      x: cells.map(c => c.x),
+      y: cells.map(c => c.y),
+      text: cells.map((c, i) => i === 0 ? `${target}b` : ''),
+      textposition: 'top center',
+      textfont: { size: 8, color: '#343a40' },
+      marker: {
+        symbol: 'triangle-up',
+        size: 11,
+        color: color,
+        line: { color: '#343a40', width: 1 }
+      },
+      name: `${target} total bits`,
+      hovertemplate:
+        cells.map(c =>
+          `iso=${target} bits<br>dim=${c.dim}, ${c.coding}<br>actual total=${c.tb} bits<br>R@10=${c.r10.toFixed(2)}<extra></extra>`
+        )[0],
+      customdata: cells.map(c => ({ tb: c.tb, r10: c.r10, dim: c.dim, coding: c.coding })),
+      showlegend: true
+    });
+  }
+
+  // ── Annotation: binarization-loss region ─────────────────────────────
+  // Find approximate x-range where sign collapses (right half of dims)
+  const halfIdx = Math.floor(dims.length / 2);
+  const annotations = [{
+    x: dims[dims.length - 1].toString(),
+    y: rowLabels['sign'],
+    xref: 'x',
+    yref: 'y',
+    text: 'binarization-loss region:<br>low-variance dims → Hamming noise',
+    showarrow: true,
+    arrowhead: 2,
+    arrowsize: 1,
+    arrowwidth: 1.5,
+    arrowcolor: '#e74c3c',
+    ax: -120,
+    ay: -40,
+    font: { size: 9.5, color: '#c0392b' },
+    bgcolor: 'rgba(255,255,255,0.85)',
+    bordercolor: '#e74c3c',
+    borderwidth: 1,
+    borderpad: 3
+  }];
+
+  const allTraces = [heatTrace, ...isoTraces];
+
+  const layout = {
+    margin: { t: 14, r: 110, b: 60, l: 105 },
+    xaxis: {
+      title: { text: 'Dimensions', font: { size: 12 } },
+      type: 'category',
+      tickfont: { size: 10 },
+      side: 'bottom'
+    },
+    yaxis: {
+      title: { text: 'Coding', font: { size: 12 } },
+      tickfont: { size: 11 },
+      autorange: true
+    },
+    annotations,
+    legend: {
+      orientation: 'h',
+      x: 0,
+      y: -0.22,
+      font: { size: 9.5 },
+      title: { text: 'Iso-bit markers:', font: { size: 10 } }
+    },
+    plot_bgcolor: '#fff',
+    paper_bgcolor: '#fff',
+    hovermode: 'closest'
+  };
+
+  Plotly.react('chartHeatmap', allTraces, layout, { responsive: true, displayModeBar: false });
+}
+
+// ── Lines: R@10 vs total_bits ──────────────────────────────────────────────
+function renderLines() {
+  const e = getEntry();
+  const dims  = e.dims;
+  const bpd   = e.bpd;
+
+  const COLORS = {
+    float:  '#4c9be8',
+    twobit: '#f39c12',
+    sign:   '#e74c3c'
+  };
+  const NAMES = {
+    float:  'float (32-bit)',
+    twobit: '2-bit',
+    sign:   '1-bit (sign)'
+  };
+  const DASH = {
+    float:  'dot',
+    twobit: 'dash',
+    sign:   'solid'
+  };
+
+  const traces = bpd.map(coding => {
+    const idx = bpd.indexOf(coding);
+    const tb  = e.total_bits[idx];
+    const r10 = e.grid[idx];
+    const customdata = dims.map((d, ci) => ({ dim: d, tb: tb[ci], coding: NAMES[coding], r10: r10[ci] }));
+
+    return {
+      type: 'scatter',
+      mode: 'lines+markers',
+      name: NAMES[coding],
+      x: tb,
+      y: r10,
+      line: { color: COLORS[coding], width: 2.5, dash: DASH[coding] },
+      marker: { size: 7, color: COLORS[coding] },
+      customdata,
+      hovertemplate:
+        '%{customdata.coding}<br>' +
+        'dim=%{customdata.dim}, total=%{customdata.tb} bits<br>' +
+        'R@10=%{customdata.r10:.2f}<extra></extra>'
+    };
+  });
+
+  // Add vertical reference lines at iso targets (as shapes)
+  const allTB = bpd.flatMap((coding, idx) => e.total_bits[idx]);
+  const xMin = Math.min(...allTB);
+  const xMax = Math.max(...allTB);
+
+  const shapes = ISO_TARGETS.filter(t => t >= xMin * 0.5 && t <= xMax * 1.5).map(t => ({
+    type: 'line',
+    xref: 'x',
+    yref: 'paper',
+    x0: t, x1: t,
+    y0: 0, y1: 1,
+    line: { color: 'rgba(150,150,150,0.35)', width: 1, dash: 'dot' }
+  }));
+
+  const isoAnnotations = ISO_TARGETS.filter(t => t >= xMin * 0.5 && t <= xMax * 1.5).map(t => ({
+    x: t,
+    y: 1.01,
+    xref: 'x',
+    yref: 'paper',
+    text: `${t}b`,
+    showarrow: false,
+    font: { size: 8.5, color: '#999' },
+    xanchor: 'center'
+  }));
+
+  const layout = {
+    margin: { t: 24, r: 20, b: 60, l: 56 },
+    xaxis: {
+      title: { text: 'Total Bits (log scale)', font: { size: 12 } },
+      type: 'log',
+      tickfont: { size: 10 },
+      tickvals: [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768],
+      ticktext: ['2','4','8','16','32','64','128','256','512','1K','2K','4K','8K','16K','32K']
+    },
+    yaxis: {
+      title: { text: 'R@10 (%)', font: { size: 12 } },
+      tickfont: { size: 11 },
+      range: [0, Math.max(...e.grid.flat()) + 4]
+    },
+    shapes,
+    annotations: isoAnnotations,
+    legend: { orientation: 'h', x: 0, y: -0.2, font: { size: 11 } },
+    plot_bgcolor: '#fff',
+    paper_bgcolor: '#fff',
+    hovermode: 'closest'
+  };
+
+  Plotly.react('chartLines', traces, layout, { responsive: true, displayModeBar: false });
+}
+
+// ── Master render ──────────────────────────────────────────────────────────
+function render() {
+  renderHeatmap();
+  renderLines();
+}
+
+// ── Update cut tab availability based on backbone ──────────────────────────
+function updateCutTabs() {
+  const hasKo = KO_BACKBONES.has(activeBB);
+  ['T2I/ko', 'I2T/ko'].forEach(cut => {
+    const btn = document.querySelector(`[data-cut="${cut}"]`);
+    if (!btn) return;
+    btn.disabled = !hasKo;
+    if (!hasKo && activeCut === cut) {
+      // Fall back to T2I/en
+      activeCut = 'T2I/en';
+      document.querySelectorAll('#cutTabs .path-tab').forEach(b => {
+        b.classList.toggle('active', b.dataset.cut === activeCut);
+      });
+    }
+  });
+}
+
+// ── Tab listeners ──────────────────────────────────────────────────────────
+document.getElementById('backboneTabs').addEventListener('click', e => {
+  const btn = e.target.closest('.path-tab');
+  if (!btn || btn.disabled) return;
+  document.querySelectorAll('#backboneTabs .path-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeBB = btn.dataset.bb;
+  updateCutTabs();
+  render();
+});
+
+document.getElementById('cutTabs').addEventListener('click', e => {
+  const btn = e.target.closest('.path-tab');
+  if (!btn || btn.disabled) return;
+  document.querySelectorAll('#cutTabs .path-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeCut = btn.dataset.cut;
+  render();
+});
+
+// ── Boot: fetch data ───────────────────────────────────────────────────────
+fetch('data/gapB_bits_dims.json')
+  .then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.url}`);
+    return r.json();
+  })
+  .then(data => {
+    DATA = data;
+    updateCutTabs();
+    render();
+  })
+  .catch(err => {
+    document.querySelector('main').innerHTML =
+      `<div style="padding:24px;color:#991b1b;background:#fee2e2;border-radius:8px;">
+        <strong>Failed to load data/gapB_bits_dims.json</strong><br>
+        Serve with: <code>cd viz &amp;&amp; python -m http.server 8080</code><br>
+        Error: ${err.message}
+      </div>`;
+    console.error(err);
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Language Saturation — PCA Dim Sweep (XM3600)</title>
+  <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f8f9fa;
+      color: #212529;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      padding: 14px 24px;
+    }
+    header h1 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #343a40;
+      line-height: 1.4;
+    }
+    header p.subtitle {
+      font-size: 0.82rem;
+      color: #6c757d;
+      margin-top: 4px;
+      line-height: 1.6;
+    }
+    header p.subtitle span.def {
+      display: inline-block;
+      margin-right: 14px;
+      white-space: nowrap;
+    }
+    header p.subtitle code {
+      font-size: 0.79rem;
+      background: #f1f3f5;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    /* ── Korean explainer ── */
+    .explainer {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+    }
+    .explainer summary {
+      padding: 10px 24px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #495057;
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      user-select: none;
+    }
+    .explainer summary::-webkit-details-marker { display: none; }
+    .explainer summary::before {
+      content: '▶';
+      font-size: 0.65rem;
+      color: #adb5bd;
+      transition: transform 0.15s;
+    }
+    .explainer[open] summary::before { transform: rotate(90deg); }
+    .explainer summary:hover { background: #f8f9fa; }
+    .explainer-body {
+      padding: 0 24px 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px 28px;
+    }
+    .exp-block h3 {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #343a40;
+      margin-bottom: 5px;
+    }
+    .exp-block p {
+      font-size: 0.8rem;
+      color: #495057;
+      line-height: 1.65;
+    }
+    .exp-block p em {
+      color: #868e96;
+      font-style: normal;
+    }
+    @media (max-width: 680px) {
+      .explainer-body { grid-template-columns: 1fr; }
+    }
+
+    /* ── Controls ── */
+    .controls {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      padding: 11px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: center;
+    }
+    .ctrl-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .ctrl-group label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6c757d;
+    }
+    .path-tabs {
+      display: flex;
+      gap: 0;
+      border: 1px solid #ced4da;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .path-tab {
+      padding: 5px 16px;
+      font-size: 0.85rem;
+      border: none;
+      background: #fff;
+      color: #495057;
+      cursor: pointer;
+      border-right: 1px solid #ced4da;
+      transition: background 0.12s;
+    }
+    .path-tab:last-child { border-right: none; }
+    .path-tab.active {
+      background: #4c9be8;
+      color: #fff;
+      font-weight: 600;
+    }
+    .path-tab:hover:not(.active) { background: #e9ecef; }
+
+    /* ── Main grid ── */
+    main {
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .panel {
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 9px 16px;
+      background: #f1f3f5;
+      border-bottom: 1px solid #dee2e6;
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .panel-header h2 {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #343a40;
+    }
+    .panel-header p {
+      font-size: 0.77rem;
+      color: #868e96;
+    }
+    .panel-body {
+      padding: 4px 6px 8px;
+    }
+
+    .note-footer {
+      padding: 6px 16px 10px;
+      font-size: 0.75rem;
+      color: #868e96;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Language Saturation — PCA Dimension Sweep (XM3600, 36 languages)</h1>
+  <p class="subtitle">
+    <span class="def"><strong>sat_dim</strong> = smallest PCA dim reaching <code>≥95%</code> of full-dim R@10</span>
+    <span class="def"><strong>full_r10</strong> = R@10 at 1152-dim (float ceiling)</span>
+    <span class="def">Model: SigLIP2 So400m · Task: text→image retrieval</span>
+    &nbsp;·&nbsp; All languages saturate ~128–256 dims; performance height varies, not saturation dim.
+  </p>
+</header>
+
+<!-- Korean explainer -->
+<details class="explainer" open>
+  <summary>한국어 해설 (Korean explainer)</summary>
+  <div class="explainer-body">
+    <div class="exp-block">
+      <h3>📊 무엇을 보는가</h3>
+      <p>
+        XM3600(36개 언어) 텍스트→이미지 검색에서, 언어별로 PCA 차원을 줄여가며 R@10을 봅니다.
+        '언어마다 검색에 필요한 차원 수(saturation point)가 다른가? 약한 언어가 더 저차원인가?'를 확인합니다.
+      </p>
+    </div>
+    <div class="exp-block">
+      <h3>🔍 어떻게 읽나</h3>
+      <p>
+        <strong>Panel 1</strong>: 각 선이 한 언어. 어느 차원에서 평평해지는지 비교(로그 x축).
+        <strong>Panel 2</strong>: 언어별 saturation 차원(95% 도달 최소 d).
+        <strong>Panel 3</strong>: 언어별 최종 R@10(성능). 색=문자체계(라틴/비라틴).
+      </p>
+    </div>
+    <div class="exp-block">
+      <h3>👀 주목점</h3>
+      <p>
+        saturation 차원은 라틴/비라틴 모두 중앙값 ~256(범위 128-512)으로 거의 언어 불변입니다
+        → '약한 언어가 더 저차원'이라는 가설은 뚜렷이 지지되지 않습니다.
+        언어가 다른 것은 '차원 수'가 아니라 '최종 성능(full_r10: de~97 vs 일부 비라틴 더 낮음)'입니다.
+        즉 저차원 구조 자체는 언어 공유, 차이는 그 구조에 얼마나 잘 매핑되는가.
+      </p>
+    </div>
+    <div class="exp-block">
+      <h3>🔗 연결</h3>
+      <p>
+        dim_vs_recall.html(영어 ~256차원 포화)과 일관 — 다국어에서도 ~128-256 포화가 견고.
+        저차원 구조는 모달·언어 공통 부분공간으로 보이며, 이진화·head 학습 논의(다른 viz)와 독립적으로 성립.
+      </p>
+    </div>
+  </div>
+</details>
+
+<!-- Controls -->
+<div class="controls">
+  <div class="ctrl-group">
+    <label>Script Filter</label>
+    <div class="path-tabs" id="scriptTabs">
+      <button class="path-tab active" data-script="all">all</button>
+      <button class="path-tab" data-script="latin">latin</button>
+      <button class="path-tab" data-script="non-latin">non-latin</button>
+    </div>
+  </div>
+  <div class="ctrl-group" style="flex:1; min-width:200px;">
+    <label>Legend Click = Toggle Individual Language</label>
+    <div style="font-size:0.78rem; color:#6c757d; margin-top:2px;">
+      Click a language name in any chart legend to show/hide it. Use Script Filter to group-filter.
+    </div>
+  </div>
+</div>
+
+<main>
+  <!-- Panel 1: R@10 vs PCA dim, all languages -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>R@10 vs PCA Dimension — all languages</h2>
+      <p>one line per language · x = log scale · color = script family · all lines flatten ~128–256</p>
+    </div>
+    <div class="panel-body">
+      <div id="chartLines" style="height:420px;"></div>
+    </div>
+  </div>
+
+  <!-- Panel 2: Saturation dim per language -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Saturation Dimension per Language</h2>
+      <p>smallest PCA dim reaching ≥95% of full-dim R@10 · sorted · median line shown</p>
+    </div>
+    <div class="panel-body">
+      <div id="chartSatDim" style="height:300px;"></div>
+    </div>
+  </div>
+
+  <!-- Panel 3: Full-dim R@10 per language -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Full-Dim R@10 per Language</h2>
+      <p>R@10 at 1152-dim (float ceiling) · sorted descending · this axis varies; sat_dim does not</p>
+    </div>
+    <div class="panel-body">
+      <div id="chartFullR10" style="height:300px;"></div>
+    </div>
+    <div class="note-footer">
+      Performance spread: de/ru/it ~97 (top) → te/mi/quz &lt;15 (bottom). Non-latin languages span the full range —
+      both high (ar ~84, ko ~90) and low (te ~9, bn ~39). Saturation dim is language-invariant; full_r10 is not.
+    </div>
+  </div>
+</main>
+
+<script>
+// ── Data ───────────────────────────────────────────────────────────────────
+let DATA = null;
+let activeScript = 'all';
+
+// ── Color palettes ─────────────────────────────────────────────────────────
+// Latin: blues/teals/greens; non-latin: oranges/reds/purples
+// 36 langs: 22 latin, 14 non-latin
+const LATIN_COLORS = [
+  '#1a6fa8','#2980b9','#3498db','#5dade2','#76c6e8',
+  '#27ae60','#2ecc71','#52be80','#82e0aa','#a9dfbf',
+  '#8e44ad','#9b59b6','#af7ac5','#c39bd3',
+  '#16a085','#1abc9c','#48c9b0','#76d7c4',
+  '#2c3e50','#566573','#7f8c8d','#aab7b8'
+];
+const NONLATIN_COLORS = [
+  '#e74c3c','#c0392b','#ec7063','#f1948a',
+  '#e67e22','#d35400','#f0a500','#f39c12','#f8c471',
+  '#8e44ad','#6c3483','#a569bd',
+  '#c0392b','#922b21'
+];
+
+// Named highlights for easy identification
+const HIGHLIGHT = {
+  de: '#1a6fa8', en: '#2ecc71', es: '#16a085', fr: '#8e44ad',
+  it: '#2c3e50', ru: '#e74c3c', ko: '#e67e22', ja: '#f39c12',
+  zh: '#d35400', te: '#c0392b', ar: '#ec7063', hi: '#f0a500'
+};
+
+function getLangColor(lang, script) {
+  if (HIGHLIGHT[lang]) return HIGHLIGHT[lang];
+  return null; // assigned below
+}
+
+function buildColorMap(langs, perLang) {
+  const latinLangs   = langs.filter(l => perLang[l].script === 'latin'     && !HIGHLIGHT[l]);
+  const nonLatinLangs = langs.filter(l => perLang[l].script === 'non-latin' && !HIGHLIGHT[l]);
+  const map = {};
+  let li = 0, nli = 0;
+  for (const lang of langs) {
+    if (HIGHLIGHT[lang]) {
+      map[lang] = HIGHLIGHT[lang];
+    } else if (perLang[lang].script === 'latin') {
+      map[lang] = LATIN_COLORS[li % LATIN_COLORS.length]; li++;
+    } else {
+      map[lang] = NONLATIN_COLORS[nli % NONLATIN_COLORS.length]; nli++;
+    }
+  }
+  return map;
+}
+
+// ── Filter helper ──────────────────────────────────────────────────────────
+function filteredLangs() {
+  const { langs, per_lang } = DATA;
+  if (activeScript === 'all') return langs;
+  return langs.filter(l => per_lang[l].script === activeScript);
+}
+
+// ── Panel 1: R@10 lines ────────────────────────────────────────────────────
+function renderLines(colorMap) {
+  const { dims, per_lang } = DATA;
+  const langs = filteredLangs();
+  const xLog = dims.map(d => d);
+
+  const traces = langs.map(lang => {
+    const info = per_lang[lang];
+    const isHighlight = !!HIGHLIGHT[lang];
+    return {
+      x: dims,
+      y: info.r10,
+      mode: 'lines',
+      name: lang,
+      legendgroup: lang,
+      line: {
+        color: colorMap[lang],
+        width: isHighlight ? 2.5 : 1.5,
+        dash: info.script === 'non-latin' ? 'dot' : 'solid'
+      },
+      opacity: isHighlight ? 1.0 : 0.75,
+      hovertemplate: `<b>${lang}</b> (${info.script})<br>dim=%{x}<br>R@10=%{y:.2f}<extra></extra>`,
+      type: 'scatter'
+    };
+  });
+
+  const layout = {
+    margin: { t: 10, r: 20, b: 55, l: 52 },
+    xaxis: {
+      title: { text: 'PCA Dimension', font: { size: 12 } },
+      type: 'log',
+      tickvals: [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
+      ticktext: ['2','4','8','16','32','64','128','256','512','1024'],
+      tickfont: { size: 11 }
+    },
+    yaxis: {
+      title: { text: 'R@10 (%)', font: { size: 12 } },
+      tickfont: { size: 11 },
+      range: [0, 100]
+    },
+    legend: {
+      orientation: 'h',
+      x: 0, y: -0.18,
+      font: { size: 10 },
+      tracegroupgap: 0
+    },
+    plot_bgcolor: '#fff',
+    paper_bgcolor: '#fff',
+    hovermode: 'closest',
+    shapes: [
+      // Reference lines at 128 and 256
+      {
+        type: 'line', xref: 'x', yref: 'paper',
+        x0: 128, x1: 128, y0: 0, y1: 1,
+        line: { color: '#dee2e6', width: 1, dash: 'dash' }
+      },
+      {
+        type: 'line', xref: 'x', yref: 'paper',
+        x0: 256, x1: 256, y0: 0, y1: 1,
+        line: { color: '#dee2e6', width: 1, dash: 'dash' }
+      }
+    ],
+    annotations: [
+      { xref: 'x', yref: 'paper', x: 128, y: 1.01, text: '128', showarrow: false, font: { size: 10, color: '#adb5bd' }, xanchor: 'center' },
+      { xref: 'x', yref: 'paper', x: 256, y: 1.01, text: '256', showarrow: false, font: { size: 10, color: '#adb5bd' }, xanchor: 'center' }
+    ]
+  };
+
+  Plotly.react('chartLines', traces, layout, { responsive: true, displayModeBar: false });
+}
+
+// ── Panel 2: Saturation dim bars ───────────────────────────────────────────
+function renderSatDim(colorMap) {
+  const { per_lang } = DATA;
+  const langs = filteredLangs();
+
+  // Sort by sat_dim asc, then by lang name
+  const sorted = [...langs].sort((a, b) => {
+    const diff = per_lang[a].sat_dim - per_lang[b].sat_dim;
+    return diff !== 0 ? diff : a.localeCompare(b);
+  });
+
+  const satDims = sorted.map(l => per_lang[l].sat_dim);
+  const median = computeMedian(satDims);
+
+  const traces = [
+    {
+      x: sorted,
+      y: satDims,
+      type: 'bar',
+      marker: {
+        color: sorted.map(l => colorMap[l]),
+        opacity: 0.85
+      },
+      hovertemplate: '<b>%{x}</b><br>sat_dim=%{y}<extra></extra>',
+      name: 'sat_dim'
+    },
+    // Median line
+    {
+      x: sorted,
+      y: sorted.map(() => median),
+      mode: 'lines',
+      name: `median = ${median}`,
+      line: { color: '#343a40', width: 1.5, dash: 'dash' },
+      hovertemplate: `median: ${median}<extra></extra>`,
+      type: 'scatter'
+    }
+  ];
+
+  const layout = {
+    margin: { t: 10, r: 20, b: 60, l: 52 },
+    xaxis: {
+      tickfont: { size: 10 },
+      tickangle: -45
+    },
+    yaxis: {
+      title: { text: 'Saturation Dim', font: { size: 12 } },
+      tickfont: { size: 11 },
+      range: [0, 600],
+      tickvals: [0, 128, 256, 512],
+      ticktext: ['0','128','256','512']
+    },
+    legend: { orientation: 'h', x: 0, y: -0.28, font: { size: 11 } },
+    plot_bgcolor: '#fff',
+    paper_bgcolor: '#fff',
+    showlegend: true,
+    barmode: 'overlay'
+  };
+
+  Plotly.react('chartSatDim', traces, layout, { responsive: true, displayModeBar: false });
+}
+
+// ── Panel 3: Full R@10 bars ────────────────────────────────────────────────
+function renderFullR10(colorMap) {
+  const { per_lang } = DATA;
+  const langs = filteredLangs();
+
+  // Sort by full_r10 desc
+  const sorted = [...langs].sort((a, b) => per_lang[b].full_r10 - per_lang[a].full_r10);
+
+  const traces = [
+    {
+      x: sorted,
+      y: sorted.map(l => per_lang[l].full_r10),
+      type: 'bar',
+      marker: {
+        color: sorted.map(l => colorMap[l]),
+        opacity: 0.85
+      },
+      hovertemplate: '<b>%{x}</b><br>full R@10=%{y:.2f}%<extra></extra>',
+      name: 'full_r10',
+      customdata: sorted.map(l => per_lang[l].script),
+      text: sorted.map(l => per_lang[l].script === 'non-latin' ? '●' : ''),
+      textposition: 'outside',
+      textfont: { size: 8, color: '#868e96' }
+    }
+  ];
+
+  const layout = {
+    margin: { t: 10, r: 20, b: 60, l: 52 },
+    xaxis: {
+      tickfont: { size: 10 },
+      tickangle: -45
+    },
+    yaxis: {
+      title: { text: 'R@10 (%) at full dim', font: { size: 12 } },
+      tickfont: { size: 11 },
+      range: [0, 105]
+    },
+    legend: { orientation: 'h', x: 0, y: -0.28, font: { size: 11 } },
+    plot_bgcolor: '#fff',
+    paper_bgcolor: '#fff',
+    showlegend: false
+  };
+
+  Plotly.react('chartFullR10', traces, layout, { responsive: true, displayModeBar: false });
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function computeMedian(arr) {
+  const s = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 === 0 ? (s[mid - 1] + s[mid]) / 2 : s[mid];
+}
+
+// ── Master render ──────────────────────────────────────────────────────────
+function render() {
+  const colorMap = buildColorMap(DATA.langs, DATA.per_lang);
+  renderLines(colorMap);
+  renderSatDim(colorMap);
+  renderFullR10(colorMap);
+}
+
+// ── Script filter tabs ─────────────────────────────────────────────────────
+document.getElementById('scriptTabs').addEventListener('click', e => {
+  const btn = e.target.closest('.path-tab');
+  if (!btn) return;
+  document.querySelectorAll('#scriptTabs .path-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeScript = btn.dataset.script;
+  render();
+});
+
+// ── Boot: fetch data ───────────────────────────────────────────────────────
+fetch('data/gapB_lang_sat.json')
+  .then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.url}`);
+    return r.json();
+  })
+  .then(data => {
+    DATA = data;
+    render();
+  })
+  .catch(err => {
+    document.querySelector('main').innerHTML =
+      `<div style="padding:24px;color:#991b1b;background:#fee2e2;border-radius:8px;">
+        <strong>Failed to load data/gapB_lang_sat.json</strong><br>
+        Serve with: <code>cd viz &amp;&amp; python -m http.server 8080</code><br>
+        Error: ${err.message}
+      </div>`;
+    console.error(err);
+  });
+</script>
+</body>
+</html>

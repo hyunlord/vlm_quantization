@@ -1,0 +1,4 @@
+backbone,lang,D,participation_ratio,d90,d95,d99,ceiling_r10,spearman_var_vs_retr
+so400m,en,1152,11.21,240,358,572,79.92,0.688
+siglip2-base,en,768,6.26,194,305,512,77.48,0.715
+altclip-m18,en,1024,42.76,271,373,537,77.68,0.664

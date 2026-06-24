@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PCA Dimension vs R@10 — Cross-Modal Hashing</title>
+  <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f8f9fa;
+      color: #212529;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      padding: 14px 24px;
+    }
+    header h1 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #343a40;
+      line-height: 1.4;
+    }
+    header p.subtitle {
+      font-size: 0.82rem;
+      color: #6c757d;
+      margin-top: 4px;
+      line-height: 1.6;
+    }
+    header p.subtitle span.def {
+      display: inline-block;
+      margin-right: 14px;
+      white-space: nowrap;
+    }
+    header p.subtitle code {
+      font-size: 0.79rem;
+      background: #f1f3f5;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    /* ── Korean explainer ── */
+    .explainer {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+    }
+    .explainer summary {
+      padding: 10px 24px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #495057;
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      user-select: none;
+    }
+    .explainer summary::-webkit-details-marker { display: none; }
+    .explainer summary::before {
+      content: '▶';
+      font-size: 0.65rem;
+      color: #adb5bd;
+      transition: transform 0.15s;
+    }
+    .explainer[open] summary::before { transform: rotate(90deg); }
+    .explainer summary:hover { background: #f8f9fa; }
+    .explainer-body {
+      padding: 0 24px 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px 28px;
+    }
+    .exp-block h3 {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #343a40;
+      margin-bottom: 5px;
+    }
+    .exp-block p {
+      font-size: 0.8rem;
+      color: #495057;
+      line-height: 1.65;
+    }
+    .exp-block p em {
+      color: #868e96;
+      font-style: normal;
+    }
+    @media (max-width: 680px) {
+      .explainer-body { grid-template-columns: 1fr; }
+    }
+
+    /* ── Controls ── */
+    .controls {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      padding: 11px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: flex-end;
+    }
+    .ctrl-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .ctrl-group label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6c757d;
+    }
+    .path-tabs {
+      display: flex;
+      gap: 0;
+      border: 1px solid #ced4da;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .path-tab {
+      padding: 5px 16px;
+      font-size: 0.85rem;
+      border: none;
+      background: #fff;
+      color: #495057;
+      cursor: pointer;
+      border-right: 1px solid #ced4da;
+      transition: background 0.12s;
+    }
+    .path-tab:last-child { border-right: none; }
+    .path-tab.active {
+      background: #4c9be8;
+      color: #fff;
+      font-weight: 600;
+    }
+    .path-tab:hover:not(.active) { background: #e9ecef; }
+
+    /* ── Slider ── */
+    .slider-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 200px;
+    }
+    .slider-wrap label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6c757d;
+    }
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #dimSlider {
+      width: 160px;
+      cursor: pointer;
+      accent-color: #4c9be8;
+    }
+    #dimLabel {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #343a40;
+      min-width: 38px;
+    }
+
+    /* ── Readout box ── */
+    .readout {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      padding: 7px 14px;
+      font-size: 0.78rem;
+      color: #343a40;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 18px;
+      align-items: center;
+      min-height: 34px;
+    }
+    .readout-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .readout-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .readout-key {
+      color: #6c757d;
+      font-size: 0.75rem;
+    }
+    .readout-val {
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Main grid ── */
+    main {
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .panel {
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 9px 16px;
+      background: #f1f3f5;
+      border-bottom: 1px solid #dee2e6;
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .panel-header h2 {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #343a40;
+    }
+    .panel-header p {
+      font-size: 0.77rem;
+      color: #868e96;
+    }
+    .panel-body {
+      padding: 4px 6px 8px;
+    }
+
+    /* ── Saturation table ── */
+    .rank-table-wrap {
+      overflow-x: auto;
+      padding: 12px 16px 14px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+    thead th {
+      background: #f8f9fa;
+      padding: 7px 10px;
+      text-align: left;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #6c757d;
+      border-bottom: 1px solid #dee2e6;
+      white-space: nowrap;
+    }
+    thead th.num { text-align: right; }
+    tbody tr { border-bottom: 1px solid #f1f3f5; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f8f9fa; }
+    tbody td {
+      padding: 6px 10px;
+      color: #343a40;
+      white-space: nowrap;
+    }
+    tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .pill {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 99px;
+    }
+    .pill-hi { background: #d1fae5; color: #065f46; }
+    .pill-md { background: #fef3c7; color: #92400e; }
+    .pill-lo { background: #fee2e2; color: #991b1b; }
+
+    .note-footer {
+      padding: 6px 16px 10px;
+      font-size: 0.75rem;
+      color: #868e96;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>PCA Dimension vs R@10 — Raw Embedding vs Trained Head</h1>
+  <p class="subtitle">
+    <span class="def"><strong>Continuous</strong> = float embedding after PCA to d dims, dot-product retrieval</span>
+    <span class="def"><strong>Sign / Sign-MC</strong> = 1-bit quantisation of the d-dim PCA projection</span>
+    <span class="def"><strong>Asymmetric</strong> = query-float × gallery-1bit (deployable)</span>
+    <span class="def"><strong>Head (dashed)</strong> = trained hash-head at d bits, shown for reference</span>
+    &nbsp;·&nbsp; How many dimensions carry the retrieval signal, and how much does binarisation cost?
+  </p>
+</header>
+
+<!-- Korean explainer -->
+<details class="explainer" open>
+  <summary>한국어 해설 (Korean explainer)</summary>
+  <div class="explainer-body">
+    <div class="exp-block">
+      <h3>📊 무엇을 보는가</h3>
+      <p>
+        연속(float) 임베딩을 PCA로 d차원으로 줄여가며 cross-modal R@10을 측정합니다. 같은 d에서 sign(1-bit), sign_mc(모달별 평균제거 후 sign), asymmetric(쿼리=연속·갤러리=1-bit)도 함께 봅니다. '검색 정보가 몇 차원에 들어있나'와 '차원을 줄이는 손실 vs 이진화하는 손실'을 분리해 보는 그림입니다. 학습된 head 곡선(점선)을 같이 겹쳐, raw 임베딩과 비교합니다.
+      </p>
+    </div>
+    <div class="exp-block">
+      <h3>🔍 어떻게 읽나</h3>
+      <p>
+        연속(파랑 실선)이 어느 d에서 평평해지는지 = 검색에 실제로 필요한 차원 수. raw는 ~256차원에서 천장(약 80)에 도달합니다. sign(빨강)은 중간 d에서 정점을 찍고 고차원에서 오히려 무너집니다(저분산 차원이 Hamming에 잡음을 더함). asymmetric(주황)은 sign 손실의 상당 부분을 회수합니다. 점선 = 학습된 head.
+      </p>
+    </div>
+    <div class="exp-block">
+      <h3>👀 주목점</h3>
+      <p>
+        raw 연속은 ~256차원이 필요하지만, 학습된 head의 연속은 d=64에서 이미 천장(≈80.4), d=32에서도 ~96%입니다 → '소수 차원 집중'은 frozen 임베딩의 고유 성질이라기보다 head(matryoshka) 학습이 만들어내는 것으로 보입니다. raw sign은 4~12%로 붕괴하지만 head sign은 78~80으로 작동 → 이진화가 병목이고, head가 그 병목을 푸는 장치입니다. sign_mc≈sign이라 '모달 갭(평균 차이)'은 raw sign 붕괴의 주원인이 아닙니다.
+      </p>
+    </div>
+    <div class="exp-block">
+      <h3>🔗 연결</h3>
+      <p>
+        Part1(signloss.html)의 'head 연속은 비트에 평평(64→1024 ≈80.4)'과 정확히 이어집니다. 3개 backbone(so400m/siglip2-base/altclip-m18) 모두 같은 패턴 → 레시피·백본 독립적입니다. 해석은 탐색용 — 단정 대신 수치로.
+      </p>
+    </div>
+  </div>
+</details>
+
+<!-- Controls -->
+<div class="controls">
+  <!-- Backbone tabs -->
+  <div class="ctrl-group">
+    <label>Backbone</label>
+    <div class="path-tabs" id="bbTabs">
+      <button class="path-tab active" data-bb="so400m">so400m</button>
+      <button class="path-tab" data-bb="siglip2-base">siglip2-base</button>
+      <button class="path-tab" data-bb="altclip-m18">altclip-m18</button>
+    </div>
+  </div>
+
+  <!-- Cut tabs -->
+  <div class="ctrl-group">
+    <label>Direction / Lang</label>
+    <div class="path-tabs" id="cutTabs">
+      <!-- populated dynamically -->
+    </div>
+  </div>
+
+  <!-- Dim slider -->
+  <div class="slider-wrap">
+    <label>Dimension probe</label>
+    <div class="slider-row">
+      <input type="range" id="dimSlider" min="0" max="10" value="0" step="1" />
+      <span id="dimLabel">—</span>
+    </div>
+  </div>
+
+  <!-- Readout -->
+  <div class="ctrl-group" style="flex:1;min-width:220px;">
+    <label>Values at selected dim</label>
+    <div class="readout" id="readout">
+      <span style="color:#868e96;font-size:0.78rem;">Select a dimension with the slider</span>
+    </div>
+  </div>
+</div>
+
+<main>
+  <!-- Panel 1: R@10 vs PCA dim -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>R@10 vs PCA Dimension</h2>
+      <p>raw: continuous (solid blue) · sign (red) · sign_mc (red dotted) · asymmetric (orange) — head/en: continuous (blue dashed) · sign (purple dashed)</p>
+    </div>
+    <div class="panel-body">
+      <div id="chartMain" style="height:360px;"></div>
+    </div>
+  </div>
+
+  <!-- Panel 2: Saturation summary -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Saturation Summary</h2>
+      <p>Smallest dim reaching 95% / 99% of full-dim continuous R@10 — raw vs head</p>
+    </div>
+    <div class="rank-table-wrap">
+      <table id="satTable">
+        <thead>
+          <tr>
+            <th>Curve</th>
+            <th class="num">Full-dim R@10</th>
+            <th class="num">95% sat. dim</th>
+            <th class="num">99% sat. dim</th>
+          </tr>
+        </thead>
+        <tbody id="satTbody"></tbody>
+      </table>
+    </div>
+    <div class="note-footer">
+      95%/99% saturation = smallest d where R@10 ≥ threshold × max(cont). raw≈256 vs head≈32–64 shows that trained heads concentrate information far more efficiently.
+    </div>
+  </div>
+</main>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let DATA = null;
+let activeBb  = 'so400m';
+let activeCut = 'T2I/en';
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function cutsForBb(bb) {
+  return Object.keys(DATA.data[bb]).filter(k => k !== 'HEAD/en');
+}
+
+function cutData(bb, cut) { return DATA.data[bb][cut]; }
+function headData(bb)     { return DATA.data[bb]['HEAD/en']; }
+
+function nearestIdx(arr, val) {
+  let best = 0, bestDiff = Infinity;
+  arr.forEach((v, i) => { const d = Math.abs(v - val); if (d < bestDiff) { bestDiff = d; best = i; } });
+  return best;
+}
+
+function satDim(dims, vals, maxVal, pct) {
+  const thresh = maxVal * pct;
+  for (let i = 0; i < dims.length; i++) {
+    if (vals[i] >= thresh) return dims[i];
+  }
+  return dims[dims.length - 1];
+}
+
+// ── Build cut tab buttons ──────────────────────────────────────────────────
+function buildCutTabs(bb) {
+  const cuts = cutsForBb(bb);
+  const container = document.getElementById('cutTabs');
+  container.innerHTML = '';
+  // ensure activeCut is valid for this backbone
+  if (!cuts.includes(activeCut)) activeCut = cuts[0];
+  cuts.forEach(cut => {
+    const btn = document.createElement('button');
+    btn.className = 'path-tab' + (cut === activeCut ? ' active' : '');
+    btn.dataset.cut = cut;
+    btn.textContent = cut;
+    container.appendChild(btn);
+  });
+}
+
+// ── Update slider for active cut ───────────────────────────────────────────
+function updateSlider() {
+  const dims = cutData(activeBb, activeCut).dim;
+  const slider = document.getElementById('dimSlider');
+  slider.min = 0;
+  slider.max = dims.length - 1;
+  // clamp current value
+  if (parseInt(slider.value) >= dims.length) slider.value = dims.length - 1;
+  updateDimLabel();
+}
+
+function updateDimLabel() {
+  const dims = cutData(activeBb, activeCut).dim;
+  const idx = parseInt(document.getElementById('dimSlider').value);
+  document.getElementById('dimLabel').textContent = dims[idx];
+  updateReadout(idx);
+}
+
+// ── Readout box ────────────────────────────────────────────────────────────
+const SERIES = [
+  { key: 'cont',    label: 'cont',     color: '#4c9be8' },
+  { key: 'sign',    label: 'sign',     color: '#e74c3c' },
+  { key: 'sign_mc', label: 'sign_mc',  color: '#c0392b' },
+  { key: 'asym',    label: 'asym',     color: '#f39c12' },
+];
+const HEAD_SERIES = [
+  { key: 'cont', label: 'head cont', color: '#2980b9' },
+  { key: 'sign', label: 'head sign', color: '#8e44ad' },
+];
+
+function updateReadout(rawIdx) {
+  const raw  = cutData(activeBb, activeCut);
+  const head = headData(activeBb);
+  const rawDim = raw.dim[rawIdx];
+
+  let html = '';
+  SERIES.forEach(s => {
+    const val = raw[s.key] ? raw[s.key][rawIdx] : null;
+    if (val == null) return;
+    html += `<span class="readout-item">
+      <span class="readout-swatch" style="background:${s.color}"></span>
+      <span class="readout-key">${s.label}</span>
+      <span class="readout-val">${val.toFixed(2)}</span>
+    </span>`;
+  });
+
+  // nearest head dim
+  const hIdx = nearestIdx(head.dim, rawDim);
+  const hDim = head.dim[hIdx];
+  HEAD_SERIES.forEach(s => {
+    const val = head[s.key] ? head[s.key][hIdx] : null;
+    if (val == null) return;
+    html += `<span class="readout-item">
+      <span class="readout-swatch" style="background:${s.color};border:1.5px dashed ${s.color};background:transparent;width:12px;height:12px;"></span>
+      <span class="readout-key">${s.label}@${hDim}</span>
+      <span class="readout-val">${val.toFixed(2)}</span>
+    </span>`;
+  });
+
+  document.getElementById('readout').innerHTML = html || '<span style="color:#868e96">—</span>';
+}
+
+// ── Chart: main R@10 vs dim ────────────────────────────────────────────────
+function renderMain() {
+  const raw  = cutData(activeBb, activeCut);
+  const head = headData(activeBb);
+  const sliderIdx = parseInt(document.getElementById('dimSlider').value);
+  const probeX = raw.dim[sliderIdx];
+
+  // Log-scale ticks at powers-of-2 landmarks
+  const tickvals = [2, 8, 32, 128, 512];
+  // add backbone max dim if not there
+  const maxDim = raw.dim[raw.dim.length - 1];
+  if (!tickvals.includes(maxDim)) tickvals.push(maxDim);
+  tickvals.sort((a, b) => a - b);
+
+  const traces = [
+    // raw continuous (solid blue)
+    {
+      x: raw.dim, y: raw.cont,
+      mode: 'lines+markers',
+      name: 'raw continuous',
+      line: { color: '#4c9be8', width: 2.5 },
+      marker: { size: 6, color: '#4c9be8' },
+      hovertemplate: 'raw cont  d=%{x}: %{y:.2f}<extra></extra>'
+    },
+    // raw sign (red solid)
+    {
+      x: raw.dim, y: raw.sign,
+      mode: 'lines+markers',
+      name: 'raw sign',
+      line: { color: '#e74c3c', width: 2 },
+      marker: { size: 5, color: '#e74c3c' },
+      hovertemplate: 'raw sign  d=%{x}: %{y:.2f}<extra></extra>'
+    },
+    // raw sign_mc (red dotted)
+    {
+      x: raw.dim, y: raw.sign_mc,
+      mode: 'lines+markers',
+      name: 'raw sign_mc',
+      line: { color: '#c0392b', width: 1.5, dash: 'dot' },
+      marker: { size: 4, color: '#c0392b', symbol: 'circle-open' },
+      hovertemplate: 'raw sign_mc  d=%{x}: %{y:.2f}<extra></extra>'
+    },
+    // raw asymmetric (orange)
+    {
+      x: raw.dim, y: raw.asym,
+      mode: 'lines+markers',
+      name: 'raw asymmetric',
+      line: { color: '#f39c12', width: 2 },
+      marker: { size: 5, color: '#f39c12' },
+      hovertemplate: 'raw asym  d=%{x}: %{y:.2f}<extra></extra>'
+    },
+    // head continuous (blue dashed, thicker)
+    {
+      x: head.dim, y: head.cont,
+      mode: 'lines+markers',
+      name: 'head cont (trained, EN)',
+      line: { color: '#2980b9', width: 3, dash: 'dash' },
+      marker: { size: 7, color: '#2980b9', symbol: 'diamond' },
+      hovertemplate: 'head cont  d=%{x}: %{y:.2f}<extra></extra>'
+    },
+    // head sign (purple dashed)
+    {
+      x: head.dim, y: head.sign,
+      mode: 'lines+markers',
+      name: 'head sign (trained, EN)',
+      line: { color: '#8e44ad', width: 2.5, dash: 'dash' },
+      marker: { size: 6, color: '#8e44ad', symbol: 'diamond-open' },
+      hovertemplate: 'head sign  d=%{x}: %{y:.2f}<extra></extra>'
+    },
+    // vertical probe line (shape via scatter trick)
+    {
+      x: [probeX, probeX],
+      y: [0, 102],
+      mode: 'lines',
+      name: 'probe',
+      line: { color: '#495057', width: 1.5, dash: 'dashdot' },
+      hoverinfo: 'skip',
+      showlegend: false
+    }
+  ];
+
+  // annotations
+  const annotations = [
+    {
+      x: Math.log10(256),
+      y: 80,
+      xref: 'x', yref: 'y',
+      text: 'raw cont saturates ~d=256',
+      showarrow: true,
+      arrowhead: 2,
+      arrowsize: 0.8,
+      arrowcolor: '#4c9be8',
+      ax: 55, ay: -28,
+      font: { size: 10, color: '#4c9be8' },
+      bgcolor: 'rgba(255,255,255,0.85)',
+      borderpad: 2
+    },
+    {
+      x: Math.log10(64),
+      y: head.cont[head.dim.indexOf(64)] || head.cont[3],
+      xref: 'x', yref: 'y',
+      text: 'head cont ceiling ~d=64',
+      showarrow: true,
+      arrowhead: 2,
+      arrowsize: 0.8,
+      arrowcolor: '#2980b9',
+      ax: 60, ay: 30,
+      font: { size: 10, color: '#2980b9' },
+      bgcolor: 'rgba(255,255,255,0.85)',
+      borderpad: 2
+    }
+  ];
+
+  const layout = {
+    margin: { t: 14, r: 20, b: 55, l: 52 },
+    xaxis: {
+      title: { text: 'PCA dimension (log scale)', font: { size: 12 } },
+      type: 'log',
+      tickvals: tickvals,
+      ticktext: tickvals.map(String),
+      tickfont: { size: 11 },
+      showgrid: true,
+      gridcolor: '#f1f3f5'
+    },
+    yaxis: {
+      title: { text: 'R@10 (%)', font: { size: 12 } },
+      tickfont: { size: 11 },
+      range: [-2, 105],
+      showgrid: true,
+      gridcolor: '#f1f3f5'
+    },
+    legend: { orientation: 'h', x: 0, y: -0.2, font: { size: 11 } },
+    plot_bgcolor: '#fff',
+    paper_bgcolor: '#fff',
+    hovermode: 'x unified',
+    annotations: annotations
+  };
+
+  Plotly.react('chartMain', traces, layout, { responsive: true, displayModeBar: false });
+}
+
+// ── Saturation table ───────────────────────────────────────────────────────
+function renderSatTable() {
+  const raw  = cutData(activeBb, activeCut);
+  const head = headData(activeBb);
+
+  const rawMax  = Math.max(...raw.cont);
+  const headMax = Math.max(...head.cont);
+
+  const rows = [
+    {
+      label: 'raw continuous',
+      color: '#4c9be8',
+      dims: raw.dim,
+      vals: raw.cont,
+      max: rawMax
+    },
+    {
+      label: 'head continuous (EN)',
+      color: '#2980b9',
+      dims: head.dim,
+      vals: head.cont,
+      max: headMax
+    }
+  ];
+
+  const tbody = document.getElementById('satTbody');
+  tbody.innerHTML = rows.map(r => {
+    const d95 = satDim(r.dims, r.vals, r.max, 0.95);
+    const d99 = satDim(r.dims, r.vals, r.max, 0.99);
+
+    const pill95 = d95 <= 32  ? 'pill-hi' : d95 <= 128 ? 'pill-md' : 'pill-lo';
+    const pill99 = d99 <= 128 ? 'pill-hi' : d99 <= 512 ? 'pill-md' : 'pill-lo';
+
+    return `<tr>
+      <td><span style="display:inline-block;width:10px;height:10px;background:${r.color};border-radius:2px;margin-right:6px;vertical-align:middle;"></span><strong>${r.label}</strong></td>
+      <td class="num">${r.max.toFixed(2)}</td>
+      <td class="num"><span class="pill ${pill95}">${d95}</span></td>
+      <td class="num"><span class="pill ${pill99}">${d99}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Master render ──────────────────────────────────────────────────────────
+function render() {
+  updateSlider();
+  renderMain();
+  renderSatTable();
+}
+
+// ── Event: backbone tabs ───────────────────────────────────────────────────
+document.getElementById('bbTabs').addEventListener('click', e => {
+  const btn = e.target.closest('.path-tab');
+  if (!btn) return;
+  document.querySelectorAll('#bbTabs .path-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeBb = btn.dataset.bb;
+  buildCutTabs(activeBb);
+  render();
+});
+
+// ── Event: cut tabs ────────────────────────────────────────────────────────
+document.getElementById('cutTabs').addEventListener('click', e => {
+  const btn = e.target.closest('.path-tab');
+  if (!btn) return;
+  document.querySelectorAll('#cutTabs .path-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeCut = btn.dataset.cut;
+  render();
+});
+
+// ── Event: slider ──────────────────────────────────────────────────────────
+document.getElementById('dimSlider').addEventListener('input', () => {
+  updateDimLabel();
+  renderMain();  // re-render to move probe line
+});
+
+// ── Boot: fetch data ───────────────────────────────────────────────────────
+fetch('data/gapB_dim_recall.json')
+  .then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.url}`);
+    return r.json();
+  })
+  .then(data => {
+    DATA = data;
+    buildCutTabs(activeBb);
+    render();
+  })
+  .catch(err => {
+    document.querySelector('main').innerHTML =
+      `<div style="padding:24px;color:#991b1b;background:#fee2e2;border-radius:8px;">
+        <strong>Failed to load data/gapB_dim_recall.json</strong><br>
+        Serve with: <code>cd viz &amp;&amp; python -m http.server 8080</code><br>
+        Error: ${err.message}
+      </div>`;
+    console.error(err);
+  });
+</script>
+</body>
+</html>

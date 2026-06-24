@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PC Contribution Ablation</title>
+  <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f8f9fa;
+      color: #212529;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      padding: 14px 24px;
+    }
+    header h1 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #343a40;
+      line-height: 1.4;
+    }
+    header p.subtitle {
+      font-size: 0.82rem;
+      color: #6c757d;
+      margin-top: 4px;
+      line-height: 1.6;
+    }
+    header p.subtitle span.def {
+      display: inline-block;
+      margin-right: 14px;
+      white-space: nowrap;
+    }
+    header p.subtitle code {
+      font-size: 0.79rem;
+      background: #f1f3f5;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    /* ── Korean explainer ── */
+    .explainer {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+    }
+    .explainer summary {
+      padding: 10px 24px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #495057;
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      user-select: none;
+    }
+    .explainer summary::-webkit-details-marker { display: none; }
+    .explainer summary::before {
+      content: '▶';
+      font-size: 0.65rem;
+      color: #adb5bd;
+      transition: transform 0.15s;
+    }
+    .explainer[open] summary::before { transform: rotate(90deg); }
+    .explainer summary:hover { background: #f8f9fa; }
+    .explainer-body {
+      padding: 0 24px 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px 28px;
+    }
+    .exp-block h3 {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #343a40;
+      margin-bottom: 5px;
+    }
+    .exp-block p {
+      font-size: 0.8rem;
+      color: #495057;
+      line-height: 1.65;
+    }
+    .exp-block p em {
+      color: #868e96;
+      font-style: normal;
+    }
+    @media (max-width: 680px) {
+      .explainer-body { grid-template-columns: 1fr; }
+    }
+
+    /* ── Controls ── */
+    .controls {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      padding: 11px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: center;
+    }
+    .ctrl-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .ctrl-group label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6c757d;
+    }
+    .path-tabs {
+      display: flex;
+      gap: 0;
+      border: 1px solid #ced4da;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .path-tab {
+      padding: 5px 16px;
+      font-size: 0.85rem;
+      border: none;
+      background: #fff;
+      color: #495057;
+      cursor: pointer;
+      border-right: 1px solid #ced4da;
+      transition: background 0.12s;
+    }
+    .path-tab:last-child { border-right: none; }
+    .path-tab.active {
+      background: #4c9be8;
+      color: #fff;
+      font-weight: 600;
+    }
+    .path-tab:hover:not(.active) { background: #e9ecef; }
+
+    /* ── Slider control ── */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .slider-row input[type=range] {
+      width: 220px;
+      accent-color: #4c9be8;
+      cursor: pointer;
+    }
+    .slider-readout {
+      font-size: 0.82rem;
+      color: #343a40;
+      background: #f1f3f5;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      padding: 4px 12px;
+      min-width: 320px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .slider-readout strong { color: #4c9be8; }
+    .slider-readout .retr-val { color: #e67e22; }
+
+    /* ── Main grid ── */
+    main {
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .panel {
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 9px 16px;
+      background: #f1f3f5;
+      border-bottom: 1px solid #dee2e6;
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .panel-header h2 {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #343a40;
+    }
+    .panel-header p {
+      font-size: 0.77rem;
+      color: #868e96;
+    }
+    .panel-body {
+      padding: 4px 6px 8px;
+    }
+
+    .note-footer {
+      padding: 6px 16px 10px;
+      font-size: 0.75rem;
+      color: #868e96;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>PC Contribution Ablation — How R@10 climbs as PCs are added</h1>
+  <p class="subtitle">
+    <span class="def"><strong>Variance order</strong> = PCs sorted by explained variance (largest first)</span>
+    <span class="def"><strong>Retrieval order</strong> = PCs sorted by individual retrieval contribution (R@10)</span>
+    <span class="def"><strong>P = 256</strong> PCs from top-256 embedding dimensions · <code>data/gapB_spectrum.json</code></span>
+    &nbsp;·&nbsp; Both orderings converge at k=256; no single PC carries the signal.
+  </p>
+</header>
+
+<!-- Korean explainer -->
+<details class="explainer" open>
+  <summary>한국어 해설 (Korean explainer)</summary>
+  <div class="explainer-body">
+    <div class="exp-block">
+      <h3>📊 무엇을 보는가</h3>
+      <p>
+        주성분(PC)을 하나씩(혹은 그룹으로) 켜며 R@10이 어떻게 오르는지 봅니다.
+        <strong>'분산이 큰 순서'로 켤 때</strong>와 <strong>'검색 기여가 큰 순서'로 켤 때</strong>를 비교해,
+        검색 정보가 소수 PC에 몰려 있는지 분산되어 있는지 체감합니다.
+      </p>
+    </div>
+    <div class="exp-block">
+      <h3>🔍 어떻게 읽나</h3>
+      <p>
+        위 곡선: x=포함한 PC 개수, 두 선(분산순/검색기여순)이 거의 겹치고 256개에서 천장.
+        슬라이더로 top-k를 바꾸며 두 순서의 R@10을 직접 비교.
+        아래: 각 PC 단독 R@10(점)과 분산비중(막대).
+      </p>
+    </div>
+    <div class="exp-block">
+      <h3>👀 주목점</h3>
+      <p>
+        ★ 모든 단독 PC의 R@10이 바닥(~0.4%) — PC#0은 분산 29%인데도 단독 검색 기여는 거의 0.
+        즉 <strong>'검색 정보가 소수 PC에 집중'이 아니라</strong> 중간 스펙트럼 전반에 '분산'되어 있습니다.
+        검색기여순 누적이 분산순보다 살짝 빠르지만(32 PC에서 44 vs 37), 단독 신호가 약해 그 차이는 약하고 256에서 수렴
+        → <em>'검색기여순≠분산순'은 PC#0(고분산·무검색) 사례에서만 또렷합니다.</em>
+      </p>
+    </div>
+    <div class="exp-block">
+      <h3>🔗 연결</h3>
+      <p>
+        spectrum_explorer.html(스펙트럼·유효차원)과 dim_vs_recall.html(차원 sweep)을 잇는 ablation 뷰.
+        결론은 정직하게: 분산 집중은 분명하나 검색 집중은 약함
+        → <em>'극적 저차원 집중' 서사는 raw 임베딩에서 과장이며, head 학습이 그 집중을 만든다(dim_vs_recall 참조).</em>
+      </p>
+    </div>
+  </div>
+</details>
+
+<!-- Controls -->
+<div class="controls">
+  <div class="ctrl-group">
+    <label>Backbone</label>
+    <div class="path-tabs" id="bbTabs">
+      <button class="path-tab active" data-bb="so400m">so400m</button>
+      <button class="path-tab" data-bb="siglip2-base">siglip2-base</button>
+      <button class="path-tab" data-bb="altclip-m18">altclip-m18</button>
+    </div>
+  </div>
+  <div class="ctrl-group">
+    <label>Top-k PCs</label>
+    <div class="slider-row">
+      <input type="range" id="kSlider" min="0" max="15" step="1" value="15" />
+      <div class="slider-readout" id="sliderReadout">—</div>
+    </div>
+  </div>
+</div>
+
+<main>
+  <!-- Panel 1: Cumulative R@10 ablation -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Cumulative R@10 Ablation</h2>
+      <p>variance order vs retrieval-contribution order — vertical marker = slider position</p>
+    </div>
+    <div class="panel-body">
+      <div id="chartCumR10" style="height:340px;"></div>
+    </div>
+    <div class="note-footer" id="spearmanNote"></div>
+  </div>
+
+  <!-- Panel 2: Per-PC single contribution -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Per-PC Single Contribution</h2>
+      <p>each PC's standalone R@10 (dots, left axis) vs variance fraction (bars, right axis) — honest: every PC near floor</p>
+    </div>
+    <div class="panel-body">
+      <div id="chartIndiv" style="height:320px;"></div>
+    </div>
+    <div class="note-footer">
+      Annotation: no single PC carries retrieval — signal is distributed across mid-spectrum PCs.
+      High variance ≠ retrieval importance: PC#0 holds ~29% variance yet contributes ~0.2% R@10 standalone.
+    </div>
+  </div>
+
+  <!-- Panel 3: Top retrieval PCs on variance spectrum -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Top Retrieval PCs on Variance Spectrum</h2>
+      <p>top-10 retrieval-order PCs (orange markers) overlaid on variance fraction — they are mid-spectrum, not top-variance</p>
+    </div>
+    <div class="panel-body">
+      <div id="chartTopRetr" style="height:260px;"></div>
+    </div>
+    <div class="note-footer">
+      Top retrieval PCs cluster around indices #20–84 (mid-spectrum), confirming high-variance PC#0 is not the retrieval leader.
+    </div>
+  </div>
+</main>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let DATA = null;
+let activeBb = 'so400m';
+// KS index: slider maps 0..15 → KS[0]..KS[15]
+let sliderIdx = 15; // default to full 256
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function bbData() { return DATA.data[activeBb]; }
+
+function fmt1(v) { return v.toFixed(1); }
+function fmt3(v) { return v.toFixed(3); }
+
+// ── Slider readout ─────────────────────────────────────────────────────────
+function updateReadout() {
+  const pc = bbData().pc;
+  const KS = pc.KS;
+  const k = KS[sliderIdx];
+  const varR10 = pc.var_order_cumr10[sliderIdx];
+  const retrR10 = pc.retr_order_cumr10[sliderIdx];
+  const el = document.getElementById('sliderReadout');
+  el.innerHTML = `top-<strong>${k}</strong> PCs &nbsp;→&nbsp; `
+    + `var-order R@10 = <strong>${fmt1(varR10)}%</strong> &nbsp;·&nbsp; `
+    + `retr-order R@10 = <span class="retr-val"><strong>${fmt1(retrR10)}%</strong></span>`;
+}
+
+// ── Chart 1: Cumulative R@10 ───────────────────────────────────────────────
+function renderCumR10() {
+  const entry = bbData();
+  const pc = entry.pc;
+  const KS = pc.KS;
+  const varR10  = pc.var_order_cumr10;
+  const retrR10 = pc.retr_order_cumr10;
+  const ceil    = pc.ceiling_r10;
+  const k = KS[sliderIdx];
+
+  const traces = [
+    // Variance order
+    {
+      x: KS, y: varR10,
+      mode: 'lines+markers',
+      name: 'Variance order',
+      line: { color: '#4c9be8', width: 2.5 },
+      marker: { size: 7, color: '#4c9be8' },
+      type: 'scatter',
+      hovertemplate: 'Variance order<br>k=%{x}: %{y:.2f}%<extra></extra>'
+    },
+    // Retrieval order
+    {
+      x: KS, y: retrR10,
+      mode: 'lines+markers',
+      name: 'Retrieval-contribution order',
+      line: { color: '#e67e22', width: 2.5 },
+      marker: { size: 7, color: '#e67e22' },
+      type: 'scatter',
+      hovertemplate: 'Retrieval order<br>k=%{x}: %{y:.2f}%<extra></extra>'
+    },
+    // Ceiling dashed
+    {
+      x: [KS[0], KS[KS.length - 1]],
+      y: [ceil, ceil],
+      mode: 'lines',
+      name: `Ceiling R@10 = ${ceil}%`,
+      line: { color: '#adb5bd', width: 1.5, dash: 'dash' },
+      hoverinfo: 'skip',
+      type: 'scatter'
+    },
+    // Vertical marker at k
+    {
+      x: [k, k],
+      y: [0, Math.max(...varR10, ...retrR10) + 5],
+      mode: 'lines',
+      name: `k = ${k}`,
+      line: { color: '#495057', width: 1.5, dash: 'dot' },
+      hoverinfo: 'skip',
+      showlegend: false,
+      type: 'scatter'
+    }
+  ];
+
+  const layout = {
+    margin: { t: 10, r: 20, b: 55, l: 58 },
+    xaxis: {
+      title: { text: 'Number of PCs included (k)', font: { size: 12 } },
+      type: 'log',
+      tickvals: KS,
+      ticktext: KS.map(String),
+      tickfont: { size: 11 },
+      gridcolor: '#f1f3f5'
+    },
+    yaxis: {
+      title: { text: 'Cumulative R@10 (%)', font: { size: 12 } },
+      tickfont: { size: 11 },
+      range: [0, Math.max(ceil, ...varR10, ...retrR10) + 5],
+      gridcolor: '#f1f3f5'
+    },
+    legend: { orientation: 'h', x: 0, y: -0.20, font: { size: 11 } },
+    plot_bgcolor: '#fff',
+    paper_bgcolor: '#fff',
+    hovermode: 'x unified'
+  };
+
+  Plotly.react('chartCumR10', traces, layout, { responsive: true, displayModeBar: false });
+
+  // Spearman note
+  document.getElementById('spearmanNote').textContent =
+    `Spearman ρ (variance rank vs retrieval rank) = ${fmt3(pc.spearman_var_vs_retr)} — `
+    + `moderate positive correlation: variance order is a rough proxy but retrieval-important PCs are not the top-variance ones.`;
+}
+
+// ── Chart 2: Per-PC individual contribution ────────────────────────────────
+function renderIndiv() {
+  const entry = bbData();
+  const pc = entry.pc;
+  const P = pc.P;
+  const indiv = pc.indiv_r10;        // length P
+  const varFrac = entry.var_frac;    // length D (>=P)
+
+  const pcIdx = Array.from({length: P}, (_, i) => i);
+  const vf = varFrac.slice(0, P).map(v => v * 100); // to percent
+
+  const traces = [
+    // Variance fraction bars (right axis)
+    {
+      x: pcIdx, y: vf,
+      type: 'bar',
+      name: 'Variance fraction (%)',
+      marker: { color: 'rgba(173,181,189,0.45)', line: { width: 0 } },
+      yaxis: 'y2',
+      hovertemplate: 'PC#%{x}<br>Var frac: %{y:.3f}%<extra></extra>'
+    },
+    // Individual R@10 dots
+    {
+      x: pcIdx, y: indiv,
+      mode: 'markers',
+      name: 'Single-PC R@10 (%)',
+      marker: { size: 5, color: '#4c9be8', opacity: 0.75 },
+      type: 'scatter',
+      yaxis: 'y',
+      hovertemplate: 'PC#%{x}<br>R@10: %{y:.2f}%<extra></extra>'
+    },
+    // PC#0 annotation marker
+    {
+      x: [0], y: [indiv[0]],
+      mode: 'markers+text',
+      name: 'PC#0 (max variance)',
+      marker: { size: 10, color: '#e74c3c', symbol: 'diamond' },
+      text: [`PC#0 var=${(vf[0]).toFixed(1)}% → R@10=${indiv[0].toFixed(2)}%`],
+      textposition: 'top right',
+      textfont: { size: 10, color: '#e74c3c' },
+      yaxis: 'y',
+      hovertemplate: 'PC#0<br>Var: %{customdata:.1f}%<br>R@10: %{y:.2f}%<extra></extra>',
+      customdata: [vf[0]],
+      showlegend: true,
+      type: 'scatter'
+    }
+  ];
+
+  const layout = {
+    margin: { t: 10, r: 70, b: 55, l: 58 },
+    xaxis: {
+      title: { text: 'PC index', font: { size: 12 } },
+      tickfont: { size: 11 },
+      gridcolor: '#f1f3f5'
+    },
+    yaxis: {
+      title: { text: 'Single-PC R@10 (%)', font: { size: 12 } },
+      tickfont: { size: 11 },
+      range: [0, Math.max(...indiv) * 1.6 + 0.1],
+      gridcolor: '#f1f3f5'
+    },
+    yaxis2: {
+      title: { text: 'Variance fraction (%)', font: { size: 12 } },
+      tickfont: { size: 11 },
+      overlaying: 'y',
+      side: 'right',
+      showgrid: false
+    },
+    legend: { orientation: 'h', x: 0, y: -0.22, font: { size: 11 } },
+    plot_bgcolor: '#fff',
+    paper_bgcolor: '#fff',
+    hovermode: 'closest',
+    annotations: [
+      {
+        x: 128, y: Math.max(...indiv) * 1.3,
+        xref: 'x', yref: 'y',
+        text: 'Every PC R@10 ≈ floor (~0.4%) — signal is distributed, not concentrated',
+        showarrow: false,
+        font: { size: 10, color: '#6c757d' },
+        bgcolor: '#fff',
+        bordercolor: '#dee2e6',
+        borderwidth: 1,
+        borderpad: 4
+      }
+    ]
+  };
+
+  Plotly.react('chartIndiv', traces, layout, { responsive: true, displayModeBar: false });
+}
+
+// ── Chart 3: Top retrieval PCs on variance spectrum ────────────────────────
+function renderTopRetr() {
+  const entry = bbData();
+  const pc = entry.pc;
+  const P = pc.P;
+  const varFrac = entry.var_frac.slice(0, P).map(v => v * 100);
+  const topRetrIdx = pc.retr_order_idx; // 64 entries
+  const top10 = new Set(topRetrIdx.slice(0, 10));
+
+  const pcIdx = Array.from({length: P}, (_, i) => i);
+
+  // Split into top-10 retrieval and others for highlighting
+  const top10x = [], top10y = [];
+  for (const i of top10) {
+    top10x.push(i);
+    top10y.push(varFrac[i]);
+  }
+
+  const traces = [
+    // All variance fractions as grey bars
+    {
+      x: pcIdx, y: varFrac,
+      type: 'bar',
+      name: 'Variance fraction (%)',
+      marker: { color: 'rgba(173,181,189,0.5)', line: { width: 0 } },
+      hovertemplate: 'PC#%{x}<br>Var frac: %{y:.3f}%<extra></extra>'
+    },
+    // Top-10 retrieval PCs highlighted
+    {
+      x: top10x, y: top10y,
+      type: 'bar',
+      name: 'Top-10 retrieval PCs',
+      marker: { color: 'rgba(230,126,34,0.85)', line: { width: 0 } },
+      hovertemplate: 'PC#%{x} (top retrieval)<br>Var frac: %{y:.3f}%<extra></extra>'
+    }
+  ];
+
+  const layout = {
+    margin: { t: 10, r: 20, b: 55, l: 58 },
+    xaxis: {
+      title: { text: 'PC index', font: { size: 12 } },
+      tickfont: { size: 11 },
+      gridcolor: '#f1f3f5'
+    },
+    yaxis: {
+      title: { text: 'Variance fraction (%)', font: { size: 12 } },
+      tickfont: { size: 11 },
+      gridcolor: '#f1f3f5'
+    },
+    legend: { orientation: 'h', x: 0, y: -0.22, font: { size: 11 } },
+    plot_bgcolor: '#fff',
+    paper_bgcolor: '#fff',
+    barmode: 'overlay',
+    hovermode: 'closest',
+    annotations: [
+      {
+        x: 53, y: varFrac[53] + (Math.max(...varFrac) * 0.05),
+        xref: 'x', yref: 'y',
+        text: 'Top retrieval PCs<br>cluster at mid-spectrum',
+        showarrow: true,
+        arrowhead: 2,
+        arrowsize: 1,
+        arrowcolor: '#e67e22',
+        font: { size: 10, color: '#e67e22' },
+        bgcolor: '#fff',
+        bordercolor: '#dee2e6',
+        borderwidth: 1,
+        borderpad: 3,
+        ax: 60, ay: -30
+      }
+    ]
+  };
+
+  Plotly.react('chartTopRetr', traces, layout, { responsive: true, displayModeBar: false });
+}
+
+// ── Master render ──────────────────────────────────────────────────────────
+function render() {
+  renderCumR10();
+  renderIndiv();
+  renderTopRetr();
+  updateReadout();
+}
+
+// ── Backbone tabs ──────────────────────────────────────────────────────────
+document.getElementById('bbTabs').addEventListener('click', e => {
+  const btn = e.target.closest('.path-tab');
+  if (!btn) return;
+  document.querySelectorAll('#bbTabs .path-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeBb = btn.dataset.bb;
+  render();
+});
+
+// ── Slider ────────────────────────────────────────────────────────────────
+document.getElementById('kSlider').addEventListener('input', e => {
+  sliderIdx = parseInt(e.target.value, 10);
+  renderCumR10(); // redraw marker
+  updateReadout();
+});
+
+// ── Boot: fetch data ───────────────────────────────────────────────────────
+fetch('data/gapB_spectrum.json')
+  .then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.url}`);
+    return r.json();
+  })
+  .then(data => {
+    DATA = data;
+    render();
+  })
+  .catch(err => {
+    document.querySelector('main').innerHTML =
+      `<div style="padding:24px;color:#991b1b;background:#fee2e2;border-radius:8px;">
+        <strong>Failed to load data/gapB_spectrum.json</strong><br>
+        Serve with: <code>cd viz &amp;&amp; python -m http.server 8080</code><br>
+        Error: ${err.message}
+      </div>`;
+    console.error(err);
+  });
+</script>
+</body>
+</html>
