@@ -104,6 +104,8 @@
   </style>
 </head>
 <body>
+<details data-kr-panel open style="max-width:1040px;margin:12px auto;border:1px solid #c9d4e0;border-radius:12px;background:#f5f9fd;font:14px/1.65 -apple-system,Segoe UI,Roboto,sans-serif;color:#1f2d3d;box-sizing:border-box"><summary style="cursor:pointer;padding:11px 16px;font-weight:700;font-size:15px;color:#15406b">📖 해설 — 클릭해 접기/펼치기</summary><div style="padding:2px 18px 16px"><p style="margin:10px 0"><b>📊 무엇을 보는가</b><br>백본 임베딩과 코드 공간의 <b>2D 투영</b>(PCA/UMAP), 그리고 12개 언어 텍스트의 분포를 색으로 봅니다. (좌표는 미리 계산된 값 — 브라우저는 점만 찍습니다.)</p><p style="margin:10px 0"><b>🔍 어떻게 읽는가</b><br><b>space</b>(SigLIP 임베딩/코드 공간/언어)와 <b>PCA↔UMAP</b>를 전환하고, 범례 클릭으로 클래스(이미지/ceiling/distill 또는 언어)를 켜고 끕니다. 호버로 라벨·인덱스 확인.</p><p style="margin:10px 0"><b>👀 주목할 점</b><br>이미지와 텍스트가 <b>뚜렷이 분리된 덩어리</b>(모달 갭)로 보이는지 — 해부에서 이미지는 텍스트 상위 부분공간(top-50 PC)에 에너지의 <b>약 26%만</b> 겹쳤습니다. 언어 색에서 특정 언어가 따로 뭉치는지(약한 언어가 어디로 쏠리는지)도 보세요. 단, 약어 문제는 ‘극단 꼬리(mi/te/quz)에서만’ 두드러집니다(#11 강등).</p><p style="margin:10px 0"><b>🔗 우리 연구와의 연결</b><br>#11 강등(유효차원↔R@10은 꼬리에서만), 그리고 모달 갭은 ‘backbone을 안 건드리면 못 메운다’는 changeable-points의 backbone 항목과 연결됩니다.</p></div></details>
+
 
 <header>
   <h1>Embedding &amp; code space — precomputed 2D (PCA / UMAP)</h1>

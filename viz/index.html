@@ -8,6 +8,8 @@
  .card:hover{border-color:#1a5fb4;background:#f7faff} .desc{color:#555;font-size:13px;margin-top:3px}
  code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px} .note{color:#777;font-size:12px;margin-top:18px}
 </style></head><body>
+<details data-kr-panel open style="max-width:1040px;margin:12px auto;border:1px solid #c9d4e0;border-radius:12px;background:#f5f9fd;font:14px/1.65 -apple-system,Segoe UI,Roboto,sans-serif;color:#1f2d3d;box-sizing:border-box"><summary style="cursor:pointer;padding:11px 16px;font-weight:700;font-size:15px;color:#15406b">📖 해설 — 클릭해 접기/펼치기</summary><div style="padding:2px 18px 16px"><p style="margin:10px 0"><b>📊 무엇을 보는가</b><br>이 시각화들은 현재 <b>1-bit 해싱 방식이 수학적으로 무엇을 하는지</b> 들여다보고, <b>어디를 바꿔야 판이 바뀌는지</b>(특히 ‘코드 알파벳=부호 단계’와 ‘frozen backbone’)를 찾기 위한 <b>탐색용</b> 도구입니다.</p><p style="margin:10px 0"><b>🔍 어떻게 읽는가</b><br>아래 5개 링크를 순서대로 — ①head 내부 변환 ②코드 분포·BN효과 ③(★)부호화가 버리는 정보 ④임베딩/코드 2D 공간 ⑤성공/실패 쿼리 해부. 각 페이지 상단 해설 박스를 먼저 읽고 슬라이더·토글을 만져 보세요.</p><p style="margin:10px 0"><b>👀 주목할 점</b><br>10개 게이트(loss 구성·negsep 손실·head 아키텍처·5중 음수·rank/entropy·동적비트)는 모두 ‘부호 코드 + InfoNCE’를 이기지 못했습니다. 아직 안 건드린 두 단계가 <b>부호화(크기를 버리는 지점)</b>와 <b>backbone</b>입니다.</p><p style="margin:10px 0"><b>🔗 우리 연구와의 연결</b><br>수식 정식화(docs/FORMULATION.md)의 changeable-points 표가 이 그림들이 가리키는 ‘바꿀 후보’를 정리합니다. 해석은 함께 — 단정 대신 ‘이렇게 보이면 ~일 수 있다’.</p></div></details>
+
 <h1>Current-pipeline anatomy — interactive</h1>
 <p class="desc">Exploratory views of what the frozen-SigLIP2 → Matryoshka head → 1024-bit sign code actually does,
 across three text paths (ceiling / distillation / head-adapt). Drag sliders, toggle paths, hover.

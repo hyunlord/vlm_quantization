@@ -195,6 +195,8 @@
 </style>
 </head>
 <body>
+<details data-kr-panel open style="max-width:1040px;margin:12px auto;border:1px solid #c9d4e0;border-radius:12px;background:#f5f9fd;font:14px/1.65 -apple-system,Segoe UI,Roboto,sans-serif;color:#1f2d3d;box-sizing:border-box"><summary style="cursor:pointer;padding:11px 16px;font-weight:700;font-size:15px;color:#15406b">📖 해설 — 클릭해 접기/펼치기</summary><div style="padding:2px 18px 16px"><p style="margin:10px 0"><b>📊 무엇을 보는가</b><br>코드 분포를 세 가지로 봅니다: <b>|z| 히스토그램</b>, <b>비트별 +1 비율</b>(균형), <b>비트간 상관 64×64</b>. 경로 토글로 비교하고 <b>BatchNorm on/off</b>로 정규화 효과를 직접 켜고 끕니다.</p><p style="margin:10px 0"><b>🔍 어떻게 읽는가</b><br>경로 체크박스로 ceiling/distill/head-adapt/image를 겹쳐 보고, 상단 <b>BN on/off</b> 토글로 두 분포를 비교합니다. 탭으로 |z|/균형/상관 패널을 전환합니다.</p><p style="margin:10px 0"><b>👀 주목할 점</b><br>BN을 꺼도 <b>mean|z|≈0.024는 거의 안 변합니다</b>(크기는 L2가 고정). BN의 실제 효과는 <b>비트 균형의 퍼짐</b>에 나타납니다 — 예: ceiling 비트+1비율 표준편차 0.038(BN)→0.052(off), image 0.022→0.036으로 BN을 끄면 균형이 더 흐트러집니다. 또 세 경로의 분포가 거의 똑같은데(그래서 분포 프록시로는 경로를 구분하기 어려움) 검색 성능은 다릅니다.</p><p style="margin:10px 0"><b>🔗 우리 연구와의 연결</b><br>게이트 6(BN은 본질이 아니지만 코드 기하를 지배), 그리고 ‘5중 음수’(cosine·parity·margin·neighbor·diralign 같은 분포 프록시로 R@10을 예측 못 함)와 연결됩니다.</p></div></details>
+
 
 <div id="loading">Loading data&hellip;</div>
 <div id="error-msg"></div>

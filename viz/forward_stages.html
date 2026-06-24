@@ -127,6 +127,8 @@
   </style>
 </head>
 <body>
+<details data-kr-panel open style="max-width:1040px;margin:12px auto;border:1px solid #c9d4e0;border-radius:12px;background:#f5f9fd;font:14px/1.65 -apple-system,Segoe UI,Roboto,sans-serif;color:#1f2d3d;box-sizing:border-box"><summary style="cursor:pointer;padding:11px 16px;font-weight:700;font-size:15px;color:#15406b">📖 해설 — 클릭해 접기/펼치기</summary><div style="padding:2px 18px 16px"><p style="margin:10px 0"><b>📊 무엇을 보는가</b><br>임베딩 한 샘플이 해시 head 안에서 <b>e → s(slice) → BN → L2 → z(부호 직전) → b=sign</b>로 변하는 과정을, 단계별 1024차원 분포로 보여줍니다.</p><p style="margin:10px 0"><b>🔍 어떻게 읽는가</b><br>상단에서 <b>경로</b>(ceiling/distillation/head-adapt/image)와 <b>샘플 슬롯</b>(0~11)을 고르면 4개 히스토그램(sliced·bn·z·|z|)이 그 샘플로 바뀝니다. ‘overlay’ 체크 시 한 단계를 네 경로로 겹쳐 봅니다.</p><p style="margin:10px 0"><b>👀 주목할 점</b><br>‘sliced’의 제멋대로인 분포가 BN·L2를 지나며 <b>평균 0·단위 norm</b>으로 표준화돼 고정됩니다(어느 경로든 mean|z|≈0.024로 거의 같음). 마지막 sign 단계에서 +1/−1만 남고 <b>크기 정보가 사라집니다</b>. ‘이 표준화가 분포를 묶어버린다’면, 손실 항으로 이 분포를 바꾸기 어렵다는 뜻일 수 있습니다.</p><p style="margin:10px 0"><b>🔗 우리 연구와의 연결</b><br>수식 §2의 ‘BN+L2가 z 분포를 고정 → 보조 손실이 inert’, §1의 ‘|z|≤1이라 STE clip이 안 터진다(부호의 backward가 항등)’를 눈으로 확인하는 그림입니다.</p></div></details>
+
 
 <div id="loading">Loading forward_stages.json...</div>
 <div id="error-msg"></div>

@@ -273,6 +273,8 @@
   </style>
 </head>
 <body>
+<details data-kr-panel open style="max-width:1040px;margin:12px auto;border:1px solid #c9d4e0;border-radius:12px;background:#f5f9fd;font:14px/1.65 -apple-system,Segoe UI,Roboto,sans-serif;color:#1f2d3d;box-sizing:border-box"><summary style="cursor:pointer;padding:11px 16px;font-weight:700;font-size:15px;color:#15406b">📖 해설 — 클릭해 접기/펼치기</summary><div style="padding:2px 18px 16px"><p style="margin:10px 0"><b>📊 무엇을 보는가</b><br><b>★핵심★</b> 같은 쿼리를 (a) <b>연속 점수</b>(z·z, 크기 반영)와 (b) <b>Hamming</b>(부호만)으로 각각 갤러리 랭킹 → 두 순위가 얼마나 갈리는지(rank-flip). 부호화가 ‘버리는 정보’를 직접 봅니다.</p><p style="margin:10px 0"><b>🔍 어떻게 읽는가</b><br><b>쿼리</b>(16개, ✓/✗ 성공표시)·<b>경로</b>·<b>비트수</b>(64/256/1024)를 고릅니다. 왼쪽=연속 랭킹, 오른쪽=Hamming 랭킹, 정답(gold)은 강조. 두 리스트에서 gold 위치가 다르면 그게 sign 때문입니다.</p><p style="margin:10px 0"><b>👀 주목할 점</b><br>1024-bit·ceiling 기준 gold의 평균 순위가 <b>연속 ≈191위 → Hamming ≈228위</b>로, 부호화가 정답을 평균 <b>~37계단 더 밀어냅니다</b>(64-bit는 209→251, 약 42계단). ‘비트가 적을수록·|z|가 작은 경계 비트가 많을수록 더 뒤집힌다’면, 크기를 보존하는 코드(부호만이 아닌)가 이 손실을 줄일 수 있다는 가설로 이어질 수 있습니다 — <b>A 베팅의 바로 그 지점</b>.</p><p style="margin:10px 0"><b>🔗 우리 연구와의 연결</b><br>수식 §3(검색 시 |z| 버림)과 changeable-points의 ‘코드 알파벳’·‘asymmetric search(쿼리는 연속, 갤러리는 이진)’ 후보의 근거 그림입니다.</p></div></details>
+
 
 <header>
   <h1>Sign-vs-continuous retrieval</h1>

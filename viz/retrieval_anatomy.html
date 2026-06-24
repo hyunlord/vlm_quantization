@@ -181,6 +181,8 @@
 </style>
 </head>
 <body>
+<details data-kr-panel open style="max-width:1040px;margin:12px auto;border:1px solid #c9d4e0;border-radius:12px;background:#f5f9fd;font:14px/1.65 -apple-system,Segoe UI,Roboto,sans-serif;color:#1f2d3d;box-sizing:border-box"><summary style="cursor:pointer;padding:11px 16px;font-weight:700;font-size:15px;color:#15406b">📖 해설 — 클릭해 접기/펼치기</summary><div style="padding:2px 18px 16px"><p style="margin:10px 0"><b>📊 무엇을 보는가</b><br>쿼리 하나를 고르면, 그 쿼리에서 <b>정답 이미지까지 Hamming</b> vs <b>모든 갤러리까지의 Hamming 분포</b>, 그리고 정답과 <b>어느 비트가 다른지</b>(32×32 비트차 맵)를 봅니다.</p><p style="margin:10px 0"><b>🔍 어떻게 읽는가</b><br><b>경로</b>와 <b>쿼리</b>(✓성공/✗실패)를 고릅니다. 히스토그램의 초록선=정답까지 거리, 빨강선=가장 가까운 오답까지 거리. 비트차 맵의 진한 칸=정답과 부호가 다른 비트.</p><p style="margin:10px 0"><b>👀 주목할 점</b><br>성공 쿼리는 <b>gap(최근접 오답−정답)이 +값</b>(이 데이터: 중앙값 ceiling +30.5, distill +34, head-adapt +15비트 — 정답이 오답보다 가까움)인데, 실패 쿼리는 <b>gap이 음수</b>(−38.5/−39.5/−31 — 정답이 오히려 더 멈). 즉 ‘정답에 가까운가’보다 <b>‘오답에서 충분히 먼가(negative-separation)’</b>가 성패를 가르는 것으로 보입니다.</p><p style="margin:10px 0"><b>🔗 우리 연구와의 연결</b><br>게이트 4(‘5중 음수’ → 검색을 지배하는 건 negative와의 분리이고, 그건 InfoNCE가 이미 하는 일)와 Hamming-margin 분석의 시각적 근거입니다.</p></div></details>
+
 
 <header>
   <h1>Retrieval anatomy — per query: Hamming to correct vs gallery (negative separation), and which 1024 bits differ from the correct image's code.</h1>
