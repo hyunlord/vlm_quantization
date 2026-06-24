@@ -70,6 +70,7 @@ prioritize measured, reproducible numbers over claims; every table cites the CSV
 from.
 
 \section{System}
+\label{sec:system}
 
 \subsection{Overview}
 The pipeline is a frozen encoder followed by a lightweight hashing head and client-side search
@@ -126,6 +127,7 @@ Browser inference is fp32-only---not for accuracy reasons but because the WASM e
 cannot run int8 (\texttt{ConvInteger}) or load external-data fp16 weights (\S3.4).
 
 \section{Main Results}
+\label{sec:results}
 
 \subsection{Retrieval quality}
 Table~\ref{tab:coco} reports COCO~5K retrieval for the deployed 1-bit system against the float-cosine
@@ -422,14 +424,71 @@ general law.\footnote{\src{paper/rank\_predictor.csv (branch paper-rank-governs)
 gate table}}
 
 \section{Related Work}
-\emph{(To be written.)} OrthoHash \cite{orthohash} and HashCoder/CroVCA \cite{crovca} establish
-single-loss frozen-feature hashing (BatchNorm balance); we extend to cross-modal, multilingual, and
-on-device, and characterize the failure modes there. \verify{phrase HashCoder cross-modal scope
-without quoting an unverified future-work sentence.}
+\label{sec:related}
+We position against three lines of work. In each we are explicit about what is \emph{already
+established} (which we cite and do not re-claim) and what is left open.
+
+\textbf{Frozen-embedding hashing.} OrthoHash \cite{orthohash} shows that a single cosine objective with
+a BatchNorm code-balance layer suffices for deep hashing, and HashCoder/CroVCA \cite{crovca} uses a
+lightweight MLP head with a final BatchNorm and a single alignment loss (plus a coding-rate
+anti-collapse term) as a probe on frozen embeddings. BatchNorm balance, single-loss simplicity, and
+lightweight frozen-feature heads are therefore \emph{prior art}; we claim no novelty there, and our
+negative results on loss composition and on a BN-free head (\S\ref{sec:governs}) are \emph{consistent
+with} these works (we cite them as the explanation, not as our finding). The scope difference is
+modality: CroVCA aligns \emph{cross-view} codes---two augmentations or class-consistent samples of the
+same modality---and does not address cross-modal image--text retrieval.\footnote{Stated from the
+method's described setting (views are augmentations / class-consistent samples), not from a quoted
+future-work claim. \verify{confirm against full PDF that cross-modal is not evaluated.}} Our setting is
+cross-modal, multilingual, and on-device, where the governing factor and failure modes differ.
+
+\textbf{Cross-modal quantization.} Deep cross-modal quantization---CDQ \cite{cdq}, CCQ
+\cite{ccq}---learns a shared codebook end-to-end and replaces the 1-bit alphabet with richer
+quantization (with asymmetric table-lookup distance and coarse-to-fine codes). The quantization
+alphabet, asymmetric scoring, and coarse-to-fine coding are thus \emph{established}; we claim none of
+them as novel, and our asymmetric-search and dynamic-bit results (\S\ref{sec:binarization},
+\S\ref{sec:governs}) are observations within a 1-bit frozen pipeline, not a new quantization method.
+These methods differ from ours in three deployment-relevant ways: they train the backbone (not
+frozen), evaluate English-only, and target server-side retrieval; we keep the backbone frozen, span 36
+languages, and deploy in the browser.
+
+\textbf{Multilingual and on-device vision--language.} Multilingual CLIP variants---NLLB-CLIP
+\cite{nllbclip}, AltCLIP \cite{altclip}, MetaCLIP2 \cite{metaclip2}---and SigLIP2 \cite{siglip2}
+establish multilingual float alignment; efficient encoders such as MobileCLIP \cite{mobileclip} and
+MobileCLIP2 \cite{mobileclip2} establish mobile-scale vision encoders. We \emph{use} these (SigLIP2 as
+the frozen backbone, MobileCLIP2 for on-device indexing) and we do \emph{not} beat the multilingual
+float state of the art: NLLB-CLIP reaches XM3600 R@10 86.06 as a server float model. Our position is
+orthogonal---1-bit, 128-byte, browser-side deployment of these representations.
+
+\textbf{Our place.} The gap none of the three lines occupies is to take a \emph{frozen} modern VLM down
+to 1-bit codes, make it \emph{multilingual}, deploy it \emph{backend-free in the browser}, and---rather
+than propose a new loss or quantizer---\emph{diagnose what actually governs binary cross-modal
+retrieval quality} via the eleven-gate negative-space map (\S\ref{sec:governs},
+Table~\ref{tab:gates}). Our contribution is the deployment and the diagnosis, not method novelty over
+the cited work.
 
 \section{Conclusion}
-\emph{(To be written.)} A deployed, backend-free 1-bit multilingual image search system; honest
-scope (does not beat float multilingual SoTA), measured costs, and reproducible numbers.
+\label{sec:conclusion}
+We presented a deployed 1-bit cross-modal retrieval system and the analysis that justifies its
+simplicity. Four contributions: (i) a \textbf{backend-free, browser-native multilingual image search
+system} at 128 bytes/image with client-side Hamming ranking (\S\ref{sec:system}); (ii) a
+\textbf{negative-space diagnosis}---eleven gates showing that no pre-binarization proxy predicts code
+quality and no shallow loss/architecture lever beats a normalized projection trained with InfoNCE, so
+a simple design is near-optimal here (\S\ref{sec:governs}); (iii) \textbf{on-device deployment
+science}---binarization, not dimension, is the low-bit cost, int8 is numerically free while the
+browser runtime forces fp32, and there is a clear bit-rate sweet spot (\S\ref{sec:binarization},
+\S\ref{sec:results}); and (iv) measured, reproducible numbers throughout.
+
+We are explicit about limits. (i)~We do \emph{not} beat float multilingual SoTA (NLLB-CLIP 86.06 on
+XM3600); the contribution is deployable 1-bit operation, not absolute multilingual accuracy.
+(ii)~The ``simple design is optimal'' claim is scoped to the \emph{frozen-feature regime}; unfreezing
+the backbone may change it, but trades away the deployment identity (a fixed, portable code space and
+small download). (iii)~We deliberately \emph{downgrade} two tempting stories: retrieval information is
+not intrinsically low-dimensional (the tight concentration is a learned-head property), and low
+text-embedding effective-dimension predicts weak-language performance only for the extreme tail
+(mi/te/quz), not across 36 languages ($\rho\!=\!0.38$). (iv)~Search latency at 50k and browser
+text-query latency are not directly benchmarked in this submission \verify{50k search and browser
+text-encode latency}. The takeaway: in on-device multilingual 1-bit cross-modal retrieval, we give
+evidence for \emph{why a simple design is the right one}.
 
 \appendix
 \section{Negative-space gate table}
@@ -465,10 +524,7 @@ Verdicts match STATE\_OF\_PROJECT.}
 \label{tab:gates}
 \end{table}
 
-\begin{thebibliography}{9}
-\bibitem{orthohash} Hoe, J.T.; et al. One Loss for All: Deep Hashing with a Single Cosine Similarity
-based Learning Objective. \emph{NeurIPS}, 2021.
-\bibitem{crovca} Cross-View Code Alignment (HashCoder / CroVCA). arXiv:2510.27584, 2025.
-\end{thebibliography}
+\bibliographystyle{plain}
+\bibliography{refs}
 
 \end{document}
