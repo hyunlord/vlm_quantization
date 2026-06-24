@@ -1,0 +1,4 @@
+path,n,fail_pct,confusable_pct,isolated_pct,fail_gold_ham_med,fail_top1_ham_med,close_thresh
+ceiling,5000,20.08,12.8,7.28,297.0,212.0,226
+distillation,5000,29.14,20.34,8.8,289.0,206.0,226
+head-adapt,5000,26.0,16.54,9.46,296.0,213.0,226

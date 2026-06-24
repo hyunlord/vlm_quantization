@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign Information-Loss Analysis</title>
+  <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f8f9fa;
+      color: #212529;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      padding: 14px 24px;
+    }
+    header h1 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #343a40;
+      line-height: 1.4;
+    }
+    header p.subtitle {
+      font-size: 0.82rem;
+      color: #6c757d;
+      margin-top: 4px;
+      line-height: 1.6;
+    }
+    header p.subtitle span.def {
+      display: inline-block;
+      margin-right: 14px;
+      white-space: nowrap;
+    }
+    header p.subtitle code {
+      font-size: 0.79rem;
+      background: #f1f3f5;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    /* ── Korean explainer ── */
+    .explainer {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+    }
+    .explainer summary {
+      padding: 10px 24px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #495057;
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      user-select: none;
+    }
+    .explainer summary::-webkit-details-marker { display: none; }
+    .explainer summary::before {
+      content: '▶';
+      font-size: 0.65rem;
+      color: #adb5bd;
+      transition: transform 0.15s;
+    }
+    .explainer[open] summary::before { transform: rotate(90deg); }
+    .explainer summary:hover { background: #f8f9fa; }
+    .explainer-body {
+      padding: 0 24px 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px 28px;
+    }
+    .exp-block h3 {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #343a40;
+      margin-bottom: 5px;
+    }
+    .exp-block p {
+      font-size: 0.8rem;
+      color: #495057;
+      line-height: 1.65;
+    }
+    .exp-block p em {
+      color: #868e96;
+      font-style: normal;
+    }
+    @media (max-width: 680px) {
+      .explainer-body { grid-template-columns: 1fr; }
+    }
+
+    /* ── Controls ── */
+    .controls {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+      padding: 11px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: center;
+    }
+    .ctrl-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .ctrl-group label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6c757d;
+    }
+    .path-tabs {
+      display: flex;
+      gap: 0;
+      border: 1px solid #ced4da;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .path-tab {
+      padding: 5px 16px;
+      font-size: 0.85rem;
+      border: none;
+      background: #fff;
+      color: #495057;
+      cursor: pointer;
+      border-right: 1px solid #ced4da;
+      transition: background 0.12s;
+    }
+    .path-tab:last-child { border-right: none; }
+    .path-tab.active {
+      background: #4c9be8;
+      color: #fff;
+      font-weight: 600;
+    }
+    .path-tab:hover:not(.active) { background: #e9ecef; }
+
+    /* ── Main grid ── */
+    main {
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .panel {
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 9px 16px;
+      background: #f1f3f5;
+      border-bottom: 1px solid #dee2e6;
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .panel-header h2 {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #343a40;
+    }
+    .panel-header p {
+      font-size: 0.77rem;
+      color: #868e96;
+    }
+    .panel-body {
+      padding: 4px 6px 8px;
+    }
+
+    /* ── Ranking table ── */
+    .rank-table-wrap {
+      overflow-x: auto;
+      padding: 12px 16px 14px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+    thead th {
+      background: #f8f9fa;
+      padding: 7px 10px;
+      text-align: left;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #6c757d;
+      border-bottom: 1px solid #dee2e6;
+      white-space: nowrap;
+    }
+    thead th.num { text-align: right; }
+    tbody tr { border-bottom: 1px solid #f1f3f5; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f8f9fa; }
+    tbody td {
+      padding: 6px 10px;
+      color: #343a40;
+      white-space: nowrap;
+    }
+    tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .pill {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 99px;
+    }
+    .pill-hi { background: #d1fae5; color: #065f46; }
+    .pill-md { background: #fef3c7; color: #92400e; }
+    .pill-lo { background: #fee2e2; color: #991b1b; }
+
+    .note-footer {
+      padding: 6px 16px 10px;
+      font-size: 0.75rem;
+      color: #868e96;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Sign Information-Loss Analysis</h1>
+  <p class="subtitle">
+    <span class="def"><strong>Continuous</strong> = <code>z·z</code> float dot-product, ceiling before sign is applied</span>
+    <span class="def"><strong>Asymmetric</strong> = <code>z_q · b_g</code> query-float × gallery-1bit (deployable)</span>
+    <span class="def"><strong>Hamming</strong> = <code>b·b</code> full 1-bit codes, current system</span>
+    &nbsp;·&nbsp; Larger gap at low bits = more retrieval info discarded by sign.
+  </p>
+</header>
+
+<!-- Korean explainer -->
+<details class="explainer" open>
+  <summary>한국어 해설 (Korean explainer)</summary>
+  <div class="explainer-body">
+    <div class="exp-block">
+      <h3>📊 무엇을 보는가</h3>
+      <p>
+        부호화(sign) 전 float 점수로 검색하면 <strong>R@10 ≈ 80.4 (ceiling 기준)</strong>로 비트 수와 거의 무관합니다.
+        실제 Hamming 검색은 비트가 적을수록 이 ceiling에서 멀어지는데, 그 차이가 <em>sign information-loss</em>입니다.
+        Asymmetric(query=float, gallery=1-bit)은 갤러리를 1-bit으로 유지하면서 쿼리 측 손실만 없애는 배포 가능한 절충안입니다.
+      </p>
+    </div>
+    <div class="exp-block">
+      <h3>🔍 어떻게 읽나</h3>
+      <p>
+        <strong>Panel 1</strong>: 세 곡선이 64→1024-bit로 갈수록 수렴하면 비트가 sign loss를 보상하는 것입니다. 파란 음영 = 전체 sign loss.
+        <strong>Panel 2</strong>: gap_cont_ham(총 손실)과 gap_asym_ham(비대칭으로 회수 가능)을 비교하면, 비대칭이 저비트 손실의 ~절반을 회수함을 이렇게 보이면 알 수 있습니다.
+        <strong>Panel 3</strong>: 랭킹 일치도(Kendall τ, Top-10 overlap)가 높을수록 float 순위와 binary 순위가 비슷한 것입니다.
+      </p>
+    </div>
+    <div class="exp-block">
+      <h3>👀 주목점</h3>
+      <p>
+        64-bit에서 gap_cont_ham ≈ <strong>+13.9 pt (ceiling)</strong> — 비트가 부족하면 sign이 상당량의 순위 정보를 버립니다.
+        1024-bit에서는 ≈ <strong>+0.6 pt</strong>로 수렴 → 고비트에서 sign이 NO-GO 문제일 가능성은 낮고, 저비트 배포 시에 더 의미 있는 병목이 될 수 있습니다.
+        Asymmetric은 저비트에서 절반가량을 회수하므로, 갤러리 규모가 매우 크다면 쿼리 side만 float으로 두는 방식이 <em>이렇게 보이면 유효한 배포 옵션일 수 있습니다.</em>
+      </p>
+    </div>
+    <div class="exp-block">
+      <h3>🔗 연결</h3>
+      <p>
+        세 path 모두 유사한 gap 패턴 → sign loss는 특정 학습 레시피보다 <strong>비트 수 자체</strong>에 의존하는 경향이 있습니다.
+        head-adapt(이미지 인코더 교체)도 ceiling/distillation과 비슷한 곡선 → 레시피 독립적 현상으로 볼 수 있습니다.
+        Kendall τ와 Top-10 overlap이 512-bit 이상에서 크게 향상 → 실용 배포 하한으로 <em>256~512-bit가 합리적인 후보일 수 있습니다.</em>
+      </p>
+    </div>
+  </div>
+</details>
+
+<!-- Controls -->
+<div class="controls">
+  <div class="ctrl-group">
+    <label>Path</label>
+    <div class="path-tabs" id="pathTabs">
+      <button class="path-tab active" data-path="ceiling">ceiling</button>
+      <button class="path-tab" data-path="distillation">distillation</button>
+      <button class="path-tab" data-path="head-adapt">head-adapt</button>
+    </div>
+  </div>
+</div>
+
+<main>
+  <!-- Panel 1: R@10 lines + gap shading -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>R@10 by Bit-Width</h2>
+      <p>continuous / asymmetric / hamming — shaded band = sign loss (cont − hamming)</p>
+    </div>
+    <div class="panel-body">
+      <div id="chartR10" style="height:320px;"></div>
+    </div>
+  </div>
+
+  <!-- Panel 2: Gap bars -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Sign-Loss Gaps vs Bit-Width</h2>
+      <p>gap_cont_ham = total sign loss · gap_asym_ham = recoverable via asymmetric search</p>
+    </div>
+    <div class="panel-body">
+      <div id="chartGaps" style="height:260px;"></div>
+    </div>
+  </div>
+
+  <!-- Panel 3: Ranking table -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Ranking Agreement</h2>
+      <p>Kendall τ / Spearman ρ (top-100) · Top-10 overlap · Gold rank shift (median)</p>
+    </div>
+    <div class="rank-table-wrap">
+      <table id="rankTable">
+        <thead>
+          <tr>
+            <th>Bits</th>
+            <th class="num">Kendall τ</th>
+            <th class="num">Spearman ρ</th>
+            <th class="num">Top-10 overlap</th>
+            <th class="num">Gold rank shift (med)</th>
+          </tr>
+        </thead>
+        <tbody id="rankTbody"></tbody>
+      </table>
+    </div>
+    <div class="note-footer" id="rankNote"></div>
+  </div>
+</main>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let ALL_ROWS = [];
+let activePath = 'ceiling';
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function rows(path) {
+  return ALL_ROWS.filter(r => r.path === path).sort((a, b) => a.bit - b.bit);
+}
+
+function fmt1(v) { return v.toFixed(1); }
+function fmt3(v) { return v.toFixed(3); }
+
+function pillClass(val, lo, hi) {
+  if (val >= hi) return 'pill-hi';
+  if (val >= lo) return 'pill-md';
+  return 'pill-lo';
+}
+
+// ── Chart 1: R@10 lines + fill ─────────────────────────────────────────────
+function renderR10(path) {
+  const d = rows(path);
+  const bits = d.map(r => String(r.bit));
+  const cont  = d.map(r => r.r10_continuous);
+  const asym  = d.map(r => r.r10_asym);
+  const hamm  = d.map(r => r.r10_hamming);
+
+  // Shaded fill between continuous and hamming
+  const fillX = bits.concat([...bits].reverse());
+  const fillY = cont.concat([...hamm].reverse());
+
+  const traces = [
+    // Fill (sign loss band)
+    {
+      x: fillX, y: fillY,
+      fill: 'toself',
+      fillcolor: 'rgba(76,155,232,0.12)',
+      line: { color: 'transparent' },
+      hoverinfo: 'skip',
+      showlegend: false,
+      type: 'scatter'
+    },
+    // Continuous ceiling
+    {
+      x: bits, y: cont,
+      mode: 'lines+markers',
+      name: 'Continuous (z·z)',
+      line: { color: '#4c9be8', width: 2.5, dash: 'dot' },
+      marker: { size: 7, color: '#4c9be8' },
+      type: 'scatter',
+      hovertemplate: 'Continuous<br>%{x}-bit: %{y:.2f}<extra></extra>'
+    },
+    // Asymmetric
+    {
+      x: bits, y: asym,
+      mode: 'lines+markers',
+      name: 'Asymmetric (z_q·b_g)',
+      line: { color: '#f39c12', width: 2.5 },
+      marker: { size: 7, color: '#f39c12' },
+      type: 'scatter',
+      hovertemplate: 'Asymmetric<br>%{x}-bit: %{y:.2f}<extra></extra>'
+    },
+    // Hamming
+    {
+      x: bits, y: hamm,
+      mode: 'lines+markers',
+      name: 'Hamming (b·b)',
+      line: { color: '#e74c3c', width: 2.5 },
+      marker: { size: 7, color: '#e74c3c' },
+      type: 'scatter',
+      hovertemplate: 'Hamming<br>%{x}-bit: %{y:.2f}<extra></extra>'
+    }
+  ];
+
+  const layout = {
+    margin: { t: 10, r: 20, b: 50, l: 52 },
+    xaxis: {
+      title: { text: 'Bit-width', font: { size: 12 } },
+      type: 'category',
+      tickfont: { size: 11 }
+    },
+    yaxis: {
+      title: { text: 'R@10 (%)', font: { size: 12 } },
+      tickfont: { size: 11 },
+      range: [
+        Math.max(0, Math.min(...hamm) - 3),
+        Math.max(...cont) + 2
+      ]
+    },
+    legend: { orientation: 'h', x: 0, y: -0.18, font: { size: 11 } },
+    plot_bgcolor: '#fff',
+    paper_bgcolor: '#fff',
+    hovermode: 'x unified'
+  };
+
+  Plotly.react('chartR10', traces, layout, { responsive: true, displayModeBar: false });
+}
+
+// ── Chart 2: Gap bars ──────────────────────────────────────────────────────
+function renderGaps(path) {
+  const d = rows(path);
+  const bits = d.map(r => String(r.bit));
+
+  const traces = [
+    {
+      x: bits,
+      y: d.map(r => r.gap_cont_ham),
+      name: 'gap_cont_ham (total sign loss)',
+      type: 'bar',
+      marker: { color: 'rgba(76,155,232,0.75)' },
+      hovertemplate: 'Total loss<br>%{x}-bit: %{y:.2f} pt<extra></extra>'
+    },
+    {
+      x: bits,
+      y: d.map(r => r.gap_asym_ham),
+      name: 'gap_asym_ham (recoverable via asymmetric)',
+      type: 'bar',
+      marker: { color: 'rgba(243,156,18,0.75)' },
+      hovertemplate: 'Recoverable<br>%{x}-bit: %{y:.2f} pt<extra></extra>'
+    }
+  ];
+
+  const layout = {
+    margin: { t: 10, r: 20, b: 50, l: 52 },
+    barmode: 'group',
+    xaxis: {
+      title: { text: 'Bit-width', font: { size: 12 } },
+      type: 'category',
+      tickfont: { size: 11 }
+    },
+    yaxis: {
+      title: { text: 'Gap (R@10 pt)', font: { size: 12 } },
+      tickfont: { size: 11 }
+    },
+    legend: { orientation: 'h', x: 0, y: -0.22, font: { size: 11 } },
+    plot_bgcolor: '#fff',
+    paper_bgcolor: '#fff',
+    hovermode: 'x unified'
+  };
+
+  Plotly.react('chartGaps', traces, layout, { responsive: true, displayModeBar: false });
+}
+
+// ── Table 3: Ranking metrics ───────────────────────────────────────────────
+function renderTable(path) {
+  const d = rows(path);
+  const tbody = document.getElementById('rankTbody');
+  const noteEl = document.getElementById('rankNote');
+
+  tbody.innerHTML = d.map(r => {
+    const kClass = pillClass(r.kendall_top100, 0.55, 0.70);
+    const oClass = pillClass(r.top10_overlap, 0.65, 0.80);
+    const shiftClass = r.gold_rank_shift_med === 0 ? 'pill-hi'
+                     : r.gold_rank_shift_med <= 1  ? 'pill-md' : 'pill-lo';
+
+    return `<tr>
+      <td><strong>${r.bit}</strong></td>
+      <td class="num"><span class="pill ${kClass}">${fmt3(r.kendall_top100)}</span></td>
+      <td class="num">${fmt3(r.spearman_top100)}</td>
+      <td class="num"><span class="pill ${oClass}">${fmt1(r.top10_overlap * 100)}%</span></td>
+      <td class="num"><span class="pill ${shiftClass}">${r.gold_rank_shift_med}</span></td>
+    </tr>`;
+  }).join('');
+
+  noteEl.textContent = 'Kendall τ / Top-10 overlap: green ≥ threshold · yellow = moderate · red = low. Gold rank shift med = median position change of the true top-10 match under hamming vs continuous.';
+}
+
+// ── Master render ──────────────────────────────────────────────────────────
+function render(path) {
+  renderR10(path);
+  renderGaps(path);
+  renderTable(path);
+}
+
+// ── Path tabs ──────────────────────────────────────────────────────────────
+document.getElementById('pathTabs').addEventListener('click', e => {
+  const btn = e.target.closest('.path-tab');
+  if (!btn) return;
+  document.querySelectorAll('.path-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activePath = btn.dataset.path;
+  render(activePath);
+});
+
+// ── Boot: fetch data ───────────────────────────────────────────────────────
+fetch('data/signloss.json')
+  .then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.url}`);
+    return r.json();
+  })
+  .then(data => {
+    ALL_ROWS = data.rows;
+    render(activePath);
+  })
+  .catch(err => {
+    document.querySelector('main').innerHTML =
+      `<div style="padding:24px;color:#991b1b;background:#fee2e2;border-radius:8px;">
+        <strong>Failed to load data/signloss.json</strong><br>
+        Serve with: <code>cd viz &amp;&amp; python -m http.server 8080</code><br>
+        Error: ${err.message}
+      </div>`;
+    console.error(err);
+  });
+</script>
+</body>
+</html>

@@ -20,6 +20,8 @@ Math: <a href="../docs/FORMULATION.md">docs/FORMULATION.md</a>. Data: <code>viz/
 <a class="card" href="sign_information_loss.html"><h2>3 · sign_information_loss</h2><div class="desc">Same query ranked by continuous z·z vs Hamming, gold highlighted, bit slider 64/256/1024. What binarization reorders.</div></a>
 <a class="card" href="embedding_space.html"><h2>4 · embedding_space</h2><div class="desc">Precomputed PCA/UMAP of SigLIP embedding, code space, and 12 languages. Toggle space/projection; color by modality-path / language.</div></a>
 <a class="card" href="retrieval_anatomy.html"><h2>5 · retrieval_anatomy</h2><div class="desc">Per query: Hamming-to-gallery histogram with gold vs nearest-wrong markers (negative separation), and a 32×32 grid of which bits differ from the correct image.</div></a>
+<a class="card" href="signloss.html"><h2>6 · signloss · A-베팅 GO/NO-GO</h2><div class="desc">연속 vs 비대칭 vs Hamming R@10을 비트별로. sign이 버리는 정보량(=격차): 1024b +0.6pt(NO-GO) vs 64b +13.9pt(GO·저비트). 비대칭검색이 절반 회복(+8.2@64).</div></a>
+<a class="card" href="outlier_gallery.html"><h2>7 · outlier_gallery · 실패 케이스 A/B</h2><div class="desc">실패 쿼리의 정답 vs 검색된 오답 썸네일. 근접오답(라벨한계 후보 A, 실패의 ~64%) vs 고립(q19형 B, ~36%) — 눈으로 의미일치 확인.</div></a>
 
 <p class="note">Serve locally (not file://, the pages fetch JSON):<br>
 <code>cd viz &amp;&amp; python -m http.server 8800</code> → open <code>http://localhost:8800/</code><br>
