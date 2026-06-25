@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WASM retrieval-latency bench v2 — popcount suspicion / roofline</title>
+<style>
+  body { font: 13px/1.5 -apple-system, system-ui, sans-serif; margin: 20px; max-width: 1200px; }
+  table { border-collapse: collapse; margin: 8px 0; font-variant-numeric: tabular-nums; font-size: 12px; }
+  th, td { border: 1px solid #ccc; padding: 3px 7px; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  .ok { color: #0a0; } .bad { color: #c00; font-weight: bold; }
+  #env { color: #555; white-space: pre-wrap; }
+  td.win { background: #e8f5e9; font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>WASM search-latency v2 — chasing the popcount suspicion</h1>
+<p>Separates <b>scan-only</b> (pure kernel) from <b>scan+topk</b>. Includes cache-resident
+   galleries (256, 1K) where memory bandwidth is NOT the bottleneck — if binary popcount is
+   ever faster, it must show here. Plus a byte-size sweep for the roofline.</p>
+<div id="env"></div>
+<p><button id="run">Run benchmark</button> <span id="status"></span></p>
+<div id="results"></div>
+
+<script type="module">
+const GALLERY_SIZES = [256, 1000, 5000, 50000, 100000];
+const WARMUP = 12;
+const MEASURE = 50;
+const QUERY_BANK = 64;
+const K = 10;
+const BASE = 1 << 20;
+const TARGET_MS = 6;          // batch target for timer resolution
+const MAXBYTES = 256;         // largest per-item byte budget (fp32-64d)
+let sink = 0;
+
+function mkRng(seed){ let s=seed>>>0||1; return ()=>{ s^=s<<13; s^=s>>>17; s^=s<<5; return (s>>>0); }; }
+
+// ---- JS scalar kernels (parameterized by length) ----
+function binaryScalar(gU32, qU32, n, words, scores){
+  for(let i=0;i<n;i++){ const off=i*words; let d=0;
+    for(let w=0;w<words;w++){ let x=(gU32[off+w]^qU32[w])>>>0;
+      x=x-((x>>>1)&0x55555555); x=(x&0x33333333)+((x>>>2)&0x33333333);
+      x=(x+(x>>>4))&0x0f0f0f0f; d+=(Math.imul(x,0x01010101)>>>24); }
+    scores[i]=d; } }
+function int8Scalar(gI8, qI8, n, dim, scores){
+  for(let i=0;i<n;i++){ const off=i*dim; let s=0; for(let k=0;k<dim;k++) s+=gI8[off+k]*qI8[k]; scores[i]=s; } }
+function fp32Scalar(gF32, qF32, n, dim, scores){
+  for(let i=0;i<n;i++){ const off=i*dim; let s=0; for(let k=0;k<dim;k++) s+=gF32[off+k]*qF32[k]; scores[i]=s; } }
+function fp16Scalar(gF16, qF16, n, dim, scores){
+  for(let i=0;i<n;i++){ const off=i*dim; let s=0; for(let k=0;k<dim;k++) s+=gF16[off+k]*qF16[k]; scores[i]=s; } }
+
+function topk(scores, n, higher){
+  const val=new Float64Array(K), idx=new Int32Array(K);
+  val.fill(higher?-Infinity:Infinity);
+  for(let i=0;i<n;i++){ const s=scores[i];
+    if(higher?(s>val[K-1]):(s<val[K-1])){ let j=K-1;
+      while(j>0&&(higher?(s>val[j-1]):(s<val[j-1]))){ val[j]=val[j-1]; idx[j]=idx[j-1]; j--; }
+      val[j]=s; idx[j]=i; } }
+  let cs=0; for(let j=0;j<K;j++) cs+=val[j]+idx[j]; return cs; }
+
+function percentile(arr,p){ const a=arr.slice().sort((x,y)=>x-y); return a[Math.min(a.length-1,Math.floor(p/100*a.length))]; }
+
+const HAS_F16 = (typeof Float16Array !== 'undefined');
+
+async function main(){
+  const status=document.getElementById('status'), envDiv=document.getElementById('env');
+  const SIMD_TEST=new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,10,1,8,0,65,0,253,15,253,98,11]);
+  const env={ userAgent:navigator.userAgent, hardwareConcurrency:navigator.hardwareConcurrency,
+    deviceMemoryGB:navigator.deviceMemory??null, wasmSimdSupported:WebAssembly.validate(SIMD_TEST),
+    float16:HAS_F16, timestamp:new Date().toISOString() };
+  envDiv.textContent=JSON.stringify(env,null,2);
+
+  status.textContent='loading wasm…';
+  const wasmBytes=await (await fetch('build/kernels.simd.wasm')).arrayBuffer();
+  const { instance }=await WebAssembly.instantiate(wasmBytes,{});
+  const ex=instance.exports, mem=ex.memory;
+
+  const maxN=Math.max(...GALLERY_SIZES);
+  const SCORES_OFF=BASE, QBANK_OFF=SCORES_OFF+maxN*4, GALLERY_OFF=QBANK_OFF+QUERY_BANK*MAXBYTES;
+  const needBytes=GALLERY_OFF+maxN*MAXBYTES+1024;
+  const have=mem.buffer.byteLength/65536, need=Math.ceil(needBytes/65536);
+  if(need>have) mem.grow(need-have);
+
+  const results=[];
+
+  // fill gallery+query bank for a (method,nbytes) at offset; returns views
+  function fill(method, n, nbytes){
+    const rng=mkRng(0x9e3779b1 ^ (n*2654435761) ^ (nbytes*40503) ^ method.length);
+    if(method==='binary'){
+      const gw=nbytes>>2; const gal=new Uint32Array(mem.buffer,GALLERY_OFF,n*gw);
+      for(let i=0;i<gal.length;i++) gal[i]=rng();
+      const qb=new Uint32Array(mem.buffer,QBANK_OFF,QUERY_BANK*gw); for(let i=0;i<qb.length;i++) qb[i]=rng();
+    } else if(method==='int8'){
+      const gal=new Int8Array(mem.buffer,GALLERY_OFF,n*nbytes); for(let i=0;i<gal.length;i++) gal[i]=(rng()&0xff)-128;
+      const qb=new Int8Array(mem.buffer,QBANK_OFF,QUERY_BANK*nbytes); for(let i=0;i<qb.length;i++) qb[i]=(rng()&0xff)-128;
+    } else if(method==='fp32'){
+      const gd=nbytes>>2; const gal=new Float32Array(mem.buffer,GALLERY_OFF,n*gd);
+      for(let i=0;i<gal.length;i++) gal[i]=(rng()/4294967296)*2-1;
+      const qb=new Float32Array(mem.buffer,QBANK_OFF,QUERY_BANK*gd); for(let i=0;i<qb.length;i++) qb[i]=(rng()/4294967296)*2-1;
+    } else if(method==='fp16'){
+      const gd=nbytes>>1; const gal=new Float16Array(mem.buffer,GALLERY_OFF,n*gd);
+      for(let i=0;i<gal.length;i++) gal[i]=(rng()/4294967296)*2-1;
+      const qb=new Float16Array(mem.buffer,QBANK_OFF,QUERY_BANK*gd); for(let i=0;i<qb.length;i++) qb[i]=(rng()/4294967296)*2-1;
+    }
+  }
+
+  // run one query; phase: 'scan' (kernel only) or 'topk' (kernel + top-k)
+  function makeRunner(method, n, nbytes, impl){
+    const stride=nbytes;
+    const scoresI32=new Int32Array(mem.buffer,SCORES_OFF,n);
+    const scoresF32=new Float32Array(mem.buffer,SCORES_OFF,n);
+    const gw=nbytes>>2, gd32=nbytes>>2, gd16=nbytes>>1;
+    const gU32=new Uint32Array(mem.buffer,GALLERY_OFF,n*gw);
+    const gI8=new Int8Array(mem.buffer,GALLERY_OFF,n*nbytes);
+    const gF32=new Float32Array(mem.buffer,GALLERY_OFF,n*gd32);
+    const gF16=HAS_F16?new Float16Array(mem.buffer,GALLERY_OFF,n*gd16):null;
+    const higher=(method!=='binary');
+    return (phase, qi)=>{
+      const qOff=QBANK_OFF+qi*stride;
+      if(impl==='wasm_simd'){
+        if(method==='binary') ex.binary_simd(qOff,GALLERY_OFF,SCORES_OFF,n,stride,nbytes);
+        else if(method==='int8') ex.int8_simd(qOff,GALLERY_OFF,SCORES_OFF,n,stride,nbytes);
+        else ex.fp32_simd(qOff,GALLERY_OFF,SCORES_OFF,n,stride,nbytes);
+        const sc=(method==='fp32')?scoresF32:scoresI32;
+        if(phase==='topk') sink+=topk(sc,n,higher); else sink+=sc[(qi*7)%n];
+      } else {
+        const sc=(method==='fp32'||method==='fp16')?scoresF32:scoresI32;
+        if(method==='binary'){ const q=new Uint32Array(mem.buffer,qOff,gw); binaryScalar(gU32,q,n,gw,scoresI32); }
+        else if(method==='int8'){ const q=new Int8Array(mem.buffer,qOff,nbytes); int8Scalar(gI8,q,n,nbytes,scoresI32); }
+        else if(method==='fp32'){ const q=new Float32Array(mem.buffer,qOff,gd32); fp32Scalar(gF32,q,n,gd32,scoresF32); }
+        else { const q=new Float16Array(mem.buffer,qOff,gd16); fp16Scalar(gF16,q,n,gd16,scoresF32); }
+        if(phase==='topk') sink+=topk(sc,n,higher); else sink+=sc[(qi*7)%n];
+      }
+    };
+  }
+
+  function measure(experiment, method, n, nbytes, impl, phase){
+    fill(method,n,nbytes);
+    const run=makeRunner(method,n,nbytes,impl);
+    for(let i=0;i<WARMUP;i++) run(phase,i%QUERY_BANK);
+    let inner=1;
+    for(let g=0; g<40; g++){ const t0=performance.now(); for(let r=0;r<inner;r++) run(phase,(r)%QUERY_BANK);
+      const t=performance.now()-t0; if(t>=TARGET_MS||inner>=200000) break;
+      inner=Math.max(inner+1,Math.ceil(inner*(TARGET_MS/Math.max(t,0.05)))); }
+    const times=new Float64Array(MEASURE);
+    for(let i=0;i<MEASURE;i++){ const t0=performance.now(); for(let r=0;r<inner;r++) run(phase,(i+r)%QUERY_BANK); times[i]=(performance.now()-t0)/inner; }
+    const p50=percentile(times,50), p95=percentile(times,95);
+    results.push({ experiment, gallery:n, method, impl, phase, bytes_per_item:nbytes,
+      p50_ms:+p50.toFixed(6), p95_ms:+p95.toFixed(6),
+      ns_per_item:+(p50*1e6/n).toFixed(3), ns_per_byte:+(p50*1e6/n/nbytes).toFixed(4),
+      inner_reps:inner, n_queries:MEASURE*inner });
+  }
+
+  // correctness self-check (128 B), confirms v2 kernels still right
+  const checks={};
+  for(const m of ['binary','int8','fp32']){
+    const nb=(m==='fp32')?256:128; const cn=256; fill(m,cn,nb);
+    if(m==='binary') ex.binary_simd(QBANK_OFF,GALLERY_OFF,SCORES_OFF,cn,nb,nb);
+    else if(m==='int8') ex.int8_simd(QBANK_OFF,GALLERY_OFF,SCORES_OFF,cn,nb,nb);
+    else ex.fp32_simd(QBANK_OFF,GALLERY_OFF,SCORES_OFF,cn,nb,nb);
+    const ws=(m==='fp32')?Array.from(new Float32Array(mem.buffer,SCORES_OFF,cn)):Array.from(new Int32Array(mem.buffer,SCORES_OFF,cn));
+    const ref=(m==='fp32')?new Float32Array(cn):new Int32Array(cn);
+    if(m==='binary') binaryScalar(new Uint32Array(mem.buffer,GALLERY_OFF,cn*(nb>>2)),new Uint32Array(mem.buffer,QBANK_OFF,nb>>2),cn,nb>>2,ref);
+    else if(m==='int8') int8Scalar(new Int8Array(mem.buffer,GALLERY_OFF,cn*nb),new Int8Array(mem.buffer,QBANK_OFF,nb),cn,nb,ref);
+    else fp32Scalar(new Float32Array(mem.buffer,GALLERY_OFF,cn*(nb>>2)),new Float32Array(mem.buffer,QBANK_OFF,nb>>2),cn,nb>>2,ref);
+    let md=0; for(let i=0;i<cn;i++) md=Math.max(md,Math.abs(ws[i]-ref[i]));
+    checks[m]={maxAbsDiff:md, pass:(m==='fp32')?md<1e-2:md===0};
+  }
+
+  // EXPERIMENT 1 — main grid @128B (binary/int8/fp16) + fp32@256B, both impl, both phases
+  const mainMethods=[['binary',128],['int8',128],['fp32',256]];
+  if(HAS_F16) mainMethods.push(['fp16',128]);
+  for(const n of GALLERY_SIZES){
+    for(const [m,nb] of mainMethods){
+      for(const impl of ['wasm_simd','js_scalar']){
+        if(m==='fp16' && impl==='wasm_simd') continue; // no native f16 SIMD
+        for(const phase of ['scan','topk']){
+          status.textContent=`main ${m}@${nb}B ${impl} ${phase} n=${n}`;
+          await new Promise(r=>setTimeout(r,0));
+          measure('main',m,n,nb,impl,phase);
+        }
+      }
+    }
+  }
+
+  // EXPERIMENT 2 — byte sweep (roofline): binary & int8, bytes 16..256, scan-only, wasm_simd
+  for(const n of [1000, 50000]){
+    for(const m of ['binary','int8']){
+      for(const nb of [16,32,64,128,256]){
+        status.textContent=`sweep ${m} ${nb}B n=${n}`;
+        await new Promise(r=>setTimeout(r,0));
+        measure('byte_sweep',m,n,nb,'wasm_simd','scan');
+      }
+    }
+  }
+
+  const payload={ env, checks, results, sink };
+  window.__RESULTS__=payload; render(payload); status.textContent='done. sink='+sink;
+}
+
+function render(p){
+  const div=document.getElementById('results');
+  let html='<h2>Correctness</h2><table><tr><th>m</th><th>maxAbsDiff</th><th>pass</th></tr>';
+  for(const m in p.checks) html+=`<tr><td>${m}</td><td>${p.checks[m].maxAbsDiff}</td><td class="${p.checks[m].pass?'ok':'bad'}">${p.checks[m].pass?'PASS':'FAIL'}</td></tr>`;
+  html+='</table>';
+  html+='<h2>Main grid — ns/item (scan-only)</h2><table><tr><th>gallery</th><th>impl</th><th>binary</th><th>int8</th><th>bin/int8</th></tr>';
+  const sizes=[...new Set(p.results.filter(r=>r.experiment==='main').map(r=>r.gallery))].sort((a,b)=>a-b);
+  for(const g of sizes) for(const impl of ['wasm_simd','js_scalar']){
+    const b=p.results.find(r=>r.experiment==='main'&&r.gallery===g&&r.method==='binary'&&r.impl===impl&&r.phase==='scan');
+    const i=p.results.find(r=>r.experiment==='main'&&r.gallery===g&&r.method==='int8'&&r.impl===impl&&r.phase==='scan');
+    if(b&&i) html+=`<tr><td>${g}</td><td>${impl}</td><td>${b.ns_per_item}</td><td>${i.ns_per_item}</td><td>${(b.ns_per_item/i.ns_per_item).toFixed(2)}</td></tr>`;
+  }
+  html+='</table>';
+  div.innerHTML=html;
+}
+window.runBench=()=>main().catch(e=>{ window.__RESULTS__={error:String(e)}; console.error(e); });
+document.getElementById('run').addEventListener('click',window.runBench);
+if(location.search.includes('auto')) window.runBench();
+</script>
+</body>
+</html>

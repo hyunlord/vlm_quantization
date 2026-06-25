@@ -1,3 +1,12 @@
+> ⚠️ **SUPERSEDED IN PART by `WASM_LATENCY_V2_HANDOFF.md` (2026-06-25).** A follow-up that
+> isolates the kernel (no top-k), tests cache-resident galleries, and sweeps byte-length found
+> this doc's "binary ≈ int8 tie, memory-bandwidth bound" conclusion was **wrong**: binary
+> popcount IS faster (~8–12 % @128 B, up to 30 % @256 B, 2.7× scalar-JS), the regime is
+> load/compute-bound (cache-resident), not DRAM-bound, and v1 here under-measured binary due
+> to a redundant-mask reduction inefficiency + top-k dilution. The *practical* conclusion still
+> holds (the 128 B win is ~tens of µs and int8 wins accuracy at equal bytes), but the mechanism
+> claims below are corrected by v2. Read v2 for the accurate story.
+
 # WASM Browser Search-Latency — Final 1-bit Life-or-Death Verdict
 
 **Branch:** `paper-wasm-latency`
