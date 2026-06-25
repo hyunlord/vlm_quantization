@@ -304,9 +304,10 @@ function renderResults(payload) {
   div.innerHTML = html;
 }
 
-document.getElementById('run').addEventListener('click', () => { main().catch(e => { document.getElementById('status').textContent = 'ERROR: ' + e.message; console.error(e); }); });
+window.runBench = () => main().catch(e => { window.__RESULTS__ = { error: String(e) }; console.error(e); });
+document.getElementById('run').addEventListener('click', window.runBench);
 // auto-run for headless driver
-if (location.search.includes('auto')) main().catch(e => { window.__RESULTS__ = { error: String(e) }; console.error(e); });
+if (location.search.includes('auto')) window.runBench();
 </script>
 </body>
 </html>

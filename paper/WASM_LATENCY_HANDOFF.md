@@ -22,7 +22,7 @@ The binary 2.3× win exists **only in the naive-JS regime** — i.e., only if yo
 ## Measurement (real browser, no extrapolation)
 
 - **Engine:** Playwright **Chromium / Chrome-for-Testing, HeadlessChrome 149.0.7827.55** — a real browser V8+WASM engine, *not* torch/numpy/desktop-FAISS and not an emulator.
-- **Device:** Apple Silicon Mac, macOS 25.4, 14 logical cores, 32 GB. (Single device. For cross-device, open `web/wasm_bench/bench.html` on real desktop/mobile Chrome — same code path, "Run" button.)
+- **Device:** Apple Silicon Mac, macOS 25.4, 14 logical cores, 32 GB. CPU-throttle sweep (1× / 4× / 6× via CDP `Emulation.setCPUThrottlingRate`) emulates slower / mobile-class **compute** on the same real engine — honestly labelled as throttled CPU, **not** a real mobile device. For a true cross-device run, open `web/wasm_bench/bench.html` on real desktop/mobile Chrome ("Run" button, same code path).
 - **WASM SIMD supported:** `true` (verified via `WebAssembly.validate` of an `i8x16.popcnt` module).
 - **Galleries built for real:** 5 000 / 50 000 / 100 000 items (actual buffers scanned, no extrapolation from a small index).
 - **Isolated region:** *gallery scan + top-10 only*, after warm-up. Model load / encoding excluded. Top-k is the **identical** JS routine for every method, so it cannot bias binary-vs-int8.
@@ -59,7 +59,19 @@ The binary 2.3× win exists **only in the naive-JS regime** — i.e., only if yo
 | 100 000 | fp32 | wasm_simd | 256 | 0.664 | 0.679 |
 | 100 000 | fp32 | js_scalar | 256 | 3.83 | 4.00 |
 
-Full table incl. fp32 at all sizes: `paper/wasm_latency.csv`. Raw JSON (env + checks): `web/wasm_bench/bench_results.json`.
+(Table shows cpu_throttle=1×.) Full table incl. fp32 + 4×/6× throttle: `paper/wasm_latency.csv` (now has a `cpu_throttle` column). Raw JSON (env + checks): `web/wasm_bench/bench_results.json`.
+
+## Robustness to slower / mobile-class compute (CPU-throttle sweep)
+
+binary vs int8 **at equal WASM-SIMD optimization**, p50 ms @100K, across throttle:
+
+| cpu_throttle | binary | int8 | ratio (int8/bin) |
+|---|---|---|---|
+| 1× | 0.467 | 0.471 | 1.01 (tie) |
+| 4× | 1.94 | 1.92 | 0.99 (tie) |
+| 6× | 2.90 | 2.87 | 0.99 (tie) |
+
+The SIMD tie is **invariant to CPU speed** — throttle scales all methods near-linearly (4×→~4.1×, 6×→~6.2× latency), so the memory-bound equal-bytes conclusion holds on mobile-class compute. The naive-JS binary/int8 ratio also stays ~2.3× at every throttle (6× @100K: 22.1 vs 50.5 ms). On a slow device the naive int8 path becomes genuinely sluggish (50 ms), but **int8 SIMD (2.87 ms) still beats binary-naive (22 ms) by 7–8×** — so the correct slow-device choice is SIMD-int8, not naive-binary. Binary's edge does not reappear on weaker hardware.
 
 ## Answering the ★ judgment questions
 
@@ -90,8 +102,8 @@ Retire the **latency** survival thesis for pure 1-bit. The paper's deploy story 
 cd web/wasm_bench
 npm install                 # assemblyscript + playwright
 npm run asbuild             # build/kernels.simd.wasm (verify i8x16.popcnt / i32x4.dot_i16x8_s in .wat)
-node run_bench.mjs          # headless Chromium -> paper/wasm_latency.csv + bench_results.json
-node run_bench.mjs --headed # watch it
+node run_bench.mjs          # headless Chromium, throttle sweep 1x/4x/6x -> paper/wasm_latency.csv
+node run_bench.mjs --rates=1 --headed   # single un-throttled run, watch it
 # manual cross-device: serve web/wasm_bench over http, open bench.html in desktop/mobile Chrome, click "Run"
 ```
 
