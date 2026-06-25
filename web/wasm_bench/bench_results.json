@@ -1,0 +1,225 @@
+{
+  "env": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+    "hardwareConcurrency": 14,
+    "deviceMemoryGB": 32,
+    "wasmSimdSupported": true,
+    "timestamp": "2026-06-25T05:15:47.552Z",
+    "browser": "Playwright Chromium (Chrome for Testing)"
+  },
+  "checks": {
+    "binary": {
+      "maxAbsDiff": 0,
+      "pass": true
+    },
+    "int8": {
+      "maxAbsDiff": 0,
+      "pass": true
+    },
+    "fp32": {
+      "maxAbsDiff": 9.5367431640625e-7,
+      "pass": true
+    }
+  },
+  "results": [
+    {
+      "gallery": 5000,
+      "method": "binary",
+      "impl": "wasm_simd",
+      "bytes_per_item": 128,
+      "inner_reps": 329,
+      "p50_ms": 0.02432,
+      "p95_ms": 0.02523,
+      "mean_ms": 0.0239,
+      "n_queries": 19740
+    },
+    {
+      "gallery": 5000,
+      "method": "binary",
+      "impl": "js_scalar",
+      "bytes_per_item": 128,
+      "inner_reps": 47,
+      "p50_ms": 0.1766,
+      "p95_ms": 0.18085,
+      "mean_ms": 0.17713,
+      "n_queries": 2820
+    },
+    {
+      "gallery": 5000,
+      "method": "int8",
+      "impl": "wasm_simd",
+      "bytes_per_item": 128,
+      "inner_reps": 318,
+      "p50_ms": 0.02421,
+      "p95_ms": 0.02547,
+      "mean_ms": 0.02432,
+      "n_queries": 19080
+    },
+    {
+      "gallery": 5000,
+      "method": "int8",
+      "impl": "js_scalar",
+      "bytes_per_item": 128,
+      "inner_reps": 21,
+      "p50_ms": 0.40952,
+      "p95_ms": 0.41905,
+      "mean_ms": 0.40881,
+      "n_queries": 1260
+    },
+    {
+      "gallery": 5000,
+      "method": "fp32",
+      "impl": "wasm_simd",
+      "bytes_per_item": 256,
+      "inner_reps": 238,
+      "p50_ms": 0.03403,
+      "p95_ms": 0.03529,
+      "mean_ms": 0.03426,
+      "n_queries": 14280
+    },
+    {
+      "gallery": 5000,
+      "method": "fp32",
+      "impl": "js_scalar",
+      "bytes_per_item": 256,
+      "inner_reps": 43,
+      "p50_ms": 0.19302,
+      "p95_ms": 0.19767,
+      "mean_ms": 0.19271,
+      "n_queries": 2580
+    },
+    {
+      "gallery": 50000,
+      "method": "binary",
+      "impl": "wasm_simd",
+      "bytes_per_item": 128,
+      "inner_reps": 40,
+      "p50_ms": 0.235,
+      "p95_ms": 0.2375,
+      "mean_ms": 0.23521,
+      "n_queries": 2400
+    },
+    {
+      "gallery": 50000,
+      "method": "binary",
+      "impl": "js_scalar",
+      "bytes_per_item": 128,
+      "inner_reps": 5,
+      "p50_ms": 1.76,
+      "p95_ms": 1.8,
+      "mean_ms": 1.76633,
+      "n_queries": 300
+    },
+    {
+      "gallery": 50000,
+      "method": "int8",
+      "impl": "wasm_simd",
+      "bytes_per_item": 128,
+      "inner_reps": 40,
+      "p50_ms": 0.2325,
+      "p95_ms": 0.24,
+      "mean_ms": 0.23279,
+      "n_queries": 2400
+    },
+    {
+      "gallery": 50000,
+      "method": "int8",
+      "impl": "js_scalar",
+      "bytes_per_item": 128,
+      "inner_reps": 2,
+      "p50_ms": 4.05,
+      "p95_ms": 4.2,
+      "mean_ms": 4.03,
+      "n_queries": 120
+    },
+    {
+      "gallery": 50000,
+      "method": "fp32",
+      "impl": "wasm_simd",
+      "bytes_per_item": 256,
+      "inner_reps": 27,
+      "p50_ms": 0.33333,
+      "p95_ms": 0.34074,
+      "mean_ms": 0.3334,
+      "n_queries": 1620
+    },
+    {
+      "gallery": 50000,
+      "method": "fp32",
+      "impl": "js_scalar",
+      "bytes_per_item": 256,
+      "inner_reps": 5,
+      "p50_ms": 1.94,
+      "p95_ms": 2,
+      "mean_ms": 1.93733,
+      "n_queries": 300
+    },
+    {
+      "gallery": 100000,
+      "method": "binary",
+      "impl": "wasm_simd",
+      "bytes_per_item": 128,
+      "inner_reps": 20,
+      "p50_ms": 0.475,
+      "p95_ms": 0.495,
+      "mean_ms": 0.47242,
+      "n_queries": 1200
+    },
+    {
+      "gallery": 100000,
+      "method": "binary",
+      "impl": "js_scalar",
+      "bytes_per_item": 128,
+      "inner_reps": 3,
+      "p50_ms": 3.53333,
+      "p95_ms": 3.66667,
+      "mean_ms": 3.52056,
+      "n_queries": 180
+    },
+    {
+      "gallery": 100000,
+      "method": "int8",
+      "impl": "wasm_simd",
+      "bytes_per_item": 128,
+      "inner_reps": 21,
+      "p50_ms": 0.46667,
+      "p95_ms": 0.49048,
+      "mean_ms": 0.46921,
+      "n_queries": 1260
+    },
+    {
+      "gallery": 100000,
+      "method": "int8",
+      "impl": "js_scalar",
+      "bytes_per_item": 128,
+      "inner_reps": 1,
+      "p50_ms": 8.2,
+      "p95_ms": 8.3,
+      "mean_ms": 8.18667,
+      "n_queries": 60
+    },
+    {
+      "gallery": 100000,
+      "method": "fp32",
+      "impl": "wasm_simd",
+      "bytes_per_item": 256,
+      "inner_reps": 14,
+      "p50_ms": 0.66429,
+      "p95_ms": 0.67857,
+      "mean_ms": 0.66488,
+      "n_queries": 840
+    },
+    {
+      "gallery": 100000,
+      "method": "fp32",
+      "impl": "js_scalar",
+      "bytes_per_item": 256,
+      "inner_reps": 3,
+      "p50_ms": 3.83333,
+      "p95_ms": 4,
+      "mean_ms": 3.84333,
+      "n_queries": 180
+    }
+  ],
+  "sink": 55566043699.50133
+}

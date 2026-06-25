@@ -1,0 +1,14 @@
+{
+  "name": "wasm-latency-bench",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "asbuild": "asc assembly/kernels.ts --target release --enable simd -o build/kernels.simd.wasm --textFile build/kernels.simd.wat --optimize",
+    "asbuild:nosimd": "asc assembly/kernels.ts --target release -o build/kernels.scalar.wasm --optimize"
+  },
+  "dependencies": {
+    "assemblyscript": "^0.28.19",
+    "playwright": "^1.61.1"
+  }
+}

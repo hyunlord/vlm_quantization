@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WASM retrieval-latency bench — binary popcount vs int8 dot vs fp32 dot</title>
+<style>
+  body { font: 14px/1.5 -apple-system, system-ui, sans-serif; margin: 20px; max-width: 1100px; }
+  h1 { font-size: 18px; } h2 { font-size: 15px; margin-top: 24px; }
+  table { border-collapse: collapse; margin: 10px 0; font-variant-numeric: tabular-nums; }
+  th, td { border: 1px solid #ccc; padding: 4px 8px; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  .ok { color: #0a0; } .bad { color: #c00; font-weight: bold; }
+  #env { color: #555; white-space: pre-wrap; }
+  button { font-size: 14px; padding: 6px 12px; }
+  td.win { background: #e8f5e9; font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>Browser retrieval-latency: binary popcount vs int8 dot vs fp32 dot</h1>
+<p>Equal-byte (128 B/item) accuracy parity established offline (R@10 ≈ 80 for all three at 128 B).
+   This measures <b>pure client-side search latency</b> only: gallery scan + top-10, after warm-up.
+   Encoding/model loading excluded.</p>
+<div id="env"></div>
+<p><button id="run">Run benchmark</button> <span id="status"></span></p>
+<div id="results"></div>
+
+<script type="module">
+const KEYBYTES = 128;                 // equal-byte budget
+const BIN_WORDS = 32;                 // 1024 bit / 32 = 32 u32 = 128 B
+const INT8_DIM  = 128;                // 128 int8 = 128 B
+const FP32_DIM  = 64;                 // 64 f32 = 256 B  (reference; not equal-byte)
+const GALLERY_SIZES = [5000, 50000, 100000];
+const WARMUP = 15;
+const MEASURE = 60;                   // >= 50 queries
+const QUERY_BANK = 64;                // distinct query vectors, rotated
+const K = 10;                         // top-k
+const BASE = 1 << 20;                 // 1 MB: safely above AS static/heap data
+
+let sink = 0;                         // defeats dead-code elimination
+
+// ---------- deterministic PRNG (xorshift32) so runs are reproducible ----------
+function mkRng(seed) {
+  let s = seed >>> 0 || 1;
+  return () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; return (s >>> 0); };
+}
+
+// ---------------------- JS scalar kernels (naive / PWA path) -----------------
+function binaryScalar(gU32, qU32, n, scores) {
+  for (let i = 0; i < n; i++) {
+    const off = i * BIN_WORDS; let d = 0;
+    for (let w = 0; w < BIN_WORDS; w++) {
+      let x = (gU32[off + w] ^ qU32[w]) >>> 0;
+      x = x - ((x >>> 1) & 0x55555555);
+      x = (x & 0x33333333) + ((x >>> 2) & 0x33333333);
+      x = (x + (x >>> 4)) & 0x0f0f0f0f;
+      d += (Math.imul(x, 0x01010101) >>> 24);
+    }
+    scores[i] = d;
+  }
+}
+function int8Scalar(gI8, qI8, n, scores) {
+  for (let i = 0; i < n; i++) {
+    const off = i * INT8_DIM; let s = 0;
+    for (let k = 0; k < INT8_DIM; k++) s += gI8[off + k] * qI8[k];
+    scores[i] = s;
+  }
+}
+function fp32Scalar(gF32, qF32, n, scores) {
+  for (let i = 0; i < n; i++) {
+    const off = i * FP32_DIM; let s = 0;
+    for (let k = 0; k < FP32_DIM; k++) s += gF32[off + k] * qF32[k];
+    scores[i] = s;
+  }
+}
+
+// ----------------------------- top-k (uniform) -------------------------------
+// lower-is-better for binary (Hamming), higher-is-better for dot products.
+function topk(scores, n, higher) {
+  const val = new Float64Array(K), idx = new Int32Array(K);
+  val.fill(higher ? -Infinity : Infinity);
+  for (let i = 0; i < n; i++) {
+    const s = scores[i];
+    if (higher ? (s > val[K - 1]) : (s < val[K - 1])) {
+      let j = K - 1;
+      while (j > 0 && (higher ? (s > val[j - 1]) : (s < val[j - 1]))) { val[j] = val[j-1]; idx[j] = idx[j-1]; j--; }
+      val[j] = s; idx[j] = i;
+    }
+  }
+  let cs = 0; for (let j = 0; j < K; j++) cs += val[j] + idx[j];
+  return cs;
+}
+
+// ------------------------------- timing helper -------------------------------
+function percentile(arr, p) {
+  const a = arr.slice().sort((x, y) => x - y);
+  const i = Math.min(a.length - 1, Math.floor(p / 100 * a.length));
+  return a[i];
+}
+
+async function main() {
+  const status = document.getElementById('status');
+  const envDiv = document.getElementById('env');
+
+  // ---- detect WASM SIMD support ----
+  const SIMD_TEST = new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,10,1,8,0,65,0,253,15,253,98,11]);
+  const simdSupported = WebAssembly.validate(SIMD_TEST);
+
+  const env = {
+    userAgent: navigator.userAgent,
+    hardwareConcurrency: navigator.hardwareConcurrency,
+    deviceMemoryGB: navigator.deviceMemory ?? null,
+    wasmSimdSupported: simdSupported,
+    timestamp: new Date().toISOString(),
+  };
+  envDiv.textContent = JSON.stringify(env, null, 2);
+
+  // ---- load WASM SIMD kernels ----
+  status.textContent = 'loading wasm…';
+  const wasmResp = await fetch('build/kernels.simd.wasm');
+  const wasmBytes = await wasmResp.arrayBuffer();
+  const { instance } = await WebAssembly.instantiate(wasmBytes, {});
+  const ex = instance.exports;
+  const mem = ex.memory;
+
+  // ---- grow memory to hold the largest gallery (fp32 @ 256 B) ----
+  const maxN = Math.max(...GALLERY_SIZES);
+  const SCORES_OFF = BASE;                          // maxN * 4 bytes
+  const QBANK_OFF  = SCORES_OFF + maxN * 4;          // QUERY_BANK * 256 bytes
+  const GALLERY_OFF = QBANK_OFF + QUERY_BANK * 256;  // maxN * 256 bytes (fp32 worst case)
+  const needBytes = GALLERY_OFF + maxN * 256 + 1024;
+  const needPages = Math.ceil(needBytes / 65536);
+  const havePages = mem.buffer.byteLength / 65536;
+  if (needPages > havePages) mem.grow(needPages - havePages);
+
+  const results = [];
+
+  function buildAndRun(method, n) {
+    // (re)build views over current memory buffer
+    const stride = (method === 'fp32') ? FP32_DIM * 4 : KEYBYTES;
+    const qstride = stride;
+    // fill gallery + query bank with deterministic pseudo-random data
+    const rng = mkRng(0x9e3779b1 ^ (n * 2654435761) ^ method.length);
+    const higher = (method !== 'binary');
+
+    if (method === 'binary') {
+      const gal = new Uint32Array(mem.buffer, GALLERY_OFF, n * BIN_WORDS);
+      for (let i = 0; i < gal.length; i++) gal[i] = rng();
+      const qb = new Uint32Array(mem.buffer, QBANK_OFF, QUERY_BANK * BIN_WORDS);
+      for (let i = 0; i < qb.length; i++) qb[i] = rng();
+    } else if (method === 'int8') {
+      const gal = new Int8Array(mem.buffer, GALLERY_OFF, n * INT8_DIM);
+      for (let i = 0; i < gal.length; i++) gal[i] = (rng() & 0xff) - 128;
+      const qb = new Int8Array(mem.buffer, QBANK_OFF, QUERY_BANK * INT8_DIM);
+      for (let i = 0; i < qb.length; i++) qb[i] = (rng() & 0xff) - 128;
+    } else { // fp32
+      const gal = new Float32Array(mem.buffer, GALLERY_OFF, n * FP32_DIM);
+      for (let i = 0; i < gal.length; i++) gal[i] = (rng() / 4294967296) * 2 - 1;
+      const qb = new Float32Array(mem.buffer, QBANK_OFF, QUERY_BANK * FP32_DIM);
+      for (let i = 0; i < qb.length; i++) qb[i] = (rng() / 4294967296) * 2 - 1;
+    }
+
+    // typed views for scalar kernels + score reading (over same memory)
+    const scoresI32 = new Int32Array(mem.buffer, SCORES_OFF, n);
+    const scoresF32 = new Float32Array(mem.buffer, SCORES_OFF, n);
+    const gU32 = new Uint32Array(mem.buffer, GALLERY_OFF, n * BIN_WORDS);
+    const gI8  = new Int8Array(mem.buffer, GALLERY_OFF, n * INT8_DIM);
+    const gF32 = new Float32Array(mem.buffer, GALLERY_OFF, n * FP32_DIM);
+
+    function runQuery(impl, qi) {
+      const qOff = QBANK_OFF + qi * qstride;
+      if (impl === 'wasm_simd') {
+        if (method === 'binary') { ex.binary_simd(qOff, GALLERY_OFF, SCORES_OFF, n, stride); sink += topk(scoresI32, n, false); }
+        else if (method === 'int8') { ex.int8_simd(qOff, GALLERY_OFF, SCORES_OFF, n, stride); sink += topk(scoresI32, n, true); }
+        else { ex.fp32_simd(qOff, GALLERY_OFF, SCORES_OFF, n, stride); sink += topk(scoresF32, n, true); }
+      } else { // js_scalar — build per-query views into query bank
+        if (method === 'binary') {
+          const qU32 = new Uint32Array(mem.buffer, qOff, BIN_WORDS);
+          binaryScalar(gU32, qU32, n, scoresI32);
+          sink += topk(scoresI32, n, false);
+        } else if (method === 'int8') {
+          const qI8 = new Int8Array(mem.buffer, qOff, INT8_DIM);
+          int8Scalar(gI8, qI8, n, scoresI32);
+          sink += topk(scoresI32, n, true);
+        } else {
+          const qF32 = new Float32Array(mem.buffer, qOff, FP32_DIM);
+          fp32Scalar(gF32, qF32, n, scoresF32);
+          sink += topk(scoresF32, n, true);
+        }
+      }
+    }
+
+    // batch a number of queries per timed sample so per-query latency rises
+    // well above Chrome's ~0.1 ms performance.now() coarsening — otherwise the
+    // fast WASM-SIMD numbers sit on the timer floor and ties look like noise.
+    function timeBatch(impl, inner, startQi) {
+      const t0 = performance.now();
+      for (let r = 0; r < inner; r++) runQuery(impl, (startQi + r) % QUERY_BANK);
+      return performance.now() - t0;
+    }
+    const TARGET_MS = 8;   // each timed batch should take ~this long
+    for (const impl of ['wasm_simd', 'js_scalar']) {
+      // warm-up
+      for (let i = 0; i < WARMUP; i++) runQuery(impl, i % QUERY_BANK);
+      // calibrate inner-repeat count
+      let inner = 1;
+      for (let guard = 0; guard < 40; guard++) {
+        const t = timeBatch(impl, inner, 0);
+        if (t >= TARGET_MS || inner >= 200000) break;
+        inner = Math.max(inner + 1, Math.ceil(inner * (TARGET_MS / Math.max(t, 0.05))));
+      }
+      // measure: MEASURE batches, per-query latency = batch / inner
+      const times = new Float64Array(MEASURE);
+      for (let i = 0; i < MEASURE; i++) times[i] = timeBatch(impl, inner, i) / inner;
+      results.push({
+        gallery: n, method, impl,
+        bytes_per_item: stride,
+        inner_reps: inner,
+        p50_ms: +percentile(times, 50).toFixed(5),
+        p95_ms: +percentile(times, 95).toFixed(5),
+        mean_ms: +(times.reduce((a, b) => a + b, 0) / MEASURE).toFixed(5),
+        n_queries: MEASURE * inner,
+      });
+    }
+  }
+
+  // ---- correctness self-check: WASM SIMD == JS scalar on a small gallery ----
+  const checkN = 256;
+  const checks = {};
+  for (const method of ['binary', 'int8', 'fp32']) {
+    const stride = (method === 'fp32') ? FP32_DIM * 4 : KEYBYTES;
+    const rng = mkRng(12345 ^ method.length);
+    // fill
+    if (method === 'binary') {
+      const g = new Uint32Array(mem.buffer, GALLERY_OFF, checkN * BIN_WORDS); for (let i=0;i<g.length;i++) g[i]=rng();
+      const q = new Uint32Array(mem.buffer, QBANK_OFF, BIN_WORDS); for (let i=0;i<q.length;i++) q[i]=rng();
+    } else if (method === 'int8') {
+      const g = new Int8Array(mem.buffer, GALLERY_OFF, checkN * INT8_DIM); for (let i=0;i<g.length;i++) g[i]=(rng()&0xff)-128;
+      const q = new Int8Array(mem.buffer, QBANK_OFF, INT8_DIM); for (let i=0;i<q.length;i++) q[i]=(rng()&0xff)-128;
+    } else {
+      const g = new Float32Array(mem.buffer, GALLERY_OFF, checkN * FP32_DIM); for (let i=0;i<g.length;i++) g[i]=(rng()/4294967296)*2-1;
+      const q = new Float32Array(mem.buffer, QBANK_OFF, FP32_DIM); for (let i=0;i<q.length;i++) q[i]=(rng()/4294967296)*2-1;
+    }
+    // wasm
+    if (method === 'binary') ex.binary_simd(QBANK_OFF, GALLERY_OFF, SCORES_OFF, checkN, stride);
+    else if (method === 'int8') ex.int8_simd(QBANK_OFF, GALLERY_OFF, SCORES_OFF, checkN, stride);
+    else ex.fp32_simd(QBANK_OFF, GALLERY_OFF, SCORES_OFF, checkN, stride);
+    const wasmScores = (method === 'fp32')
+      ? Array.from(new Float32Array(mem.buffer, SCORES_OFF, checkN))
+      : Array.from(new Int32Array(mem.buffer, SCORES_OFF, checkN));
+    // scalar
+    const ref = (method === 'fp32') ? new Float32Array(checkN) : new Int32Array(checkN);
+    if (method === 'binary') binaryScalar(new Uint32Array(mem.buffer, GALLERY_OFF, checkN*BIN_WORDS), new Uint32Array(mem.buffer, QBANK_OFF, BIN_WORDS), checkN, ref);
+    else if (method === 'int8') int8Scalar(new Int8Array(mem.buffer, GALLERY_OFF, checkN*INT8_DIM), new Int8Array(mem.buffer, QBANK_OFF, INT8_DIM), checkN, ref);
+    else fp32Scalar(new Float32Array(mem.buffer, GALLERY_OFF, checkN*FP32_DIM), new Float32Array(mem.buffer, QBANK_OFF, FP32_DIM), checkN, ref);
+    // compare
+    let maxDiff = 0;
+    for (let i = 0; i < checkN; i++) maxDiff = Math.max(maxDiff, Math.abs(wasmScores[i] - ref[i]));
+    checks[method] = { maxAbsDiff: maxDiff, pass: (method === 'fp32') ? maxDiff < 1e-2 : maxDiff === 0 };
+  }
+
+  // ---- run the benchmark ----
+  for (const n of GALLERY_SIZES) {
+    for (const method of ['binary', 'int8', 'fp32']) {
+      status.textContent = `running ${method} @ ${n}…`;
+      await new Promise(r => setTimeout(r, 0));
+      buildAndRun(method, n);
+    }
+  }
+
+  const payload = { env, checks, results, sink };
+  window.__RESULTS__ = payload;
+  renderResults(payload);
+  status.textContent = 'done. sink=' + sink;
+}
+
+function renderResults(payload) {
+  const div = document.getElementById('results');
+  let html = '<h2>Correctness self-check (WASM SIMD vs JS scalar)</h2><table><tr><th>method</th><th>max abs diff</th><th>pass</th></tr>';
+  for (const m of Object.keys(payload.checks)) {
+    const c = payload.checks[m];
+    html += `<tr><td>${m}</td><td>${c.maxAbsDiff}</td><td class="${c.pass?'ok':'bad'}">${c.pass?'PASS':'FAIL'}</td></tr>`;
+  }
+  html += '</table>';
+
+  // group by gallery
+  const byG = {};
+  for (const r of payload.results) { (byG[r.gallery] ??= []).push(r); }
+  for (const g of Object.keys(byG).map(Number).sort((a,b)=>a-b)) {
+    html += `<h2>Gallery = ${g.toLocaleString()} items</h2>`;
+    html += '<table><tr><th>method</th><th>impl</th><th>bytes/item</th><th>p50 ms</th><th>p95 ms</th><th>mean ms</th></tr>';
+    // find fastest p50 per impl among binary/int8 to highlight
+    for (const impl of ['wasm_simd','js_scalar']) {
+      const rows = byG[g].filter(r=>r.impl===impl);
+      const cmp = rows.filter(r=>r.method==='binary'||r.method==='int8');
+      const best = Math.min(...cmp.map(r=>r.p50_ms));
+      for (const r of rows) {
+        const win = (r.method==='binary'||r.method==='int8') && r.p50_ms===best ? ' class="win"' : '';
+        html += `<tr><td>${r.method}</td><td>${r.impl}</td><td>${r.bytes_per_item}</td><td${win}>${r.p50_ms}</td><td>${r.p95_ms}</td><td>${r.mean_ms}</td></tr>`;
+      }
+    }
+    html += '</table>';
+  }
+  div.innerHTML = html;
+}
+
+document.getElementById('run').addEventListener('click', () => { main().catch(e => { document.getElementById('status').textContent = 'ERROR: ' + e.message; console.error(e); }); });
+// auto-run for headless driver
+if (location.search.includes('auto')) main().catch(e => { window.__RESULTS__ = { error: String(e) }; console.error(e); });
+</script>
+</body>
+</html>
