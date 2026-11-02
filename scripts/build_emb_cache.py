@@ -129,7 +129,7 @@ def main():
     dev = "cuda"
     T0 = time.perf_counter(); torch.cuda.reset_peak_memory_stats()
     model = AutoModel.from_pretrained(MODEL, dtype=torch.bfloat16).to(dev).eval()
-    proc = AutoImageProcessor.from_pretrained(MODEL)
+    proc = AutoImageProcessor.from_pretrained(MODEL, use_fast=False)  # checkpoint-saved (slow) processor; v5 defaults to fast
     try:  # same fallback as web/common.py (AutoProcessor breaks on transformers 5.x for this repo)
         from transformers import AutoProcessor
         tok = AutoProcessor.from_pretrained(MODEL).tokenizer
@@ -139,7 +139,7 @@ def main():
     root = Path(a.data_root)
     meta = {"model": MODEL, "dtype": "bf16 inference, fp32 storage", "normalized": False,
             "text": "lower() + padding=max_length, max_length=64, truncation", "caption": "sentences[0]",
-            "seed": a.seed, "views": "clean=Resize384, weak=get_train_transforms, strong=get_consistency_augmentation"}
+            "image_processor": "slow (use_fast=False)", "seed": a.seed, "views": "clean=Resize384, weak=get_train_transforms, strong=get_consistency_augmentation"}
     timing = {}
 
     for split in ("test", "train"):
