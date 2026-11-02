@@ -125,11 +125,17 @@ def main():
     ap.add_argument("--limit", type=int, default=0, help="smoke test: first N images per split")
     a = ap.parse_args()
 
-    from transformers import AutoModel, AutoProcessor
+    from transformers import AutoImageProcessor, AutoModel
     dev = "cuda"
     T0 = time.perf_counter(); torch.cuda.reset_peak_memory_stats()
     model = AutoModel.from_pretrained(MODEL, dtype=torch.bfloat16).to(dev).eval()
-    proc = AutoProcessor.from_pretrained(MODEL)
+    proc = AutoImageProcessor.from_pretrained(MODEL)
+    try:  # same fallback as web/common.py (AutoProcessor breaks on transformers 5.x for this repo)
+        from transformers import AutoProcessor
+        tok = AutoProcessor.from_pretrained(MODEL).tokenizer
+    except Exception:
+        from transformers import GemmaTokenizer
+        tok = GemmaTokenizer.from_pretrained(MODEL)
     root = Path(a.data_root)
     meta = {"model": MODEL, "dtype": "bf16 inference, fp32 storage", "normalized": False,
             "text": "lower() + padding=max_length, max_length=64, truncation", "caption": "sentences[0]",
@@ -145,7 +151,7 @@ def main():
         t0 = time.perf_counter()
         views = encode_images(model, Views(ents, root, proc, split == "train", a.seed), a.bs, a.workers, dev, split)
         ti = time.perf_counter() - t0; t0 = time.perf_counter()
-        txt = encode_texts(model, proc.tokenizer, caps, 256, dev)
+        txt = encode_texts(model, tok, caps, 256, dev)
         tt = time.perf_counter() - t0
         timing[split] = {"n": len(ents), "image_sec": round(ti, 1), "text_sec": round(tt, 1)}
         print(f"[{split}] n={len(ents)} image {ti:.0f}s text {tt:.0f}s", flush=True)
